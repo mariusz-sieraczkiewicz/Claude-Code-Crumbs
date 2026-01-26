@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__tavily__*"
+    ]
+  },
+  "enabledMcpjsonServers": [
+    "tavily"
+  ],
+  "enabledPlugins": {
+    "tavily@Claude-Code-Crumbs": true
+  }
+}
