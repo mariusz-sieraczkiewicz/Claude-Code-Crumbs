@@ -1,0 +1,39 @@
+{
+  "name": "Claude-Code-Crumbs",
+  "description": "Collection of Claude Code plugins for MCP integrations and LSP support",
+  "owner": {
+    "name": "Mariusz Sieraczkiewicz"
+  },
+  "plugins": [
+    {
+      "name": "tavily",
+      "source": "./tavily-plugin",
+      "description": "Tavily AI search integration for web search, extract, crawl, and map capabilities",
+      "version": "1.0.0"
+    },
+    {
+      "name": "lsp-python",
+      "source": "./lsp-python-plugin",
+      "description": "Python LSP support using Pyright for code intelligence",
+      "version": "1.0.0"
+    },
+    {
+      "name": "lsp-java",
+      "source": "./lsp-java-plugin",
+      "description": "Java LSP support using Eclipse JDT Language Server for code intelligence",
+      "version": "1.0.0"
+    },
+    {
+      "name": "lsp-kotlin",
+      "source": "./lsp-kotlin-plugin",
+      "description": "Kotlin LSP support using Kotlin Language Server for code intelligence",
+      "version": "1.0.0"
+    },
+    {
+      "name": "lsp-typescript",
+      "source": "./lsp-typescript-plugin",
+      "description": "TypeScript/JavaScript LSP support for code intelligence",
+      "version": "1.0.0"
+    }
+  ]
+}
