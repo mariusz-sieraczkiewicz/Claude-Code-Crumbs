@@ -1,0 +1,8 @@
+{
+  "name": "lsp-typescript",
+  "description": "TypeScript/JavaScript LSP support for code intelligence",
+  "version": "1.0.0",
+  "author": {
+    "name": "sieracm2"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "name": "lsp-java",
+  "description": "Java LSP support using Eclipse JDT Language Server for code intelligence",
+  "version": "1.0.0",
+  "author": {
+    "name": "sieracm2"
+  }
+}

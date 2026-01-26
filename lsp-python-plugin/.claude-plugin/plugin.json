@@ -1,0 +1,8 @@
+{
+  "name": "lsp-python",
+  "description": "Python LSP support using Pyright for code intelligence",
+  "version": "1.0.0",
+  "author": {
+    "name": "sieracm2"
+  }
+}
