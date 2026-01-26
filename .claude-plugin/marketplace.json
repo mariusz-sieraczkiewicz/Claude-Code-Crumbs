@@ -9,7 +9,7 @@
       "name": "tavily",
       "source": "./tavily-plugin",
       "description": "Tavily AI search integration for web search, extract, crawl, and map capabilities",
-      "version": "1.0.0"
+      "version": "1.1.0"
     },
     {
       "name": "lsp-python",
