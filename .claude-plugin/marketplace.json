@@ -51,7 +51,7 @@
       "name": "python-modern-practices",
       "source": "./python-modern-practices-plugin",
       "description": "Comprehensive modern Python 3.12+ programming guidelines with strict typing, clean code patterns, and current tooling best practices",
-      "version": "1.0.0"
+      "version": "1.0.1"
     }
   ]
 }
