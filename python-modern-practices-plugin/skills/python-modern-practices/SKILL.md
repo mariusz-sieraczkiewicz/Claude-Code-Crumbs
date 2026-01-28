@@ -1,3 +1,12 @@
+---
+name: python-modern-practices
+description: |
+  Modern Python 3.12+ programming guidelines with strict typing. Use when writing,
+  reviewing, or refactoring Python code. Covers clean code fundamentals, imports,
+  exception handling, logging, type hints (strict mode), project structure, and
+  modern tooling (Ruff, mypy, uv). Invoke with /python-modern-practices.
+---
+
 # Python Modern Practices (3.12+)
 
 Apply these rules to all Python code. Target Python 3.12+ with strict typing.
