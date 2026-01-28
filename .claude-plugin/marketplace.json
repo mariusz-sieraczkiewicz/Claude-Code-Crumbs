@@ -34,6 +34,18 @@
       "source": "./lsp-typescript-plugin",
       "description": "TypeScript/JavaScript LSP support for code intelligence",
       "version": "1.0.0"
+    },
+    {
+      "name": "karpathy-code",
+      "source": "./karpathy-code-plugin",
+      "description": "Behavioral guidelines to reduce common LLM coding mistakes, derived from Andrej Karpathy's observations",
+      "version": "1.0.0"
+    },
+    {
+      "name": "karpathy-content",
+      "source": "./karpathy-content-plugin",
+      "description": "Behavioral guidelines to reduce common LLM content creation mistakes, adapted from Karpathy's principles",
+      "version": "1.0.0"
     }
   ]
 }
