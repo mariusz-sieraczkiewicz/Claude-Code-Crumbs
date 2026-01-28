@@ -1,12 +1,8 @@
 {
   "name": "python-modern-practices",
-  "version": "1.0.0",
   "description": "Comprehensive modern Python 3.12+ programming guidelines with strict typing, clean code patterns, and current tooling best practices",
-  "skills": [
-    {
-      "name": "python-modern-practices",
-      "description": "Apply modern Python 3.12+ best practices including strict type hints, clean code fundamentals, proper exception handling, logging standards, and project structure",
-      "path": "skills/python-modern-practices"
-    }
-  ]
+  "version": "1.0.0",
+  "author": {
+    "name": "Mariusz Sieraczkiewicz"
+  }
 }
