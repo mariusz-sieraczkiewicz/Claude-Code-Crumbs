@@ -51,3 +51,5 @@ echo "Node.js: $(node --version)"
 echo "npm: $(npm --version)"
 echo "uv: $($HOME/.local/bin/uv --version)"
 echo "uvx: $($HOME/.local/bin/uvx --version)"
+
+claude --dangerously-skip-permissions
