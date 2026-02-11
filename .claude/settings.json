@@ -5,7 +5,8 @@
     ]
   },
   "enabledMcpjsonServers": [
-    "tavily"
+    "tavily",
+    "google-docs-mcp"
   ],
   "enabledPlugins": {
     "tavily@Claude-Code-Crumbs": true
