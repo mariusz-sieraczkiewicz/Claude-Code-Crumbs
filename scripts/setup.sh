@@ -327,5 +327,3 @@ echo "Python: $(python3 --version)"
 echo "pip: $(pip3 --version)"
 echo "uv: $($HOME/.local/bin/uv --version)"
 echo "uvx: $($HOME/.local/bin/uvx --version)"
-
-claude --dangerously-skip-permissions
