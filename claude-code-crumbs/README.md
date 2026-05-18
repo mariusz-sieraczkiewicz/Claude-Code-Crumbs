@@ -173,6 +173,16 @@ Project-specific glossary lives in `CONTEXT.md` (created on bootstrap). The plug
 - **Finding.** A blocker emitted by `/003-verify-dod` or `/004-code-review`. Always actionable, always specific to a file/line or a gate.
 - **Run.** The collection of phase artifacts for one task under `.claude/runs/{epic_id}/{task_id}/`.
 
+## Known limitations (v0.1.0)
+
+The v0.1 release ships the workflow surface end-to-end, but a handful of edges are deliberately unpolished. None block daily use; all are scheduled for v0.2+.
+
+- **Archive rotation unbounded.** `.claude/runs-archive/` grows over time as `scripts/archive-epic-runs.sh` deposits tar-gz snapshots on epic close-out. There is no built-in pruning. Manual cleanup is required — delete old snapshots when the directory gets noisy. v0.2+ will add policy-driven rotation (size cap, age cap, or keep-last-N).
+- **`stack.yaml.extras` size.** The free-form `extras` block is injected verbatim into every subagent prompt. Keep it small — under ~4 KB — or it will bloat every dispatch and burn context for no signal. v0.2+ may enforce a hard cap and warn on overflow.
+- **Network call timeouts.** `/006-merge` and `/007-promote` shell out to `gh` / `glab` for the actual MR/PR/workflow trigger. The commands rely on the CLI's own default timeouts and do **not** wrap the calls in an external timeout. If the CLI hangs >120s, abort manually (Ctrl-C) and check network connectivity. Do not auto-retry — see the "Network timeout posture" notes in `commands/006-merge.md` and `commands/007-promote.md`.
+- **Single-host concurrency.** Epic locks are local `mkdir`-based guards under `.claude/runs/.lock-<epic_id>/`. They are safe against concurrent runs on the same machine but **not** safe against NFS-shared `.claude/` directories or multi-host shared storage. If two machines mount the same project tree over NFS, the lock may not arbitrate correctly. Run from local disk for v0.1.
+- **Ruleset section order.** Seven of the shipped process rules have non-canonical section ordering relative to the others. The reviewer subagent looks rules up by header rather than by position, so behaviour is unaffected — only readability varies. Re-ordering is a v0.2 cleanup.
+
 ## License
 
 MIT

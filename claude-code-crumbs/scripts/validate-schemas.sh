@@ -54,6 +54,14 @@ except jsonschema.ValidationError as e:
     msg = e.message.replace("\n", " ")
     path = "/".join(str(p) for p in e.absolute_path) or "<root>"
     print("FAIL: at " + path + ": " + msg)
+except json.JSONDecodeError as e:
+    print("FAIL: schema or file is malformed JSON: " + e.msg + " at line " + str(e.lineno) + " col " + str(e.colno))
+except yaml.YAMLError as e:
+    mark = getattr(e, "problem_mark", None)
+    if mark:
+        print("FAIL: YAML parse error at line " + str(mark.line + 1) + " col " + str(mark.column + 1) + ": " + str(e))
+    else:
+        print("FAIL: YAML parse error: " + str(e))
 except Exception as e:
     print("FAIL: " + type(e).__name__ + ": " + str(e))
 ' 2>&1 || true)"

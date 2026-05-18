@@ -22,6 +22,27 @@ Output language for all artifacts and user-facing messages is **English**, regar
 
 ### Phase 0 — Pre-flight
 
+- **Acquire epic lock (atomic).** Before any other pre-flight step, take an exclusive lock on the epic id via `mkdir` (atomic on POSIX). This prevents two terminals from racing on the same `epic-{id}-tasks.yaml` and `.claude/runs/{epic_id}/` tree. Run, verbatim, in the conductor's shell context:
+
+  ```sh
+  LOCK_DIR=".claude/runs/.lock-${EPIC_ID}"
+  if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+      # Read PID/timestamp from existing lock for diagnostics
+      LOCK_INFO=""
+      if [ -f "$LOCK_DIR/info" ]; then
+          LOCK_INFO=" (held by: $(cat "$LOCK_DIR/info"))"
+      fi
+      echo "Error: epic $EPIC_ID is already being processed${LOCK_INFO}." >&2
+      echo "If you are sure no other process is running, remove $LOCK_DIR and retry." >&2
+      exit 5
+  fi
+  echo "$$@$(hostname) $(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$LOCK_DIR/info"
+
+  # Ensure lock is released on exit (success OR failure).
+  trap 'rm -rf "$LOCK_DIR"' EXIT INT TERM
+  ```
+
+  Exit code `5` is reserved for the "already running" case so callers can distinguish concurrency from other pre-flight failures. The `trap` releases the lock on any exit path — success, halt-on-block, dispatch error, or signal. Stale locks (process killed `-9`, host crashed) require manual cleanup of `.claude/runs/.lock-<epic_id>/`.
 - Verify `<epic-id>` exists as an entry in `docs/planning/epics.yaml`. If not → abort with: `Epic <epic-id> not found in docs/planning/epics.yaml. Run /000-prd-refine or /001-plan first.`
 - Verify `docs/planning/epic-{id}-tasks.yaml` exists (filename derived from the epic id, e.g. `E-007` → `epic-07-tasks.yaml`). If not → abort with the expected path and: `Run /001-plan E-NNN first.`
 - Load the tasks list. Group entries by `status`. Compute:
@@ -181,7 +202,7 @@ A user could in principle write `for t in T-001 T-002 …; do /002-implement "$t
 - **Missing inputs** (epic not in `epics.yaml`, tasks file absent, ruleset incomplete, stack.yaml missing `gates`) → abort with the exact path(s) and the remediation command (`/000-prd-refine`, `/001-plan`, or a manual fix).
 - **Subagent dispatch error** (Task tool returns non-zero or no artifact written at the expected path) → print the subagent type and task id, halt the batch. Do not retry automatically — the user resumes after diagnosis.
 - **Schema validation failure on a subagent artifact** (JSON does not match the plugin-shipped schema for that phase) → halt the batch; print the validation error and the offending path. The task stays at whatever status it had before dispatch (typically `in_progress`).
-- **Concurrent run of `/002-auto-implement` for the same epic** is not supported. The command does not take a file lock; the user is responsible for not invoking it twice in parallel. Symptom of accidental concurrency: task statuses flicker between `pending` and `in_progress`, and runs-directory artifacts overwrite each other. Recovery: kill both runs, inspect the runs directory, manually reset task statuses.
+- **Concurrent run of `/002-auto-implement` for the same epic** is rejected by the Phase 0 atomic lock (`mkdir .claude/runs/.lock-<epic_id>`). The second invocation exits with code `5` and prints the holder's `pid@host` plus timestamp. Stale locks (process died without unwinding the `trap` — e.g. `kill -9`, host crash) require manual cleanup of `.claude/runs/.lock-<epic_id>/`; the error message points the user at the exact path. Different epic ids do not contend, so two terminals can drive two different epics in parallel without interference.
 
 ## Idempotency and resumability
 
@@ -190,7 +211,7 @@ This command is **resumable by design**. The state of the batch lives entirely i
 - `epic-{id}-tasks.yaml` — the authoritative `status` field per task.
 - `.claude/runs/{epic_id}/{task_id}/*.json` — the per-task subagent artifacts.
 
-Re-running `/002-auto-implement <epic-id>` after any halt picks up the next `pending` task and continues. There is no in-memory batch state, no lock file, no resume token. The Phase 0 pre-flight rebuilds `pending_ids` fresh on every invocation, so any tasks marked `done` mid-batch are correctly skipped on the next run, and any tasks the user manually re-opened (set back to `pending`) are correctly re-processed.
+Re-running `/002-auto-implement <epic-id>` after any halt picks up the next `pending` task and continues. There is no in-memory batch state and no resume token; the Phase 0 lock directory (`.claude/runs/.lock-<epic_id>/`) is held only for the lifetime of a single invocation and is removed by the `EXIT` trap before the process returns. The Phase 0 pre-flight rebuilds `pending_ids` fresh on every invocation, so any tasks marked `done` mid-batch are correctly skipped on the next run, and any tasks the user manually re-opened (set back to `pending`) are correctly re-processed.
 
 If a task halted with `loop_limit_exceeded` and was left `in_progress`, the next run will **skip it** (because `pending_ids` only includes `pending`). The user must either:
 - Manually re-run `/005-implement-feedback <task-id>` until verify/review pass, then set the task to `done` themselves, **or**

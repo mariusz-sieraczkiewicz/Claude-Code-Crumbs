@@ -7,7 +7,7 @@ set -euo pipefail
 
 EPICS_YAML="docs/planning/epics.yaml"
 OUT_FILE="docs/planning/SCENARIOS.md"
-TMP_FILE="docs/planning/SCENARIOS.md.tmp"
+TMP_FILE="${OUT_FILE}.tmp.$$"
 
 # Atomic write discipline: write to SCENARIOS.md.tmp first, rename on success.
 # On any error before the final rename, leave the tmp file in place and exit non-zero
@@ -102,7 +102,10 @@ PY
 # Atomic rename: only after the tmp file is fully written and the python block
 # exited 0 do we promote it to the canonical path. POSIX rename(2) is atomic on
 # the same filesystem.
-mv "$TMP_FILE" "$OUT_FILE"
+if ! mv "$TMP_FILE" "$OUT_FILE"; then
+    echo "Error: failed to rename ${TMP_FILE} to ${OUT_FILE}. Tmp file preserved for inspection." >&2
+    exit 4
+fi
 
 # Capture counts from the python output by re-running a lightweight parse.
 read -r N M < <(python3 - "$EPICS_YAML" <<'PY'

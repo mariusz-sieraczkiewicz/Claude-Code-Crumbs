@@ -88,6 +88,18 @@ if [ -z "$RULESET_DIR" ]; then
     RULESET_DIR="$DEFAULT_RULESET_DIR"
 fi
 
+# Reject path traversal and absolute paths that escape project root.
+case "$RULESET_DIR" in
+    *..*)
+        echo "Error: paths.ruleset must not contain '..' (got: $RULESET_DIR)" >&2
+        exit 2
+        ;;
+    /*)
+        echo "Error: paths.ruleset must be project-relative, not absolute (got: $RULESET_DIR)" >&2
+        exit 2
+        ;;
+esac
+
 if [ ! -d "$RULESET_DIR" ]; then
     echo "No ruleset found at ${RULESET_DIR}. Run /000-prd-refine first." >&2
     exit 2
@@ -108,6 +120,12 @@ fi
 
 for f in "$RULESET_DIR"/*.md; do
     [ -e "$f" ] || continue
+    case "$(basename "$f")" in
+        -*)
+            echo "Warning: skipping ruleset file with leading dash: $f" >&2
+            continue
+            ;;
+    esac
     base="$(basename "$f" .md)"
     printf -- '--- %s ---\n' "$base"
     cat -- "$f"

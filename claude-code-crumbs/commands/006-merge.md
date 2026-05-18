@@ -107,6 +107,8 @@ Verify every commit in `<base>..HEAD` carries a `Signed-off-by:` trailer (`git l
 
 ### Phase 3 — Open MR/PR
 
+**Network timeout posture.** This command invokes GitHub/GitLab CLI commands that perform network I/O. The CLI tools (`gh`, `glab`) use their own default timeouts; this command does NOT wrap them in an external timeout. If a CLI call hangs >120s, halt the command (Ctrl-C) and re-run after checking network connectivity. Do not auto-retry — duplicate PRs/MRs/workflow triggers may result.
+
 GitHub:
 
 ```bash

@@ -62,11 +62,13 @@ Dashboard hygiene:
 
 ## Mechanical enforcement
 
+The verifier subagent enforces this rule via the **`gates.monitoring`** entry in `.claude/stack.yaml`. Bind your alert-config linter, monitoring-as-code validator, and runbook-link CI check to that gate (e.g. `promtool check rules ...`, `amtool check-config ...`, plus a project script that asserts every page-level alert carries a non-empty `runbook` annotation). Zero tolerance: any non-zero exit blocks DoD. Leaving `gates.monitoring: null` is a deliberate, recorded opt-out — not a default.
+
 - **Monitoring-as-code** — alerts, SLOs, and dashboards defined in code (e.g. Prometheus rules in YAML, Datadog Terraform provider, Grafana JSON). Pull requests reviewed.
 - **Synthetic checks** — black-box probes against critical endpoints / journeys (e.g. uptime checks, k6 synthetic, Pingdom-style). Independent of the system they monitor.
 - **Certificate expiry monitors** — TLS, signing keys, secrets nearing rotation.
-- **Linting / validation** for alert config — e.g. `promtool check rules`, `amtool` for Alertmanager, provider-specific linters.
-- **Runbook link required field** — a CI check that every page-level alert has a non-empty runbook URL.
+- **Linting / validation** for alert config — e.g. `promtool check rules`, `amtool` for Alertmanager, provider-specific linters. Wire these into `gates.monitoring`.
+- **Runbook link required field** — a CI check that every page-level alert has a non-empty runbook URL. Wire into `gates.monitoring`.
 - **SLO burn-rate alerts** generated from the SLO definition rather than hand-written thresholds.
 
 ## Subagent check

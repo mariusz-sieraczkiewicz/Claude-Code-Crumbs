@@ -55,7 +55,7 @@ trap cleanup EXIT INT TERM
 # Source-stable checksum helper. Lists files sorted then hashes concatenated content.
 compute_checksum() {
     # shellcheck disable=SC2016
-    ( cd "$1" && find . -type f | LC_ALL=C sort | xargs cat 2>/dev/null | shasum -a 256 | awk '{print $1}' )
+    ( cd "$1" && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 cat 2>/dev/null | shasum -a 256 | awk '{print $1}' )
 }
 
 CHECKSUM_BEFORE="$(compute_checksum "$SRC_DIR")"
@@ -85,5 +85,10 @@ if [ "$CHECKSUM_BEFORE" != "$CHECKSUM_AFTER" ]; then
 fi
 
 rm -rf "$SRC_DIR"
+
+if [ -d "$SRC_DIR" ]; then
+    echo "Error: failed to remove ${SRC_DIR} after archive. Archive at ${ARCHIVE_PATH} is intact." >&2
+    exit 3
+fi
 
 echo "Archived ${EPIC_ID} -> ${ARCHIVE_PATH}"

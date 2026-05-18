@@ -29,6 +29,7 @@ gates:                              # shell commands. null = skip. Zero toleranc
   security: null                        # e.g. "gitleaks detect", "trivy fs ."
   a11y: null                            # e.g. "bun run test:a11y"
   perf: null                            # e.g. "bun run test:perf"
+  monitoring: null                      # e.g. "promtool check rules ops/alerts.yaml && scripts/check-runbook-links.sh"
 
 design_verify:                      # optional
   type: prompt                         # "script" | "prompt"

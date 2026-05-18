@@ -48,7 +48,8 @@
         "build": { "type": ["string", "null"] },
         "security": { "type": ["string", "null"] },
         "a11y": { "type": ["string", "null"] },
-        "perf": { "type": ["string", "null"] }
+        "perf": { "type": ["string", "null"] },
+        "monitoring": { "type": ["string", "null"] }
       },
       "additionalProperties": { "type": ["string", "null"] }
     },

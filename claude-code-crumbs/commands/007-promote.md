@@ -87,6 +87,8 @@ Detect the platform from `git remote get-url origin`:
 
 **Auth check.** After confirming the CLI is installed (per the platform branches below), run `gh auth status` (or `glab auth status`) **before** the actual `gh workflow run` / `glab pipeline trigger`. If exit code != 0 → ABORT with: `<gh|glab> is installed but not authenticated. Run \`gh auth login\` (or \`glab auth login\`) first, then re-invoke /007-promote.` Capture the auth-status stderr in the abort message for diagnostics.
 
+**Network timeout posture.** This command invokes GitHub/GitLab CLI commands that perform network I/O. The CLI tools (`gh`, `glab`) use their own default timeouts; this command does NOT wrap them in an external timeout. If a CLI call hangs >120s, halt the command (Ctrl-C) and re-run after checking network connectivity. Do not auto-retry — duplicate PRs/MRs/workflow triggers may result.
+
 - **GitHub** (host contains `github.com`): require `gh` on `$PATH`. Determine the ref:
   - For `staging`: `--ref main` (or the branch configured in `ruleset/deployment.md`).
   - For `prod`: `--ref <tag>` when `team_preset = oss`; otherwise `--ref main` unless the workflow expects an explicit tag (defer to `deployment.md`).
