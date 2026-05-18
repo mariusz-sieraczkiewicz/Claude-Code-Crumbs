@@ -5,7 +5,7 @@ stack:
   language: "<language>"           # e.g. "typescript", "swift", "python", "go"
   runtime: "<runtime>"             # optional, e.g. "bun", "node", "iOS 17", "python 3.12"
 
-team_preset: small-team             # one of: solo | small-team | oss | enterprise. Set by /000-prd-refine. Informational after bootstrap.
+team_preset: small-team             # one of: solo | small-team | oss | enterprise. Chosen during /000-prd-refine; baseline ruleset's git-workflow.md and deployment.md are overlaid from templates/presets/<team_preset>/.
 
 paths:                              # optional path overrides. Defaults shown.
   prd: PRD.md

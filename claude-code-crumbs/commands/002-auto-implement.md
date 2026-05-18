@@ -68,7 +68,8 @@ Read `02-impl.json.status`:
 
 - **`too_big_proposal`** → print the `reason` and `suggested_split` to the user, then:
   - Suggest: `Run /001-plan --resplit <task-id> to decompose this task, then re-run /002-auto-implement <epic-id>.`
-  - Leave the task `status: pending` in `epic-{id}-tasks.yaml` (do **not** mark `blocked` — the task is splittable, not blocked).
+  - Explicitly write `status: pending` to the task entry in `epic-{id}-tasks.yaml` (preserve YAML formatting, comments, and key order). The task was set to `in_progress` in Phase 0 / Step 1; this reverts it. Matches `/002-implement` behaviour: both commands revert task status to `pending` on `too_big_proposal`. Do **not** mark `blocked` — the task is splittable, not blocked.
+  - Note: the planner re-split (`/001-plan --resplit`) is responsible for archiving the pending task's stub `01-plan.json` if it exists.
   - **HALT the batch.** Do not advance to the next pending task. Exit.
 - **`blocked`** → record the blocker:
   - Set `status: blocked` for this task in `epic-{id}-tasks.yaml`.
@@ -131,9 +132,12 @@ Same shape as Step 4, but driven by `04-review.json.status`:
 After every task in `pending_ids` reaches `status: done` (the loop completed without halting):
 
 Order is MANDATORY:
-1. Mark every completed task `status: done` in `docs/planning/epic-{id}-tasks.yaml` and the epic itself in `docs/planning/epics.yaml`. Save the file. Commit the status change (`chore(E-NNN): mark epic done`).
-2. Print summary: tasks completed, suggest `/006-merge T-LAST` and `/003-verify-dod T-LAST --epic-close` (ATDD specs).
-3. ONLY AFTER step 1+2, invoke `bash scripts/archive-epic-runs.sh E-NNN`. Status is already persisted (committed in step 1), so if archive fails, no state is lost — user re-runs `archive-epic-runs.sh` manually.
+1. Write `status: done` to epic entry in `docs/planning/epics.yaml` AND mark all tasks `status: done` in `docs/planning/epic-{id}-tasks.yaml`.
+2. `git add docs/planning/epics.yaml docs/planning/epic-{id}-tasks.yaml` and `git commit -m "chore(planning): close epic {id}"`.
+3. ONLY AFTER successful commit: invoke `scripts/archive-epic-runs.sh {epic_id}`.
+4. If commit fails: abort, do NOT archive. Surface error to user.
+
+Print summary after step 2 (or step 3 on success): tasks completed, suggest `/006-merge T-LAST` and `/003-verify-dod T-LAST --epic-close` (ATDD specs).
 
 If you reverse this order — archive before mark-done — and the archive succeeds while mark-done fails (e.g. file lock), the runs artifacts are gone but the epic is still `in_progress`. AVOID.
 

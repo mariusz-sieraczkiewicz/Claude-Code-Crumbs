@@ -96,7 +96,7 @@ Branch on `status`:
 
   Next step: /001-plan --resplit <task-id>
   ```
-  Set the task `status` back to `pending` in `epic-{id}-tasks.yaml`. Halt; do **not** proceed to verify or review.
+  Set the task `status` back to `pending` in `epic-{id}-tasks.yaml`. Halt; do **not** proceed to verify or review. Note: the planner re-split (`/001-plan --resplit`) is responsible for archiving the pending task's stub `01-plan.json` if it exists.
 
 - **`status: "blocked"`** — implementer hit a blocker it cannot resolve (missing dependency, ambiguous scenario, external decision required). Print `payload.reason` verbatim and the suggested follow-up if present. Leave task `status: in_progress` so the user can clear it manually after resolution. Halt.
 
@@ -112,7 +112,7 @@ If `auto_invoke_verify` is **not** `false` (default: `true`):
    - **`status: "ok"`** → continue to Phase 5.
    - **`status: "fail"`** → spawn `/005-implement-feedback` with the verifier findings. The feedback-implementer fixes implementation and the chain loops back to `/003-verify-dod`. Number the feedback artifacts `05a-feedback-impl.json`, `05b-...`, `05c-...`.
 
-**Hard cap: 3 consecutive feedback iterations.** On the 3rd consecutive `fail` from verify, halt with:
+**Hard cap: 3 feedback iterations per task, SHARED across verify and review gates (matches /005-implement-feedback letter-suffix scheme 05a/05b/05c). On the 4th would-be iteration, halt with `status: blockers_max_iterations`, surface findings to user, do not auto-loop.**
 ```
 Verify failed 3 times in a row for task <task-id>. Escalating to user.
 Last findings: .claude/runs/{epic_id}/{task_id}/03-verify.json
@@ -132,7 +132,7 @@ If `auto_invoke_review` is **not** `false` (default: `true`):
    - **`status: "ok"`** → continue to Phase 6.
    - **`status: "fail"`** → spawn `/005-implement-feedback` with reviewer findings. The chain loops: feedback-impl → back to `/003-verify-dod` → back to `/004-code-review`. The feedback iteration counter is **shared** with Phase 4 (a single task has at most 3 feedback rounds total, not 3 per gate).
 
-**Hard cap: 3 consecutive feedback iterations across verify + review combined.** On the 3rd consecutive `fail`, halt with the same escalation pattern as Phase 4, pointing at `04-review.json` and the latest `05X-feedback-impl.json`.
+**Hard cap: 3 feedback iterations per task, SHARED across verify and review gates (matches /005-implement-feedback letter-suffix scheme 05a/05b/05c). On the 4th would-be iteration, halt with `status: blockers_max_iterations`, surface findings to user, do not auto-loop.** Halt with the same escalation pattern as Phase 4, pointing at `04-review.json` and the latest `05X-feedback-impl.json`.
 
 If `auto_invoke_review: false`, skip Phase 5 and inform the user: `Auto-review disabled by toggle. Run /004-code-review <task-id> manually.`
 

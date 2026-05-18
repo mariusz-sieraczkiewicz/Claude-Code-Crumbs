@@ -191,10 +191,12 @@ What do you want to do?
    ```yaml
    - id: E-NNN
      title: <title>
+     goal: <one-line outcome>
      status: pending
-     business_scenarios: []
+     business_scenarios: |
+       # Empty until /001-plan authors scenarios
    ```
-   `business_scenarios` is left empty. **The planner (`/001-plan`) fills BS later** — not this command.
+   `business_scenarios` is a Gherkin block-scalar (string), seeded with a placeholder comment. **The planner (`/001-plan`) fills BS later** — not this command.
 4. Continue inline context-building (A.5) throughout.
 
 ### B.4 — Edit top-level PRD

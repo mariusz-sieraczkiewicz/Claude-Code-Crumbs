@@ -32,7 +32,11 @@ The **most recent** verify/review files are the source of truth. If both `03-ver
 For each Finding in the most recent verify/review:
 
 1. **Read the Finding** — pull `rule`, `location`, `message` from the JSON entry.
-2. **Locate the offending file/line.** If `location: "-"` (no precise pointer), derive the location from `message`, the rule file, and the task's declared `files[]` in `epic-{id}-tasks.yaml`. Use `Grep`/`Glob` to confirm.
+2. **Locate the offending file/line.** If `location: "-"` (no precise pointer), derive the location via this algorithm:
+   1. `Grep` the Finding's `message` keywords against the task's `files[]` from `01-plan.json`.
+   2. If exactly **1** file matches → use that file's path as `location`.
+   3. If **multiple** match → pick the file referenced earliest (lowest line number) in the rule file's body text.
+   4. If **zero** match → mark `unable_to_locate: true` on the corresponding entry in `05*-feedback-impl.json.payload.findings_processed[]` and skip this Finding; the verifier will re-flag it on the next pass.
 3. **Apply the minimal fix that addresses the root cause.** Do NOT bypass the gate. Specifically forbidden:
    - `git commit --no-verify`
    - Adding `eslint-disable`, `// @ts-ignore`, `// swiftlint:disable`, `# type: ignore`, `# noqa`, or analogous inline suppressions — **unless the rule file itself explicitly permits that suppression for this exact case**.
@@ -56,6 +60,7 @@ This subagent does not get to skip TDD just because the implementation already e
 - A Finding of the form "test assertion is too weak" → strengthen the assertion to match the Business scenario / acceptance criterion. Verify the strengthened assertion fails against the current code first if there is any doubt the new assertion is meaningful.
 - **Never delete or weaken an existing test to make a Finding disappear.** The reviewer flags weakened assertions, deleted tests, and `skip`/`xit`/`@Ignore` decorators as blockers. Doing this here produces an infinite review-loop and erodes trust in the gates.
 - If a Finding seems to require weakening a test, the test was probably written wrong by the implementer — emit `status: "blocked"`, `next: "re-plan"`, do not act unilaterally.
+- **Test scope is task scope.** Test code authored by `feedback-implementer` belongs to the same task scope as the file the Finding targets. If the new test would live **outside** the task's declared `files[]`, mark `out_of_scope: true` on that finding entry and request `/001-plan --resplit` via a `next` field pointing to the offending task. Do not silently write tests into a sibling task's directory.
 
 ## Commits
 
@@ -74,6 +79,8 @@ Never amend prior commits. Always append new commits. Never force-push (see `rul
 ## Outputs
 
 Write `runs/{epic_id}/{task_id}/05a-feedback-impl.json` on the first feedback iteration of this task. On reruns (because verify/review failed again after your fix), write `05b-feedback-impl.json`, then `05c-feedback-impl.json` — letter-suffixed in order, starting with `a`. Each file is validated against `schemas/run-phase.schema.json` on write; you must conform to it. There is no plain `05-feedback-impl.json` — always include the letter suffix from the very first iteration.
+
+**Letter-suffix branching contract.** After writing `05a-feedback-impl.json`, the orchestrating command (`/002-implement` or `/005-implement-feedback`) re-invokes the verifier (`/003-verify-dod`), which writes `03b-verify.json`. If `03b-verify.json.status == "ok"`, the orchestrator proceeds to the reviewer; if blockers remain, the orchestrator invokes `feedback-implementer` again, which writes `05b-feedback-impl.json`. The cycle repeats up to a **hard cap at `05c`** — no `05d` is ever produced (see "Loop limit").
 
 Schema-conformant shape:
 

@@ -32,18 +32,19 @@ If `stack.yaml.promote` is absent or empty: abort with `No promote config in sta
 
 ### Phase 0 — Pre-flight (always run)
 
-Validate inputs before doing any work. Each check below is **abort-on-fail** unless explicitly noted. None of these checks call the platform CLI — they are local: filesystem, git, and clock. The point of Phase 0 is to fail fast on misconfiguration before paying the cost of running the pre-flight script or the Journey gate.
+Validate inputs before doing any work. Each check below is **abort-on-fail** unless explicitly noted. Phase 0 fails fast on misconfiguration before paying the cost of running the pre-flight script or the Journey gate.
 
 1. **Environment whitelist.** If `<environment>` is not in `stack.yaml.promote.environments`, abort:
    `Environment '<env>' not configured. Available: <comma-separated list>.`
-2. **Workflow configured.** Look up `stack.yaml.promote.<environment>_workflow`. If empty or null, abort:
+2. **Auth check.** After confirming the platform CLI is installed (detect via `git remote get-url origin` — `github.com` → `gh`; `gitlab.com` or self-hosted GitLab → `glab`), run `gh auth status` (or `glab auth status`). If exit code != 0 → ABORT with: `<gh|glab> is installed but not authenticated. Run \`gh auth login\` (or \`glab auth login\`) first, then re-invoke /007-promote.` Capture the auth-status stderr in the abort message for diagnostics. This check belongs **BEFORE** any read of `stack.yaml.promote.*_workflow`.
+3. **Workflow configured.** Look up `stack.yaml.promote.<environment>_workflow`. If empty or null, abort:
    `No workflow configured for <env>. Plugin does not orchestrate deploys — set <env>_workflow in stack.yaml or run promotion manually.`
-3. **Team-preset discipline.** Read `team_preset` from `stack.yaml`. Apply the matching policy:
+4. **Team-preset discipline.** Read `team_preset` from `stack.yaml`. Apply the matching policy:
    - **`solo`** — allow direct Promotion to any Environment. No staging precondition. No further checks.
    - **`small-team`** — Promotion to `prod` requires staging to have been promoted within the **last 24h**. Read recent deploys via `gh run list --workflow=<staging_workflow> --limit 5 --json conclusion,updatedAt` (GitHub) or equivalent `glab` call. If no successful staging run in the window, **warn** and ask the user to confirm explicitly (`Proceed without recent staging? [y/N]`). Allow override on `y`; abort otherwise.
    - **`oss`** — Promotion to `prod` requires the current commit to carry a release tag. Run `git describe --tags --exact-match HEAD`. If it fails, abort: `prod promote requires a tagged release on HEAD. Tag the commit first (git tag vX.Y.Z && git push --tags).`
    - **`enterprise`** — Promotion to `prod` requires (a) change-management approval and (b) execution **inside the `change_window`** declared in `ruleset/deployment.md`. Parse `change_window` from that file (typically e.g. `Mon-Fri 09:00-17:00 local`). Compare to current local time. If outside the window, abort: `Outside change window (<window>). Override only with explicit user confirmation and CM approval reference.` Permit override only on explicit `y` plus a non-empty CM reference typed by the user.
-4. **Concurrent promotion check.** Detect the platform from `git remote get-url origin`:
+5. **Concurrent promotion check.** Detect the platform from `git remote get-url origin`:
    - **GitHub** (`github.com` in remote): run `gh run list --workflow=<stack.yaml.promote.<environment>_workflow> --status=in_progress --limit=5 --json status,createdAt`. If the result is a non-empty array, abort: `A promotion workflow is already in progress for <workflow>. Wait for it to finish or cancel it manually before re-invoking /007-promote.`
    - **GitLab** (`gitlab.com` or self-hosted GitLab): run `glab pipeline list --status=running --limit=5` and filter to entries whose pipeline file matches `<stack.yaml.promote.<environment>_workflow>`. If any match, abort with the same message (substituting the workflow name).
    - **Neither `gh` nor `glab` available on `$PATH`** (or remote host unrecognised): skip the check and print a visible warning: `Concurrent promotion check skipped — no platform CLI available. Proceeding without concurrency guard.`

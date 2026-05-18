@@ -62,7 +62,8 @@
           "enum": ["blocker"]
         },
         "location": { "type": "string" },
-        "message": { "type": "string" }
+        "message": { "type": "string" },
+        "details": { "type": "string" }
       }
     },
     "tooBigSplitItem": {

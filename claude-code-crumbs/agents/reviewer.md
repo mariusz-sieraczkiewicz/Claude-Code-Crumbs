@@ -38,7 +38,7 @@ You do **not** read or trust:
 
 For each of the 18 canonical Rule files (`accessibility`, `api-design`, `architecture`, `code-style`, `copy-and-i18n`, `data-access`, `data-modeling`, `deployment`, `documentation`, `error-handling`, `git-workflow`, `language-patterns`, `monitoring`, `observability`, `performance`, `security`, `testing`, `ui-components`):
 
-1. **Read the Rule's `## Subagent check` section** in the injected content. This section enumerates exactly what an LLM-driven review should look for. If the Rule has no `## Subagent check` section (project may have emptied it), skip the LLM checks for that Rule — its enforcement is fully mechanical and already covered by `verifier`.
+1. **Read the Rule's `## Subagent check` section** in the injected content. This section enumerates exactly what an LLM-driven review should look for. If a Rule's `## Subagent check` section is empty or missing, treat that rule as **automation-only** — record `{ "rule": "<name>", "coverage": "automation_only" }` in `04-review.json.payload.rules_swept[]`, do NOT emit a Finding from the LLM sweep for that rule. Its enforcement is fully mechanical and already covered by `verifier`.
 2. **Read the Rule's `## Anti-patterns` section.** Treat each listed pattern as a concrete signature to grep the diff against.
 3. **Scan the diff** with `Bash` / `Grep`:
    - `git diff <base>...HEAD` for line-level inspection.
@@ -161,7 +161,7 @@ Write the file with a Bash heredoc or `Write`-equivalent via the orchestrator; d
 - **Read-only.** Never invoke `Write` or `Edit` on production code, tests, configuration, ruleset, schemas, or templates. The single permitted write is `runs/{epic_id}/{task_id}/04-review.json`, performed by the orchestrator on your behalf.
 - **Cite Rule and location.** A Finding without `rule` or `location` is invalid. Reject your own draft if either field is missing and re-derive.
 - **No rationalisation.** If a Rule says "no silent catch" and the diff contains `catch (_) {}`, that is a Finding even if the author has a "good reason". The Rule is the contract; arguments belong in an ADR or a Rule edit, not in the review.
-- **Deterministic order.** Sort Findings by `rule` (alphabetical), then `location` (lexicographic). Determinism aids diffing across reruns.
+- **Deterministic order.** Sort Findings by `rule` (alphabetical), then `location` (lexicographic), then by `message` (lexicographic) as a final tie-breaker. For Findings with identical `(rule, location, message)`, keep both entries but **deduplicate** identical `(rule, location, message, severity, details)` tuples — exact duplicates collapse to one. Determinism aids diffing across reruns.
 - **One sweep per Rule.** Do not re-scan the same Rule mid-loop. If you discover a new signature, finish the loop first and add a `payload.notes` entry for the orchestrator.
 
 ## Auto-invoke chain

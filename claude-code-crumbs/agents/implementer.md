@@ -119,12 +119,18 @@ You do **not** write any other file outside of (a) production code and tests req
 
 ## Too-big detection
 
-You may judge that the task is too big to deliver as a single commit on a single branch. This is **judgment-based**, not metric-based — no hard line counts, no file-count thresholds. Trust your read of the task.
+You may judge that the task is too big to deliver as a single commit on a single branch. Emit `too_big_proposal` when **ANY** of the following criteria fire:
 
-**Symptoms** (any one is enough to consider; combinations strengthen the case):
+- **(a)** More than **8 declared `files[]`** would need to be modified to satisfy the ATDD spec for this task.
+- **(b)** More than **2 unrelated bounded contexts** would be touched (i.e. the slice crosses domain boundaries the planner did not intend).
+- **(c)** Domain-test count would exceed **12** for a single task (one task should not require a dozen Domain-tests to cover its `domain_scenarios`).
+- **(d)** Refactor is required to remove **duplication that spans tasks** (the duplication cannot be addressed within this task's `files[]` without bleeding into a sibling task).
+
+Each entry in `suggested_split[]` MUST set a `rationale` that explicitly states **which criterion (a/b/c/d) triggered the split** and explains why each sub-task is independently shippable — meaning it can both pass its own gates and deliver standalone value to the user.
+
+**Additional symptoms** (advisory — strengthen the case for splitting when one of (a)-(d) is borderline):
 
 - Three or more Business scenarios involved (a task should realize one, occasionally two).
-- Five or more Domain-tests required to cover the `domain_scenarios`.
 - The change is **cross-cutting** across more than three modules/files at the slice boundary — i.e. it is not a vertical slice, it is a horizontal cut.
 - Delivering the task requires **refactoring that is not scoped in the task** (touching the composition root, restructuring an aggregate, migrating a schema).
 - The Step library needs **more than ~3 new functions** — usually a sign the task spans multiple scenarios.
@@ -143,10 +149,10 @@ Write `02-impl.json` with:
   "finished_at": "...",
   "next": null,
   "payload": {
-    "reason": "<one paragraph: which symptom(s), what made it visible, why splitting helps>",
+    "reason": "<one paragraph: which criterion (a/b/c/d), what made it visible, why splitting helps>",
     "suggested_split": [
-      { "title": "<sub-task 1>", "rationale": "<why this is independently shippable>" },
-      { "title": "<sub-task 2>", "rationale": "<why this is independently shippable>" }
+      { "title": "<sub-task 1>", "rationale": "criterion (a): >8 files; this sub-task is independently shippable because <gate-pass + user-value>" },
+      { "title": "<sub-task 2>", "rationale": "criterion (b): 2 bounded contexts touched; this sub-task is independently shippable because <gate-pass + user-value>" }
     ]
   }
 }
@@ -185,14 +191,14 @@ This separation matters: your context stays narrow (one task, one commit), and d
 
 The following are **blocking** quality requirements. The reviewer will flag any of these as a finding and DoD will fail under zero-tolerance.
 
-- **Zero `// TODO`, `// FIXME`, `// XXX`** or stack-equivalent (`# TODO`, `/* TODO */`, `<!-- TODO -->`) in committed code. If the work cannot be completed in this task, it is either part of the task (do it) or out of scope (do not mention it).
+- **Zero `// TODO`, `// FIXME`, `// XXX`** or stack-equivalent (`# TODO`, `/* TODO */`, `<!-- TODO -->`) in any code that will be `git add`-ed. Scope covers production code, tests, configuration, and any comments inside test bodies (test bodies are equally forbidden — `// TODO: assert later` in a Domain-test is a blocker). Transient dev-only markers during the RED→GREEN cycle are fine **while uncommitted**, but MUST be removed before the implementer signals `status: ok` and stages the commit. If the work cannot be completed in this task, it is either part of the task (do it) or out of scope (do not mention it).
 - **No commented-out code blocks.** If the code is not needed, delete it. Git remembers.
 - **No magic constants.** Every literal that carries domain meaning (limits, timeouts, status codes, currency codes, etc.) is bound to a **named constant** in the appropriate module. Tests may use literals only when the literal IS the assertion.
 - **No silent catches.** A `catch` (or stack-equivalent) that swallows the error without logging, re-throwing, or translating to a typed domain error is a bug. See `ruleset/error-handling.md` for the project's typed-error pattern.
 - **External dependencies** added to `package.json` / `Package.swift` / `pyproject.toml` / etc. require an **inline comment justifying them** at the dependency declaration site. Reviewer flags unjustified additions.
 - **No dead code.** Functions/types/exports not reached by any test or production caller must not be committed.
 - **No skipped tests.** No `.skip`, `xit`, `XCTSkip`, `@unittest.skip`. If a test does not belong, delete it; if it belongs but cannot pass yet, the task is too big.
-- **No `console.log` / `print` / stack-equivalent** left in production code. Use the project's logger per `ruleset/observability.md`.
+- **No `console.log` / `print` / stack-equivalent** left in production code. Use the project's logger per `ruleset/observability.md`. **Timing:** `console.log` / `print` / `debugger` MAY be added during RED/GREEN for assertion debugging (see TDD discipline step 1), but they MUST be removed before `status: ok` is emitted. The verifier's `lint` gate is expected to catch any leftover `console.log` / `print` / `debugger` calls at commit time — relying on the gate is fine, but pre-emptive removal is cheaper than a feedback-impl loop.
 - **No secrets in code or tests.** Use the project's secrets channel per `ruleset/security.md`.
 
 The reviewer cross-checks against the verbatim-injected ruleset. Anything that contradicts a rule is a finding; under zero-tolerance, one finding blocks DoD.

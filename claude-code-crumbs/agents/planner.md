@@ -60,7 +60,7 @@ A PRD section is **sufficient** when it covers all three of:
 - At least one **edge case** (failure mode, validation, boundary condition, concurrency interaction, etc.).
 - An explicit **scope boundary** (what is in vs. out of this epic, especially with respect to adjacent epics).
 
-If **any** of those three is missing or ambiguous, do NOT guess. Write `runs/{epic_id}/00-plan-questions.json` with:
+If **any** of those three is missing or ambiguous, do NOT guess. Write `runs/{epic_id}/00-plan-questions.json` with the shape below. Note: `00-plan-questions.json` is an **interactive grilling artifact**, not a phase output — it does NOT have to validate against `schemas/run-phase.schema.json`. Only `NN-<phase>.json` files (e.g. `01-plan.json`) are phase outputs subject to schema validation.
 
 ```json
 {
@@ -90,12 +90,24 @@ Every invocation writes:
    - `agent: "planner"` (required by schema)
    - `status: "ok" | "blocked" | "fail"` (required)
    - `started_at` (required, RFC 3339 date-time)
-   - `findings: []` (present, may be empty — schema does not require findings for the plan phase, but emitting the key is good hygiene)
+   - `findings` (required — emit as `[]` when none; the key MUST be present so schema validation passes even when the planner has no questions/blockers to raise)
    - `payload` (free-form object; include `produced_artifacts: [...]` listing every file written this invocation)
 
 In fresh mode, additionally:
 
-2. **`docs/planning/epics.yaml`** — append or replace the entry for this epic. The entry must include `id`, `title`, `status: pending`, and a `business_scenarios` block-scalar containing all `## Scenario: <name>` blocks in Gherkin.
+2. **`docs/planning/epics.yaml`** — append or replace the entry for this epic. The entry must include `id`, `title`, `goal`, `status: pending`, and a `business_scenarios` block-scalar containing all `## Scenario: <name>` blocks in Gherkin. Required fields mirror `schemas/epics.schema.json`. Concrete entry shape:
+
+   ```yaml
+   - id: E-007
+     title: Subscription cancellation
+     goal: Allow paid users to cancel and retain access until end of period
+     status: pending
+     business_scenarios: |
+       ## Scenario: User cancels an active subscription
+       Given the user has an active paid subscription
+       When the user cancels the subscription
+       Then the subscription is marked cancelled at the end of the current billing period
+   ```
 
 3. **`docs/planning/epic-{id}-tasks.yaml`** — full task list for the epic.
 
@@ -307,4 +319,4 @@ Note: the second scenario only appears under T-001 because the idempotency edge 
 - Do not run tests, linters, or gates. That is the verifier's job.
 - Do not preserve a `parent` field on re-split tasks. Re-split is replacement, not lineage.
 - Do not invent epics. You only operate on epics that already exist in `PRD.md` and `epics.yaml`.
-- Do not emit non-English content in any shipped artifact. Plugin output is English regardless of project working language.
+- Do not emit non-English content in any shipped artifact. Plugin output is English regardless of project working language. The `reviewer` subagent enforces this constraint via the `vocabulary-discipline` ruleset sweep and rejects non-English content as a Finding on the next phase.

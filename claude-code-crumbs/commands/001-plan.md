@@ -107,7 +107,7 @@ The planner produces:
 
 ### Phase 2 — Archive old task
 
-Move the old task's `runs/{epic_id}/{task_id}/` directory to `runs-archive/{epic_id}/{task_id}-resplit-{timestamp}/` where `{timestamp}` is `YYYYMMDD-HHMMSS` UTC. The main thread invokes `mv` directly (or a small shell snippet); the planner does not touch the filesystem outside the planning artifacts.
+Move the old task's `runs/{epic_id}/{task_id}/` directory to `runs-archive/{epic_id}/{task_id}-resplit-{timestamp}-{short_uuid}/` where `{timestamp}` is `YYYYMMDD-HHMMSS` UTC and `{short_uuid}` is the first 8 chars of `uuidgen | tr -d '-'` (POSIX equivalent: `date +%s%N | sha1sum | cut -c1-8`). The suffix avoids collisions on sub-second re-splits. Example: `runs-archive/E-003/T-014-resplit-20260518-143022-a3f9b2c1/`. The main thread invokes `mv` directly (or a small shell snippet); the planner does not touch the filesystem outside the planning artifacts.
 
 Do NOT preserve a `parent` pointer on the new task entries. The history of the too_big_proposal lives in the archive directory only — new tasks start with a clean slate.
 
