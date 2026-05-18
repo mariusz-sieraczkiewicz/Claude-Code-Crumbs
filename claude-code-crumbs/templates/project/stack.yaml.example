@@ -23,6 +23,7 @@ gates:                              # shell commands. null = skip. Zero toleranc
   lint: "<your lint command>"          # e.g. "bun run lint"
   typecheck: "<your typecheck>"        # e.g. "bun run typecheck", "swift build"
   domain_tests: "<your domain test runner>"   # Vertex-style, no-infra
+  # For iOS, point to a simulator destination to avoid code-signing dependency, e.g. "xcodebuild test -scheme App -destination 'platform=iOS Simulator,name=iPhone 15' -only-testing:AppDomainTests"
   atdd_specs: null                      # null per-task; populated for epic close-out, e.g. "bun run test:atdd"
   journeys: null                        # populated for promotion only, e.g. "bun run test:journeys"
   build: "<your build command>"

@@ -29,6 +29,11 @@
         },
         "goal": { "type": "string" },
         "business_scenarios": { "type": "string" },
+        "cm_ticket": {
+          "type": "string",
+          "pattern": "^[A-Z]{2,}-[0-9]+$",
+          "description": "Optional change-management ticket id (e.g. CHG-12345, JIRA-7, CM-1). Required when the team_preset enforces require_ticket_reference: true (see templates/presets/enterprise/git-workflow.md). Inherited by tasks under this epic unless a task carries its own cm_ticket override."
+        },
         "adrs": {
           "type": "array",
           "items": { "type": "string" }

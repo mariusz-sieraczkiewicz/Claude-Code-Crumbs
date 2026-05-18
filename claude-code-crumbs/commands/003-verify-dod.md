@@ -114,7 +114,7 @@ A schema-failing verifier output is a bug in the subagent prompt, not in the pro
 
 `stack.yaml.design_verify` declares the project's design-fidelity gate. It is special-cased because it has two forms:
 
-- **`type: "script"`** — an executable (e.g. `swiftlint --strict` with custom rules, a Python `design_check.py`). The verifier treats it like any other gate: run, check exit code, capture findings. **No extra handling in this command.**
+- **`type: "script"`** — an executable (e.g. `swiftlint --strict` with custom rules, a Python `design_check.py`). The verifier treats it like any other gate: run, check exit code, capture findings. **No extra handling in this command.** Script form contributes a single Finding to `03-verify.json` (under `findings[]`) — no `03b-design-verify.json` sibling is written. Only the `prompt` form writes the sibling artifact.
 - **`type: "prompt"`** — a markdown file containing instructions for an LLM-driven design check (e.g. "compare diff against `docs/DESIGN.md` token table; flag any deviation"). The verifier cannot execute prose — it instead emits a single `design_verify_prompt` finding pointing at the prompt file. This command then:
   1. Reads the prompt file's full content.
   2. Computes the diff for the task (compare working tree against the branch base recorded in `02-impl.json`).

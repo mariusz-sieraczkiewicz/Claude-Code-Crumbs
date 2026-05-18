@@ -135,6 +135,39 @@ With `<preset>` from A.1:
 
 No other ruleset files are touched. Other ruleset files keep their baseline content from A.3.
 
+### A.4.1 — Enterprise configuration (only when team_preset=enterprise)
+
+This phase runs **only if** the user selected `enterprise` in A.1. For any other preset (`solo`, `small-team`, `oss`), skip this entire section and proceed to A.5.
+
+The baseline `.claude/stack.yaml` (copied in A.3 from `stack.yaml.example`) contains placeholder values for the promote workflows and lacks enterprise-specific keys (`git_host`, `cm_ticket_prefixes`, `change_window`, `signing_team_id`). Those placeholders are not safe to ship downstream to `/006-merge` and `/007-promote` — they may reference workflow files that do not exist, or omit the CM-ticket regex entirely. Prompt the user one-by-one and write each answer to `.claude/stack.yaml` at the indicated key. Defaults shown in parentheses; if the user hits Enter, use the default.
+
+1. **Git host.** Ask verbatim: "What git host? (e.g. `github.com`, `github.acmecorp.com`, `gitlab.com`, `gitlab.acmecorp.internal`)"
+   → Write `extras.git_host: <answer>` to stack.yaml.
+   If the answer is a non-standard host (anything other than `github.com` or `gitlab.com`), print: "Run `gh auth login --hostname <host>` or `glab auth login --hostname <host>` before /006-merge."
+
+2. **CM ticket prefixes.** Ask verbatim: "Allowed CM ticket prefixes? Space-separated, e.g. `CHG CM JIRA INC`" (default: `CHG`).
+   → Write `extras.cm_ticket_prefixes: [<prefix1>, <prefix2>, ...]` to stack.yaml as a YAML list.
+   Note: the `T-` prefix is reserved for plugin task ids; if the user includes it, reject and re-ask.
+
+3. **Change window.** Ask verbatim: "Change window for deployments? (e.g. `Tue-Thu 09:00-17:00 UTC`, or `none`)"
+   → Parse and write a structured key:
+     ```yaml
+     extras.change_window:
+       days: [Tue, Wed, Thu]
+       hours: "09:00-17:00"
+       timezone: UTC
+     ```
+   → If the user answers `none`: omit the key entirely (no window enforced).
+
+4. **Promote workflow filenames.** Two prompts:
+   a. "Staging workflow filename in `.github/workflows/`? (e.g. `promote-staging.yml`)" → Write `promote.staging_workflow: <answer>` to stack.yaml (overwriting the baseline placeholder).
+   b. "Prod workflow filename in `.github/workflows/`? (e.g. `promote-prod.yml`)" → Write `promote.prod_workflow: <answer>` (same).
+
+5. **Signing identity (optional).** Ask verbatim: "If iOS / signing-team-id applies, enter the Apple Developer Team ID (or press Enter to skip)"
+   → If the answer is non-empty: write `extras.signing_team_id: <answer>` to stack.yaml. If empty: omit the key.
+
+After all prompts complete, print a summary of the keys written and point the user to `commands/006-merge.md` and `commands/007-promote.md` for downstream usage of these values.
+
 ### A.5 — Inline context-building
 
 Throughout A.2 (and B/C below), maintain a discipline:
@@ -322,7 +355,7 @@ Permitted exception: if State A starts in a repo with significant pre-existing c
 
 You are done when, depending on state:
 
-- **State A**: PRD §1-§12 are concrete, all bootstrap files are written, team preset is applied, `.gitignore` includes runs/runs-archive, `CONTEXT.md` has at least the terms that came up during grilling, and you have announced `/001-plan` as the next step.
+- **State A**: PRD §1-§12 are concrete, all bootstrap files are written, team preset is applied, `.gitignore` includes runs/runs-archive, `CONTEXT.md` has at least the terms that came up during grilling, and you have announced `/001-plan` as the next step. If `team_preset=enterprise`: `stack.yaml.extras.cm_ticket_prefixes` is a non-empty list; `stack.yaml.promote.staging_workflow` and `prod_workflow` point to existing files OR are documented as TODO-create-by-user.
 - **State B**: the chosen sub-branch (new epic / top-level edit / header refine) is complete, the file deltas are minimal and accurate, `CONTEXT.md` reflects any new resolved terms, and any qualifying decisions have been offered as ADRs.
 - **State C**: the user's requested edits are applied, minimally and accurately. Nothing else moved.
 

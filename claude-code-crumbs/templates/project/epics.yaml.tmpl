@@ -1,3 +1,19 @@
 # epics.yaml — managed by /000-prd-refine (registry) and /001-plan (business_scenarios + tasks)
 # Validate with: scripts/validate-schemas.sh
+#
+# Reference shape for an epic entry (uncomment and adapt; /000-prd-refine writes
+# real entries — this block is documentation only):
+#
+# - id: E-001
+#   title: <short noun phrase>
+#   goal: <one-line outcome statement>
+#   status: pending          # pending | in_progress | blocked | done
+#   # cm_ticket: CHG-12345   # required when team_preset=enterprise (git-workflow.md `require_ticket_reference: true`); optional otherwise. Pattern: ^[A-Z]{2,}-[0-9]+$
+#   business_scenarios: |
+#     ## Scenario: <name>
+#     Given ...
+#     When ...
+#     Then ...
+#   # adrs: []               # optional, ADR ids/links produced under this epic
+#   # modules: []            # optional, module names this epic touches
 epics: []

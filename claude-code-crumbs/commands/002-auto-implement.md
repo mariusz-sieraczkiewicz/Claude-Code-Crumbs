@@ -58,6 +58,13 @@ Output language for all artifacts and user-facing messages is **English**, regar
 - Load the 18 ruleset files into a single verbatim block (in stable lexicographic order). Hold it in memory for the whole batch. The block is identical for every subagent dispatch in this batch — load once, inject many times.
 - Verify the current branch is clean (no uncommitted changes outside `.claude/runs/` and `docs/planning/`). If dirty → abort with: `Working tree has uncommitted changes outside the runs and planning directories. Commit or stash before /002-auto-implement.`
 - Resolve the branch base from `git-workflow.md` (`base_branch` key; defaults to `main`). Hold the resolved base ref in memory for the reviewer dispatches (they diff against it).
+- **Signed-commits preflight.** If `git-workflow.md.require_signed_commits: true`:
+  1. Run `git config --get user.signingkey` — must return non-empty.
+  2. Run `git config --get commit.gpgsign` — must return `true` (or `gpg.format=ssh` plus `user.signingkey` set).
+  3. Verify the agent is available:
+     - For GPG: `gpg --list-secret-keys "$(git config --get user.signingkey)" >/dev/null`
+     - For SSH: `ssh-add -L | grep -q "$(git config --get user.signingkey)"` or accept if `gpg.format=ssh` and the key file exists on disk.
+  4. If any check fails → ABORT (release the Phase 0 lock first per the close-out cleanup contract) with: `require_signed_commits=true but signing not configured. Set git config user.signingkey and ensure your agent (gpg-agent / ssh-agent) is running. Re-run after fixing.`
 - Print the plan to the user (single block):
 
   ```
@@ -74,13 +81,29 @@ For each task id in `pending_ids`, **in declared order** (sequential, never para
 
 #### Step 1 — Implementer subagent
 
+- **Pre-dispatch: resolve branch name and commit-msg context.** Mirrors `/002-implement` Phase 1 substitution rules. Recognised substitution keys for `branch_name_pattern`: `{task_id}`, `{slug}`, `{ticket_id}`.
+  1. Substitute `{task_id}` with the current task id and `{slug}` with the task's `slug` (or kebab-cased `title` fallback).
+  2. **Resolve `{ticket_id}`** (only required when the pattern contains the placeholder; enterprise default `task/{ticket_id}/{task_id}-{slug}`):
+     a. Read `task.cm_ticket` from the current task entry in `epic-{id}-tasks.yaml`.
+     b. If absent, fall back to `epic.cm_ticket` from the matching epic entry in `epics.yaml`.
+     c. If still absent AND the pattern contains `{ticket_id}`:
+        - If `git-workflow.md.require_ticket_reference: true` → HALT the batch (release the Phase 0 lock first) with: `Task T-NNN has no cm_ticket and parent epic has none either. Add one via /001-plan or edit epic-NNN-tasks.yaml. (Enterprise preset requires CM ticket per task or epic.)`
+        - Else → substitute `{ticket_id}` with the empty string and emit a visible warning (non-enterprise edge case).
+     d. **Validate against `ticket_prefixes`** from `git-workflow.md` (if present): the resolved `<id>` must start with one of the configured prefixes (e.g. `CHG-`, `CM-`, `JIRA-`, `INC-`). Reject anything starting with `T-` — the plugin's own task-id namespace is reserved. On mismatch → HALT the batch with the resolved id, the allowed prefixes, and the source (task vs epic).
+  3. **Branch collision / resume check.** Before any sync, run `git show-ref --verify --quiet refs/heads/<computed-branch-name>`. If the branch exists:
+     - If `HEAD` already points at that branch AND any commit on that branch carries the current task id OR the resolved ticket id in its subject (`git log --oneline --grep="$TASK_ID\|$TICKET_ID" <branch>`) — treat as **resume**: skip base checkout, skip branch creation.
+     - Otherwise → HALT the batch: `Branch <computed-branch-name> exists but does not appear to be a resume from a prior /002-auto-implement run. Inspect manually before retrying.`
 - Invoke the `Task` tool with `subagent_type: "implementer"`.
 - Prompt body MUST include, verbatim:
   - the task entry from `epic-{id}-tasks.yaml`,
   - the referenced Business scenarios from `epics.yaml` (Gherkin block-scalar copied as-is),
   - the full 18-file ruleset block,
   - `stack.yaml.extras`,
-  - the resolved `git-workflow.md` toggles.
+  - the resolved `git-workflow.md` toggles,
+  - **commit-msg context** under a header `--- commit-msg context ---`:
+    - `cm_ticket: <resolved-ticket-id-or-null>` — the value resolved in the pre-dispatch step above.
+    - `commit_subject_pattern: <from git-workflow.md commit-msg toggle>` — verbatim regex/string (e.g. `^(feat|fix|chore|refactor|test|docs)(\([a-z0-9-]+\))?: .+ \[[A-Z]+-[0-9]+\]$`).
+    The implementer is responsible for including the ticket id in the commit subject (per the enterprise `^... \[TICKET-ID\]$` pattern); the conductor's job is to surface it.
 - The subagent reads/writes `.claude/runs/{epic_id}/{task_id}/02-impl.json` (and any prior phase files in that directory).
 - Wait for completion. On return, read `02-impl.json`.
 - Before dispatch, set the task `status: in_progress` in `epic-{id}-tasks.yaml` (preserve YAML formatting, comments, and key order). This matches `/002-implement` behaviour and ensures that if the user kills the batch mid-task, the runs-directory state is consistent with the tasks file.

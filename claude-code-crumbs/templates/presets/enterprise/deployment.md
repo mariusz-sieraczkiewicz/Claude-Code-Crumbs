@@ -63,7 +63,13 @@ require_provenance: true
 separation_of_duty: true
 block_self_approval: true
 auto_invoke_verify: true
+require_pre_flight: true
 branch_name_pattern: "task/{ticket_id}/{task_id}-{slug}"   # nested under change-management ticket id
+change_window:
+  days: ["Tue", "Wed", "Thu"]    # ISO weekday names, 3-letter
+  hours: "09:00-17:00"            # 24h local time, dash-separated
+  timezone: "UTC"                 # IANA tz name; team's anchor
+  allow_outside_window_for: ["sev-1", "rollback"]   # ticket-type allowlist
 ```
 
 ## Mechanical enforcement

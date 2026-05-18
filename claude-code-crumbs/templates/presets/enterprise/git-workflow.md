@@ -12,10 +12,9 @@ applyTo: "**/*"
 ## Branching
 
 - `main` is the production-tracking branch. Strictly protected.
-- Feature work: `feat/<JIRA-or-CM-id>-<slug>`, e.g. `feat/CHG-12345-rate-limit-middleware`. **Ticket id in branch name is mandatory** — this is the audit anchor.
-- Other types: `fix/<id>-<slug>`, `chore/<id>-<slug>`, `refactor/<id>-<slug>`, `hotfix/<id>-<slug>`.
+- All task branches: `task/{ticket_id}/{task_id}-{slug}`, e.g. `task/CHG-12345/T-014-rate-limit-middleware`. **Ticket id in branch name is mandatory** — this is the audit anchor. The canonical shape is enforced by the `branch_name_pattern` toggle below; no other shapes are permitted.
 - Release branches: `release/v<major>.<minor>` cut from `main` for staged production rollouts.
-- Hotfix branches: `hotfix/<id>-<slug>` cut from the current `release/` branch; merged to `release/` and forward-merged to `main`.
+- Hotfix branches follow the same `task/{ticket_id}/{task_id}-{slug}` shape, cut from the current `release/` branch; merged to `release/` and forward-merged to `main`.
 - Long-lived branches outside the above set require an ADR.
 
 ## Commit conventions
@@ -63,8 +62,23 @@ squash_merge: true
 delete_branch_on_merge: true
 pr_required: true
 require_ticket_reference: true
-ticket_pattern: "[A-Z]+-\\d+"
+ticket_prefixes: ["CHG", "CM", "JIRA", "INC"]   # downstream commands compose the regex as (CHG|CM|JIRA|INC)-\d+
 ticket_locations: ["branch_name", "commit_subject"]   # where to look for the id
+pr_body_template: |
+  ## Summary
+  <one-paragraph summary>
+
+  ## Change-management
+  - Ticket: {ticket_id}
+  - Risk: <low|medium|high>
+  - Affected systems: <list>
+  - Rollback procedure: <steps or link>
+  - Test evidence: <links to /003+/004 outputs>
+  - Security impact: <none | summary>
+
+  ## Approvers
+  - Code owner: @<owner>
+  - Compliance: @<compliance>
 require_codeowners_review: true
 require_security_review_for_sensitive_paths: true
 dismiss_stale_approvals_on_push: true
@@ -83,8 +97,8 @@ branch_name_pattern: "task/{ticket_id}/{task_id}-{slug}"   # nested under change
   - Dismiss stale approvals on push.
   - Restrict who can push: only the merge bot / release engineers.
   - No force-push, no deletion, no bypass for admins.
-- **Commit-msg lefthook hook**: regex `^(feat|fix|chore|docs|refactor|test|style|perf|ci|build|revert|hotfix)(\([a-z0-9-]+\))?: .+ \[[A-Z]+-[0-9]+\]$` enforces ticket id in subject.
-- **Ticket id enforcement**: all branches and commits MUST reference a change-management ticket id matching `ticket_pattern` (default `[A-Z]+-\d+`). `/006-merge` parses this id from the locations listed in `ticket_locations` and embeds it in the PR description's Change-management section. PR creation fails if no match is found in any of `ticket_locations`.
+- **Commit-msg lefthook hook**: regex `^(feat|fix|chore|docs|refactor|test|style|perf|ci|build|revert|hotfix)(\([a-z0-9-]+\))?: .+ \[(CHG|CM|JIRA|INC)-[0-9]+\]$` enforces ticket id in subject. The prefix alternation is composed from `ticket_prefixes`.
+- **Ticket id enforcement**: all branches and commits MUST reference a change-management ticket id whose prefix appears in `ticket_prefixes`. Use `ticket_prefixes` (list); regex composed downstream as `(<prefix1>|<prefix2>|...)-\\d+`. The plugin's own task ids (`T-NNN`) are reserved and not valid tickets. `/006-merge` parses this id from the locations listed in `ticket_locations` and embeds it in the PR description's Change-management section. PR creation fails if no match is found in any of `ticket_locations`.
 - **`ticket-link-check` CI job** verifies the referenced ticket exists, is in an allowed status, and is assigned to a human (not unassigned).
 - **Audit log**: PR events streamed to the org's SIEM via webhook. Retained per compliance policy.
 - **CODEOWNERS** at multiple granularities; security paths owned by `@org/security`.
@@ -112,7 +126,7 @@ branch_name_pattern: "task/{ticket_id}/{task_id}-{slug}"   # nested under change
 
 ```
 # 1. Create CM ticket CHG-12345 (risk: medium, rollback: feature-flag off)
-git switch -c feat/CHG-12345-rate-limit-middleware
+git switch -c task/CHG-12345/T-014-rate-limit-middleware
 # ... TDD via /002-implement ...
 git commit -S -s -m "feat(server): add token-bucket rate-limit middleware [CHG-12345]
 
@@ -120,7 +134,7 @@ Mitigates abuse vector documented in THREAT-2026-04. Behind feature flag
 rate_limit.enabled; default off; rollout plan in CHG-12345.
 
 Refs: CHG-12345"
-git push -u origin feat/CHG-12345-rate-limit-middleware
+git push -u origin task/CHG-12345/T-014-rate-limit-middleware
 /006-merge
 # PR opened, 2 CODEOWNERS approve, security CODEOWNERS approve (auth path)
 # All gates green, ticket in approved state -> squash-merge to main

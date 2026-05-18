@@ -39,17 +39,32 @@ This command is the single-task counterpart of `/002-auto-implement`. It dispatc
 - Ensure `.claude/runs/{epic_id}/{task_id}/artifacts/` exists for transient subagent outputs (logs, drafts).
 - Confirm `.claude/ruleset/` contains all 18 canonical rule files. If any are missing, list them and abort — the implementer cannot be dispatched without the full ruleset.
 - Confirm `.claude/stack.yaml` exists and parses. If absent, abort with: `stack.yaml missing. Run /000-prd-refine to bootstrap the project.`
+- **Signed-commits preflight.** If `git-workflow.md.require_signed_commits: true`:
+  1. Run `git config --get user.signingkey` — must return non-empty.
+  2. Run `git config --get commit.gpgsign` — must return `true` (or `gpg.format=ssh` plus `user.signingkey` set).
+  3. Verify the agent is available:
+     - For GPG: `gpg --list-secret-keys "$(git config --get user.signingkey)" >/dev/null`
+     - For SSH: `ssh-add -L | grep -q "$(git config --get user.signingkey)"` or accept if `gpg.format=ssh` and the key file exists on disk.
+  4. If any check fails → ABORT with: `require_signed_commits=true but signing not configured. Set git config user.signingkey and ensure your agent (gpg-agent / ssh-agent) is running. Re-run after fixing.`
 
 ### Phase 1 — Branch
 
-- Read `branch_name_pattern` from the YAML toggle block in `.claude/ruleset/git-workflow.md`. Default: `task/{task_id}-{slug}`. Substitute `{task_id}` with the actual id and `{slug}` with the task's `slug` field (or a kebab-cased `title` fallback).
+- Read `branch_name_pattern` from the YAML toggle block in `.claude/ruleset/git-workflow.md`. Default: `task/{task_id}-{slug}`. Recognised substitution keys: `{task_id}`, `{slug}`, `{ticket_id}`.
+  1. Substitute `{task_id}` with the actual id and `{slug}` with the task's `slug` field (or a kebab-cased `title` fallback).
+  2. **Resolve `{ticket_id}`** (only required when the pattern contains the placeholder; enterprise default `task/{ticket_id}/{task_id}-{slug}`):
+     a. Read `task.cm_ticket` from the current task entry in `epic-{id}-tasks.yaml`.
+     b. If absent, fall back to `epic.cm_ticket` from the matching epic entry in `epics.yaml`.
+     c. If still absent AND the pattern contains `{ticket_id}`:
+        - If `git-workflow.md.require_ticket_reference: true` → ABORT with: `Task T-NNN has no cm_ticket and parent epic has none either. Add one via /001-plan or edit epic-NNN-tasks.yaml. (Enterprise preset requires CM ticket per task or epic.)`
+        - Else → substitute `{ticket_id}` with the empty string and emit a visible warning (non-enterprise edge case where the pattern references the placeholder but no ticket is mandated).
+     d. **Validate against `ticket_prefixes`** from `git-workflow.md` (if the key is present): the resolved `<id>` must start with one of the configured prefixes (e.g. `CHG-`, `CM-`, `JIRA-`, `INC-`). Reject anything starting with `T-` — the plugin's own task-id namespace is reserved and must never be reused as a ticket id. On mismatch → ABORT with the resolved id, the allowed prefixes, and the source (task vs epic) from which the id was read.
 - If `allow_commit_to_main: true` (typical for the **solo** preset):
   - Skip branch creation entirely.
   - The implementer will commit directly to `main` (or the configured default branch).
 - Otherwise:
   - Determine the default base branch (`main` unless `stack.yaml.paths.default_branch` overrides).
   - **Branch collision check.** Before syncing, run `git show-ref --verify --quiet refs/heads/<computed-branch-name>`. If the branch exists:
-    - If `HEAD` already points at that branch (`git rev-parse --abbrev-ref HEAD` equals the computed name) AND the most recent commit message on it matches the pattern `feat(<task-id>):` or `WIP(<task-id>):` (i.e. it is a prior partial `/002-implement` run on the same task) → treat this as a **resume**: skip base checkout, skip branch creation, continue at Phase 2.
+    - If `HEAD` already points at that branch (`git rev-parse --abbrev-ref HEAD` equals the computed name) AND any commit on that branch carries the current task id OR the resolved ticket id in its subject (per the enterprise convention `feat(scope): description [TICKET-ID]`, the task id is not in the Conventional-Commits scope) — match via `git log --oneline --grep="$TASK_ID\|$TICKET_ID" <branch>` — treat this as a **resume**: skip base checkout, skip branch creation, continue at Phase 2.
     - Otherwise → abort: `Branch <computed-branch-name> exists but does not appear to be a resume from a prior /002-implement run. Inspect manually before retrying.`
   - Run `git checkout <base>` then `git pull --ff-only` to sync.
   - Create and check out the new branch: `git checkout -b <computed-branch-name>`.
@@ -67,6 +82,10 @@ Use the **Task tool** with `subagent_type: "implementer"`. Inject the following 
    - `too_big_proposal` → `reason` (prose), `suggested_split` (array of draft task titles, 2..n entries).
    - `blocked` → `reason` (prose), optional `suggested_follow_up`.
 6. **Prior history** — paste any pre-existing artifacts under `.claude/runs/{epic_id}/{task_id}/` (e.g. `01-plan.json` from `/001-plan`) verbatim under a header `--- Prior phase: 01-plan.json ---`. Subagents are append-only readers of the runs history.
+7. **Commit-msg context** — under a header `--- commit-msg context ---`, pass the values needed for the implementer to compose a compliant commit subject (per enterprise `^... \[TICKET-ID\]$` pattern from `git-workflow.md`):
+   - `cm_ticket: <resolved-ticket-id-or-null>` — the value resolved in Phase 1 (task `cm_ticket`, falling back to epic `cm_ticket`, or `null` if neither was set and the pattern did not require one).
+   - `commit_subject_pattern: <from git-workflow.md commit-msg toggle>` — verbatim regex/string from the toggle block (e.g. `^(feat|fix|chore|refactor|test|docs)(\([a-z0-9-]+\))?: .+ \[[A-Z]+-[0-9]+\]$`).
+   The implementer is responsible for including the ticket id in the commit subject when one is present; the main thread is responsible for surfacing it.
 
 The implementer is expected to:
 

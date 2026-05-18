@@ -36,18 +36,42 @@ Validate inputs before doing any work. Each check below is **abort-on-fail** unl
 
 1. **Environment whitelist.** If `<environment>` is not in `stack.yaml.promote.environments`, abort:
    `Environment '<env>' not configured. Available: <comma-separated list>.`
-2. **Auth check.** After confirming the platform CLI is installed (detect via `git remote get-url origin` — `github.com` → `gh`; `gitlab.com` or self-hosted GitLab → `glab`), run `gh auth status` (or `glab auth status`). If exit code != 0 → ABORT with: `<gh|glab> is installed but not authenticated. Run \`gh auth login\` (or \`glab auth login\`) first, then re-invoke /007-promote.` Capture the auth-status stderr in the abort message for diagnostics. This check belongs **BEFORE** any read of `stack.yaml.promote.*_workflow`.
+2. **Detect host, platform, and auth.** Use the 3-step host-aware detection algorithm (works for GitHub Enterprise and self-hosted GitLab — host is **not** matched against `github.com` / `gitlab.com` literals). `command -v gh` / `command -v glab` runs **first**; abort with an install hint if neither exists.
+
+   ```bash
+   # Step 1 — extract host from origin URL
+   HOST="$(git remote get-url origin | sed -E 's#^(https?://|git@)([^:/]+)[:/].*#\2#')"
+
+   # Step 2 — detect platform via authenticated CLI
+   if gh auth status --hostname "$HOST" >/dev/null 2>&1; then
+     PLATFORM=github; GH_HOST="$HOST"
+   elif glab auth status --hostname "$HOST" >/dev/null 2>&1; then
+     PLATFORM=gitlab; GLAB_HOST="$HOST"
+   else
+     echo "No authenticated CLI for host $HOST. Run \`gh auth login --hostname $HOST\` (or \`glab auth login --hostname $HOST\`) then re-run." >&2
+     exit 1
+   fi
+   ```
+
+   GitHub Enterprise and self-hosted GitLab are supported via per-host `gh auth login --hostname <host>` / `glab auth login --hostname <host>`. The command honours whatever host the local CLI is authenticated against; no `stack.yaml` override is required.
+
+   This check belongs **BEFORE** any read of `stack.yaml.promote.*_workflow`.
+
+   **Plugin cannot verify external CM-system state.** Whether the referenced CM ticket is in `Approved for Deployment` state is enforced server-side by the platform (workflow `required_reviewers`, branch protection, or a `ticket-link-check` CI job). The plugin does not contact your CM/Jira/ServiceNow API.
 3. **Workflow configured.** Look up `stack.yaml.promote.<environment>_workflow`. If empty or null, abort:
    `No workflow configured for <env>. Plugin does not orchestrate deploys — set <env>_workflow in stack.yaml or run promotion manually.`
+   Then verify the workflow file actually exists at HEAD: `test -f .github/workflows/<workflow>` (or the GitLab-equivalent path). If missing, abort: `Workflow file .github/workflows/<workflow> not found at HEAD. Check stack.yaml.promote.<env>_workflow points to an existing file.`
 4. **Team-preset discipline.** Read `team_preset` from `stack.yaml`. Apply the matching policy:
    - **`solo`** — allow direct Promotion to any Environment. No staging precondition. No further checks.
-   - **`small-team`** — Promotion to `prod` requires staging to have been promoted within the **last 24h**. Read recent deploys via `gh run list --workflow=<staging_workflow> --limit 5 --json conclusion,updatedAt` (GitHub) or equivalent `glab` call. If no successful staging run in the window, **warn** and ask the user to confirm explicitly (`Proceed without recent staging? [y/N]`). Allow override on `y`; abort otherwise.
+   - **`small-team` and `enterprise`** — Promotion to `prod` requires staging to have been promoted within the **last 24h**. Read recent deploys via `gh run list --workflow=<staging_workflow> --limit 5 --json conclusion,updatedAt` (GitHub) or equivalent `glab` call. If no successful staging run in the window:
+     - For `small-team`: **warn** and ask the user to confirm explicitly (`Proceed without recent staging? [y/N]`). Allow override on `y`; abort otherwise.
+     - For `enterprise`: abort with `Enterprise preset requires staging promotion within the last 24h before prod. Run /007-promote staging first.` (No interactive override — enterprise discipline is non-negotiable.)
    - **`oss`** — Promotion to `prod` requires the current commit to carry a release tag. Run `git describe --tags --exact-match HEAD`. If it fails, abort: `prod promote requires a tagged release on HEAD. Tag the commit first (git tag vX.Y.Z && git push --tags).`
-   - **`enterprise`** — Promotion to `prod` requires (a) change-management approval and (b) execution **inside the `change_window`** declared in `ruleset/deployment.md`. Parse `change_window` from that file (typically e.g. `Mon-Fri 09:00-17:00 local`). Compare to current local time. If outside the window, abort: `Outside change window (<window>). Override only with explicit user confirmation and CM approval reference.` Permit override only on explicit `y` plus a non-empty CM reference typed by the user.
-5. **Concurrent promotion check.** Detect the platform from `git remote get-url origin`:
-   - **GitHub** (`github.com` in remote): run `gh run list --workflow=<stack.yaml.promote.<environment>_workflow> --status=in_progress --limit=5 --json status,createdAt`. If the result is a non-empty array, abort: `A promotion workflow is already in progress for <workflow>. Wait for it to finish or cancel it manually before re-invoking /007-promote.`
-   - **GitLab** (`gitlab.com` or self-hosted GitLab): run `glab pipeline list --status=running --limit=5` and filter to entries whose pipeline file matches `<stack.yaml.promote.<environment>_workflow>`. If any match, abort with the same message (substituting the workflow name).
-   - **Neither `gh` nor `glab` available on `$PATH`** (or remote host unrecognised): skip the check and print a visible warning: `Concurrent promotion check skipped — no platform CLI available. Proceeding without concurrency guard.`
+   - **`enterprise`** — In addition to the staging-within-24h precondition above, Promotion to `prod` requires execution **inside the `change_window`**. Read the structured change-window config from `stack.yaml.extras.change_window` (preferred) — keys: `days` (e.g. `[Mon, Tue, Wed, Thu, Fri]`), `hours` (e.g. `"09:00-17:00"`), `timezone` (IANA, e.g. `"Europe/Warsaw"`). If `stack.yaml.extras.change_window` is absent, fall back to parsing the toggle block in `ruleset/deployment.md`. Compute current local time in the specified `timezone`. If outside the window AND the CM ticket id is NOT listed in `stack.yaml.extras.change_window.allow_outside_window_for`, abort: `Outside change window (<days> <hours> <timezone>). Override only with explicit user confirmation and CM approval reference, or add the ticket to allow_outside_window_for.` Permit override only on explicit `y` plus a non-empty CM reference typed by the user.
+5. **Concurrent promotion check.** Use the `PLATFORM` / `HOST` resolved in step 2 (no re-detection from `git remote`):
+   - **`PLATFORM=github`**: run `GH_HOST="$HOST" gh run list --workflow=<stack.yaml.promote.<environment>_workflow> --status=in_progress --limit=5 --json status,createdAt`. If the result is a non-empty array, abort: `A promotion workflow is already in progress for <workflow>. Wait for it to finish or cancel it manually before re-invoking /007-promote.`
+   - **`PLATFORM=gitlab`**: run `GLAB_HOST="$HOST" glab pipeline list --status=running --limit=5` and filter to entries whose pipeline file matches `<stack.yaml.promote.<environment>_workflow>`. If any match, abort with the same message (substituting the workflow name).
+   - **Neither CLI authenticated for `$HOST`** (step 2 already aborts in this case): skip — control never reaches step 5. The legacy "no platform CLI available" warning path is retained only for environments where the operator deliberately bypasses step 2; in normal flow it is unreachable.
 
 Phase 0 produces no artifact; on success it prints a one-line summary of the checks that passed and proceeds.
 
@@ -83,21 +107,18 @@ The Journey gate runs against the **source** Environment in most projects (e.g. 
 
 ### Phase 3 — Trigger platform workflow
 
-Detect the platform from `git remote get-url origin`:
-
-**Auth check.** After confirming the CLI is installed (per the platform branches below), run `gh auth status` (or `glab auth status`) **before** the actual `gh workflow run` / `glab pipeline trigger`. If exit code != 0 → ABORT with: `<gh|glab> is installed but not authenticated. Run \`gh auth login\` (or \`glab auth login\`) first, then re-invoke /007-promote.` Capture the auth-status stderr in the abort message for diagnostics.
+Use the `PLATFORM` / `HOST` resolved in Phase 0 step 2. Auth has already been verified there (the `gh auth status --hostname "$HOST"` / `glab auth status --hostname "$HOST"` probe doubles as platform detection AND auth verification), so no separate auth re-check is needed here.
 
 **Network timeout posture.** This command invokes GitHub/GitLab CLI commands that perform network I/O. The CLI tools (`gh`, `glab`) use their own default timeouts; this command does NOT wrap them in an external timeout. If a CLI call hangs >120s, halt the command (Ctrl-C) and re-run after checking network connectivity. Do not auto-retry — duplicate PRs/MRs/workflow triggers may result.
 
-- **GitHub** (host contains `github.com`): require `gh` on `$PATH`. Determine the ref:
+- **`PLATFORM=github`**: determine the ref:
   - For `staging`: `--ref main` (or the branch configured in `ruleset/deployment.md`).
   - For `prod`: `--ref <tag>` when `team_preset = oss`; otherwise `--ref main` unless the workflow expects an explicit tag (defer to `deployment.md`).
-  - Invoke: `gh workflow run <workflow-from-stack-yaml> --ref <ref>`. If the workflow accepts inputs, pass `-f environment=<env>` when the workflow declares an `environment` input; do not invent inputs the workflow does not declare.
-- **GitLab** (host contains `gitlab.com` or a self-hosted GitLab): require `glab` on `$PATH`. Invoke:
-  - `glab pipeline trigger --ref <ref> -v ENV=<env>` for the default pipeline, or
-  - `glab ci run <pipeline-file>` when `*_workflow` names a specific pipeline file.
-- **Other** (neither `gh` nor `glab` resolves, or remote host is unrecognised): abort with:
-  `Unsupported platform. Trigger the workflow manually: <workflow_name>. Plugin does not implement raw API calls.`
+  - Invoke: `GH_HOST="$HOST" gh workflow run <workflow-from-stack-yaml> --ref <ref>`. If the workflow accepts inputs, pass `-f environment=<env>` when the workflow declares an `environment` input; do not invent inputs the workflow does not declare.
+- **`PLATFORM=gitlab`**: invoke:
+  - `GLAB_HOST="$HOST" glab pipeline trigger --ref <ref> -v ENV=<env>` for the default pipeline, or
+  - `GLAB_HOST="$HOST" glab ci run <pipeline-file>` when `*_workflow` names a specific pipeline file.
+- **Other** (Phase 0 step 2 already aborts when neither CLI is authenticated for `$HOST`): this branch is unreachable in normal flow. Retained as a defence-in-depth fallback: `Unsupported platform. Trigger the workflow manually: <workflow_name>. Plugin does not implement raw API calls.`
 
 **The plugin does not wait for the workflow to finish.** It triggers and exits immediately. The platform owns execution, logging, rollback, and notification. The user monitors via `gh run watch`, `glab pipeline view`, or the platform UI.
 

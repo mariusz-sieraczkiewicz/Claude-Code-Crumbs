@@ -40,13 +40,31 @@ The active preset is determined by which `git-workflow.md` is present in `.claud
 
 1. **Task exists and done.** Load the task entry from `epic-{id}-tasks.yaml` (the `{id}` comes from the task's epic linkage). If the task is missing → abort: `Task <id> not found in any epic-*-tasks.yaml.` If `status != done` → abort: `Task must be /002-implement-complete (status: done) before merging.`
 2. **Branch matches pattern.** Compare `git rev-parse --abbrev-ref HEAD` against `branch_name_pattern`. Mismatch → warn (`Branch <name> does not match pattern <pattern>; proceeding.`) but do not abort.
-3. **Detect remote.** Read `git remote get-url origin`:
-   - Contains `github.com` → tool is `gh`.
-   - Contains `gitlab.com` or a self-hosted GitLab host (detected via the workflow toggle or the URL pattern) → tool is `glab`.
-   - Anything else → abort: `Unsupported remote <url>. Push branch and open MR manually.`
+3. **Detect remote and platform.** Use the 3-step host-aware detection algorithm (works for GitHub Enterprise and self-hosted GitLab — host is **not** matched against `github.com` / `gitlab.com` literals):
+
+   ```bash
+   # Step 1 — extract host from origin URL
+   HOST="$(git remote get-url origin | sed -E 's#^(https?://|git@)([^:/]+)[:/].*#\2#')"
+
+   # Step 2 — detect platform via authenticated CLI (run `command -v` first; see step 5)
+   if gh auth status --hostname "$HOST" >/dev/null 2>&1; then
+     PLATFORM=github; GH_HOST="$HOST"
+   elif glab auth status --hostname "$HOST" >/dev/null 2>&1; then
+     PLATFORM=gitlab; GLAB_HOST="$HOST"
+   else
+     # abort — no authenticated CLI for this host
+     echo "No authenticated CLI for host $HOST. Run \`gh auth login --hostname $HOST\` (or \`glab auth login --hostname $HOST\`) then re-run." >&2
+     exit 1
+   fi
+   ```
+
+   GitHub Enterprise and self-hosted GitLab are supported via per-host `gh auth login --hostname <host>` / `glab auth login --hostname <host>`. The command honours whatever host the local CLI is authenticated against; no `stack.yaml` override is required.
+
 4. **Solo preset short-circuit.** If `pr_required: false`: print `Solo preset — no MR required. Branch <name> is on main.` and exit cleanly. Do not push, do not call `gh`/`glab`.
-5. **CLI installed.** `command -v gh` or `command -v glab`. If missing → abort with the install hint: `Install <tool> first: https://cli.github.com` or `https://gitlab.com/gitlab-org/cli`.
-6. **Auth check.** After confirming the CLI is installed, run `gh auth status` (or `glab auth status`). If exit code != 0 → ABORT with: `<gh|glab> is installed but not authenticated. Run \`gh auth login\` (or \`glab auth login\`) first, then re-invoke /006-merge.` Capture the auth-status stderr in the abort message for diagnostics.
+5. **CLI installed.** `command -v gh` or `command -v glab` — this check runs **before** the auth-status probe in step 3. If missing → abort with the install hint: `Install <tool> first: https://cli.github.com` or `https://gitlab.com/gitlab-org/cli`.
+6. **Auth check.** Already folded into step 3 — the `gh auth status --hostname "$HOST"` / `glab auth status --hostname "$HOST"` probe doubles as platform detection AND auth verification. If neither CLI is authenticated for `$HOST`, the abort message from step 3 names the exact `--hostname` flag the user needs.
+
+   **Plugin cannot verify external CM-system state.** Whether the referenced CM ticket is in `Approved for Deployment` state is enforced server-side by the platform (workflow `required_reviewers`, branch protection, or a `ticket-link-check` CI job). The plugin does not contact your CM/Jira/ServiceNow API.
 7. **Signed commits (conditional).** If `require_signed_commits: true`, run `git log --pretty='%G?' <base_branch>..HEAD` and confirm every line is `G`. Any other value (`N`, `B`, `U`, `X`, `Y`, `R`, `E`) → abort: `Unsigned or invalid signature on commit <sha>. Sign commits before opening the MR.`
 
 ### Phase 1 — Push branch
@@ -109,10 +127,12 @@ Verify every commit in `<base>..HEAD` carries a `Signed-off-by:` trailer (`git l
 
 **Network timeout posture.** This command invokes GitHub/GitLab CLI commands that perform network I/O. The CLI tools (`gh`, `glab`) use their own default timeouts; this command does NOT wrap them in an external timeout. If a CLI call hangs >120s, halt the command (Ctrl-C) and re-run after checking network connectivity. Do not auto-retry — duplicate PRs/MRs/workflow triggers may result.
 
-GitHub:
+**Enterprise:** required reviewers, CODEOWNERS, and merge-block-until-checks-pass are enforced by GitHub/GitLab branch protection — the plugin does NOT pass `--reviewer` flags for enterprise (CODEOWNERS auto-assigns server-side).
+
+GitHub (prepend `GH_HOST="$HOST"` so GHE hosts route correctly):
 
 ```bash
-gh pr create \
+GH_HOST="$HOST" gh pr create \
   --base <base_branch> \
   --title "<title>" \
   --body "<body>" \
@@ -120,10 +140,10 @@ gh pr create \
   --label <labels-csv>
 ```
 
-GitLab:
+GitLab (prepend `GLAB_HOST="$HOST"` so self-hosted GitLab routes correctly):
 
 ```bash
-glab mr create \
+GLAB_HOST="$HOST" glab mr create \
   --target-branch <base_branch> \
   --title "<title>" \
   --description "<body>" \

@@ -30,11 +30,12 @@ You have **two entry modes**. Auto-detect from the input payload the main thread
 1. Read the per-epic section in `PRD.md` (the `## Epic E-NNN: <title>` heading and its body).
 2. Read the existing entry in `docs/planning/epics.yaml` if one exists.
 3. Decide whether the PRD section is **sufficient** for scenario authoring (see "Source-of-truth precedence" below).
-4. If sufficient: author **Business scenarios** (Gherkin block-scalar) and write them inline on the epic entry in `epics.yaml`.
-5. Decompose the epic into **Tasks**. Each task gets a `domain_scenarios: [...]` list (which drives RED Domain-tests) and exactly one `atdd_spec: <path>` field (the file the implementer will create during the task, executed only at epic close-out).
-6. Write the task list to `docs/planning/epic-{id}-tasks.yaml`.
-7. Write your phase artifact to `runs/{epic_id}/01-plan.json` (no task subdirectory; this is the epic-level plan artifact for fresh mode) validated against `schemas/run-phase.schema.json`.
-8. Regenerate `docs/planning/SCENARIOS.md` by invoking the plugin-shipped `scripts/regen-scenarios.sh`.
+4. **CM ticket check.** Inspect the project's `.claude/ruleset/git-workflow.md` (falling back to `templates/presets/<team_preset>/git-workflow.md` when the ruleset file is not yet materialised). If it declares `require_ticket_reference: true`, the planner MUST prompt the user (via a `00-plan-questions.json` finding with `rule: "missing_cm_ticket"`) for the epic-level change-management ticket id **before** writing the epic entry. Validate the supplied id against the union of `ticket_prefixes` declared in the same `git-workflow.md` (e.g. `CHG|CM|JIRA|INC`); the full regex is `^(<prefix1>|<prefix2>|...)-[0-9]+$`. Store the accepted value as `cm_ticket: <ID>` on the epic entry in `epics.yaml`. If the ruleset has `require_ticket_reference: false` (or the key is absent), the field is optional — do not prompt.
+5. If sufficient: author **Business scenarios** (Gherkin block-scalar) and write them inline on the epic entry in `epics.yaml`.
+6. Decompose the epic into **Tasks**. Each task gets a `domain_scenarios: [...]` list (which drives RED Domain-tests) and exactly one `atdd_spec: <path>` field (the file the implementer will create during the task, executed only at epic close-out). Tasks MAY also carry an optional `cm_ticket:` field if the team tracks change-management per task; when absent, downstream commands (`/002`, `/006`) substitute `{ticket_id}` from the parent epic's `cm_ticket`. The per-task field follows the same pattern (`^[A-Z]{2,}-[0-9]+$`) and the same `ticket_prefixes` allowlist.
+7. Write the task list to `docs/planning/epic-{id}-tasks.yaml`.
+8. Write your phase artifact to `runs/{epic_id}/01-plan.json` (no task subdirectory; this is the epic-level plan artifact for fresh mode) validated against `schemas/run-phase.schema.json`.
+9. Regenerate `docs/planning/SCENARIOS.md` by invoking the plugin-shipped `scripts/regen-scenarios.sh`.
 
 ### Mode 2 — Re-split
 
@@ -102,6 +103,7 @@ In fresh mode, additionally:
      title: Subscription cancellation
      goal: Allow paid users to cancel and retain access until end of period
      status: pending
+     cm_ticket: CHG-12345   # required when git-workflow.md has require_ticket_reference: true; otherwise omit
      business_scenarios: |
        ## Scenario: User cancels an active subscription
        Given the user has an active paid subscription
@@ -192,6 +194,7 @@ tasks:
       - data-access
       - error-handling
     depends_on: []        # optional, ids of other tasks
+    cm_ticket: CHG-12346  # optional per-task override; falls back to the epic's cm_ticket when absent
     notes: <optional one-liner>
   - id: T-002
     ...
@@ -204,6 +207,7 @@ Field semantics:
 - `atdd_spec` — path the implementer will create. Extension matches the stack (e.g. `.spec.ts`, `.swift`).
 - `rules_in_scope` — bare ruleset names (no `.md`); the implementer reads these and injects them into its own working context.
 - `depends_on` — task ids that must reach `done` first. Use sparingly; favour independently mergeable tasks.
+- `cm_ticket` — optional change-management ticket id matching `^[A-Z]{2,}-[0-9]+$`. Only emit when the project's `git-workflow.md` declares `require_ticket_reference: true` AND the team tracks tickets per task. Must use one of the prefixes listed in `git-workflow.md` `ticket_prefixes:`. When absent, downstream `/002`/`/006` substitute `{ticket_id}` from the parent epic's `cm_ticket`.
 
 ## Quality bar
 
