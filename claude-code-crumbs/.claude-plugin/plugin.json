@@ -4,5 +4,9 @@
   "version": "0.1.0",
   "author": {
     "name": "Mariusz Sieraczkiewicz"
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "python3 ${CLAUDE_PLUGIN_ROOT}/scripts/statusline.py"
   }
 }
