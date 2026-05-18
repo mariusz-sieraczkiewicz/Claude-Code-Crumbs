@@ -141,9 +141,11 @@ This phase runs **only if** the user selected `enterprise` in A.1. For any other
 
 The baseline `.claude/stack.yaml` (copied in A.3 from `stack.yaml.example`) contains placeholder values for the promote workflows and lacks enterprise-specific keys (`git_host`, `cm_ticket_prefixes`, `change_window`, `signing_team_id`). Those placeholders are not safe to ship downstream to `/006-merge` and `/007-promote` — they may reference workflow files that do not exist, or omit the CM-ticket regex entirely. Prompt the user one-by-one and write each answer to `.claude/stack.yaml` at the indicated key. Defaults shown in parentheses; if the user hits Enter, use the default.
 
-1. **Git host.** Ask verbatim: "What git host? (e.g. `github.com`, `github.acmecorp.com`, `gitlab.com`, `gitlab.acmecorp.internal`)"
-   → Write `extras.git_host: <answer>` to stack.yaml.
-   If the answer is a non-standard host (anything other than `github.com` or `gitlab.com`), print: "Run `gh auth login --hostname <host>` or `glab auth login --hostname <host>` before /006-merge."
+1. **Git host (optional override).** Ask verbatim:
+   "Git host override? (default: auto-detect from `git remote get-url origin`; type a host like `github.acmecorp.com` to override, or press Enter for auto-detect)"
+   → If user provides a value: write `extras.git_host: <answer>` to stack.yaml.
+   → If user hits Enter: omit the key. /006-merge and /007-promote will derive host from `git remote` at run-time.
+   Print: "Run `gh auth login --hostname <host>` or `glab auth login --hostname <host>` for whichever host you'll be using."
 
 2. **CM ticket prefixes.** Ask verbatim: "Allowed CM ticket prefixes? Space-separated, e.g. `CHG CM JIRA INC`" (default: `CHG`).
    → Write `extras.cm_ticket_prefixes: [<prefix1>, <prefix2>, ...]` to stack.yaml as a YAML list.

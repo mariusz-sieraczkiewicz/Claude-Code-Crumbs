@@ -44,5 +44,6 @@ promote:                            # optional. Empty/missing = /007-promote ski
 
 extras: {}                          # free-form. Propagated verbatim to all subagents.
 # extras:
+#   git_host: "github.acmecorp.com"   # optional override; if absent, host derives from `git remote get-url origin`
 #   bash_buffering_warning: true
 #   user_ping_interval_minutes: 5

@@ -40,11 +40,33 @@ The active preset is determined by which `git-workflow.md` is present in `.claud
 
 1. **Task exists and done.** Load the task entry from `epic-{id}-tasks.yaml` (the `{id}` comes from the task's epic linkage). If the task is missing → abort: `Task <id> not found in any epic-*-tasks.yaml.` If `status != done` → abort: `Task must be /002-implement-complete (status: done) before merging.`
 2. **Branch matches pattern.** Compare `git rev-parse --abbrev-ref HEAD` against `branch_name_pattern`. Mismatch → warn (`Branch <name> does not match pattern <pattern>; proceeding.`) but do not abort.
-3. **Detect remote and platform.** Use the 3-step host-aware detection algorithm (works for GitHub Enterprise and self-hosted GitLab — host is **not** matched against `github.com` / `gitlab.com` literals):
+3. **Detect remote and platform.** Use the 3-step host-aware detection algorithm (works for GitHub Enterprise and self-hosted GitLab — host is **not** matched against `github.com` / `gitlab.com` literals). Host resolution order: `stack.yaml.extras.git_host` (override; useful when `origin` is a fork) → `git remote get-url origin`. Once resolved, the same `gh|glab auth status --hostname` probe determines the platform.
 
-   ```bash
-   # Step 1 — extract host from origin URL
-   HOST="$(git remote get-url origin | sed -E 's#^(https?://|git@)([^:/]+)[:/].*#\2#')"
+   ```sh
+   # Step 1 — resolve host. extras.git_host (override) wins; else derive from origin.
+   HOST=""
+   if [ -f .claude/stack.yaml ]; then
+       HOST="$(awk '
+           /^extras:[[:space:]]*$/ { in_e=1; next }
+           in_e && /^[^[:space:]]/ { in_e=0 }
+           in_e && /^[[:space:]]+git_host:[[:space:]]*/ {
+               line=$0
+               sub(/^[[:space:]]+git_host:[[:space:]]*/, "", line)
+               gsub(/^["'\'']|["'\'']$/, "", line)
+               sub(/[[:space:]]+#.*$/, "", line)
+               gsub(/^[[:space:]]+|[[:space:]]+$/, "", line)
+               print line
+               exit
+           }
+       ' .claude/stack.yaml)"
+   fi
+   if [ -z "$HOST" ]; then
+       HOST="$(git remote get-url origin | sed -E 's#^(https?://|git@)([^:/]+)[:/].*#\2#')"
+   fi
+   if [ -z "$HOST" ]; then
+       echo "Cannot resolve host. Set stack.yaml.extras.git_host or configure git remote origin." >&2
+       exit 1
+   fi
 
    # Step 2 — detect platform via authenticated CLI (run `command -v` first; see step 5)
    if gh auth status --hostname "$HOST" >/dev/null 2>&1; then
@@ -58,7 +80,7 @@ The active preset is determined by which `git-workflow.md` is present in `.claud
    fi
    ```
 
-   GitHub Enterprise and self-hosted GitLab are supported via per-host `gh auth login --hostname <host>` / `glab auth login --hostname <host>`. The command honours whatever host the local CLI is authenticated against; no `stack.yaml` override is required.
+   GitHub Enterprise and self-hosted GitLab are supported via per-host `gh auth login --hostname <host>` / `glab auth login --hostname <host>`. If `origin` points at a fork and the user wants PRs against an upstream on a different host, set `stack.yaml.extras.git_host` to override origin-derived detection; otherwise the host is derived from `git remote get-url origin`.
 
 4. **Solo preset short-circuit.** If `pr_required: false`: print `Solo preset — no MR required. Branch <name> is on main.` and exit cleanly. Do not push, do not call `gh`/`glab`.
 5. **CLI installed.** `command -v gh` or `command -v glab` — this check runs **before** the auth-status probe in step 3. If missing → abort with the install hint: `Install <tool> first: https://cli.github.com` or `https://gitlab.com/gitlab-org/cli`.

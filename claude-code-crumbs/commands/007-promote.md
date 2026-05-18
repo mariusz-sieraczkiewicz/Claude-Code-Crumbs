@@ -36,11 +36,33 @@ Validate inputs before doing any work. Each check below is **abort-on-fail** unl
 
 1. **Environment whitelist.** If `<environment>` is not in `stack.yaml.promote.environments`, abort:
    `Environment '<env>' not configured. Available: <comma-separated list>.`
-2. **Detect host, platform, and auth.** Use the 3-step host-aware detection algorithm (works for GitHub Enterprise and self-hosted GitLab — host is **not** matched against `github.com` / `gitlab.com` literals). `command -v gh` / `command -v glab` runs **first**; abort with an install hint if neither exists.
+2. **Detect host, platform, and auth.** Use the 3-step host-aware detection algorithm (works for GitHub Enterprise and self-hosted GitLab — host is **not** matched against `github.com` / `gitlab.com` literals). `command -v gh` / `command -v glab` runs **first**; abort with an install hint if neither exists. Host resolution order: `stack.yaml.extras.git_host` (override; useful when `origin` is a fork) → `git remote get-url origin`. Once resolved, the same `gh|glab auth status --hostname` probe determines the platform.
 
-   ```bash
-   # Step 1 — extract host from origin URL
-   HOST="$(git remote get-url origin | sed -E 's#^(https?://|git@)([^:/]+)[:/].*#\2#')"
+   ```sh
+   # Step 1 — resolve host. extras.git_host (override) wins; else derive from origin.
+   HOST=""
+   if [ -f .claude/stack.yaml ]; then
+       HOST="$(awk '
+           /^extras:[[:space:]]*$/ { in_e=1; next }
+           in_e && /^[^[:space:]]/ { in_e=0 }
+           in_e && /^[[:space:]]+git_host:[[:space:]]*/ {
+               line=$0
+               sub(/^[[:space:]]+git_host:[[:space:]]*/, "", line)
+               gsub(/^["'\'']|["'\'']$/, "", line)
+               sub(/[[:space:]]+#.*$/, "", line)
+               gsub(/^[[:space:]]+|[[:space:]]+$/, "", line)
+               print line
+               exit
+           }
+       ' .claude/stack.yaml)"
+   fi
+   if [ -z "$HOST" ]; then
+       HOST="$(git remote get-url origin | sed -E 's#^(https?://|git@)([^:/]+)[:/].*#\2#')"
+   fi
+   if [ -z "$HOST" ]; then
+       echo "Cannot resolve host. Set stack.yaml.extras.git_host or configure git remote origin." >&2
+       exit 1
+   fi
 
    # Step 2 — detect platform via authenticated CLI
    if gh auth status --hostname "$HOST" >/dev/null 2>&1; then
@@ -53,7 +75,7 @@ Validate inputs before doing any work. Each check below is **abort-on-fail** unl
    fi
    ```
 
-   GitHub Enterprise and self-hosted GitLab are supported via per-host `gh auth login --hostname <host>` / `glab auth login --hostname <host>`. The command honours whatever host the local CLI is authenticated against; no `stack.yaml` override is required.
+   GitHub Enterprise and self-hosted GitLab are supported via per-host `gh auth login --hostname <host>` / `glab auth login --hostname <host>`. If `origin` points at a fork and the user wants Promotion workflows triggered against an upstream on a different host, set `stack.yaml.extras.git_host` to override origin-derived detection; otherwise the host is derived from `git remote get-url origin`.
 
    This check belongs **BEFORE** any read of `stack.yaml.promote.*_workflow`.
 
