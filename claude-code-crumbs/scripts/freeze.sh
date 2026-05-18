@@ -88,23 +88,86 @@ EOF
 }
 
 # -----------------------------------------------------------------------------
+# Manifest. Tracks paths written by /freeze so --reset can remove ONLY those,
+# leaving user-authored files in .claude/commands/ untouched.
+# -----------------------------------------------------------------------------
+MANIFEST=".claude/.freeze-manifest"
+
+# -----------------------------------------------------------------------------
 # Reset handler.
 # -----------------------------------------------------------------------------
 do_reset() {
-    if [ ! -d "$OUT_COMMANDS" ] && [ ! -d "$OUT_AGENTS" ]; then
+    if [ ! -d "$OUT_COMMANDS" ] && [ ! -d "$OUT_AGENTS" ] && [ ! -f "$MANIFEST" ]; then
         info "nothing to reset (no $OUT_COMMANDS or $OUT_AGENTS)"
         exit 0
     fi
+
+    if [ -e "$MANIFEST" ]; then
+        # Refuse if manifest is a symlink — attacker could point it at /etc/passwd
+        # and have us read+rm arbitrary content. Manifest must be a regular file.
+        if [ -L "$MANIFEST" ]; then
+            err "manifest is a symlink: $MANIFEST. Refusing to proceed. Remove it manually if expected."
+            exit 4
+        fi
+        if [ ! -f "$MANIFEST" ]; then
+            err "manifest exists but is not a regular file: $MANIFEST"
+            exit 4
+        fi
+        # Surgical reset: remove only the files freeze itself wrote.
+        if [ "$FORCE" -ne 1 ]; then
+            local count
+            count="$(grep -vc '^#' "$MANIFEST" 2>/dev/null || echo 0)"
+            printf 'freeze: remove %s files listed in %s? [y/N] ' "$count" "$MANIFEST"
+            read -r reply || reply=""
+            case "$reply" in
+                y|Y|yes|YES) : ;;
+                *) info "aborted"; exit 0 ;;
+            esac
+        fi
+        local skipped_unsafe=0
+        while IFS= read -r path; do
+            case "$path" in
+                ''|'#'*) continue ;;
+            esac
+            # Whitelist: paths MUST be project-local and under .claude/commands/
+            # or .claude/agents/. Reject absolute paths, parent-dir traversal,
+            # and anything outside the two output dirs. Defends against a
+            # tampered manifest that lists ../../../etc/passwd.
+            case "$path" in
+                "$OUT_COMMANDS"/*|"$OUT_AGENTS"/*) : ;;
+                *)
+                    err "manifest contains unsafe path (skipping): $path"
+                    skipped_unsafe=$((skipped_unsafe + 1))
+                    continue
+                    ;;
+            esac
+            case "$path" in
+                *..*|/*)
+                    err "manifest contains unsafe path (skipping): $path"
+                    skipped_unsafe=$((skipped_unsafe + 1))
+                    continue
+                    ;;
+            esac
+            rm -f -- "$path" 2>/dev/null || true
+        done < "$MANIFEST"
+        if [ "$skipped_unsafe" -gt 0 ]; then
+            err "$skipped_unsafe unsafe path(s) skipped — manifest may be tampered. Inspect $MANIFEST."
+        fi
+        rm -f -- "$MANIFEST"
+        rmdir "$OUT_COMMANDS" 2>/dev/null || true
+        rmdir "$OUT_AGENTS" 2>/dev/null || true
+        info "reset: removed files listed in $MANIFEST (user-authored files in $OUT_COMMANDS preserved)"
+        exit 0
+    fi
+
+    # No manifest: legacy reset (or manifest was wiped). Refuse without --force
+    # because we cannot tell plugin output from user files.
     if [ "$FORCE" -ne 1 ]; then
-        printf 'freeze: remove %s and %s? [y/N] ' "$OUT_COMMANDS" "$OUT_AGENTS"
-        read -r reply || reply=""
-        case "$reply" in
-            y|Y|yes|YES) : ;;
-            *) info "aborted"; exit 0 ;;
-        esac
+        err "no manifest at $MANIFEST — cannot tell plugin-written files from user-authored. Re-run with --force to blast-remove $OUT_COMMANDS and $OUT_AGENTS, or remove desired files manually."
+        exit 4
     fi
     rm -rf "$OUT_COMMANDS" "$OUT_AGENTS" || { err "failed to remove frozen dirs"; exit 4; }
-    info "reset: removed $OUT_COMMANDS and $OUT_AGENTS"
+    info "reset: removed $OUT_COMMANDS and $OUT_AGENTS (no manifest, blast mode)"
     exit 0
 }
 
@@ -117,7 +180,8 @@ do_reset() {
 parse_stack_preset() {
     local f="$1"
     [ -f "$f" ] || return 0
-    awk '
+    awk -v BOM=$'\xef\xbb\xbf' '
+        NR == 1 { sub("^" BOM, "") }
         { sub(/\r$/, "") }
         /^[[:space:]]*#/ { next }
         /^[[:space:]]*team_preset:[[:space:]]*/ {
@@ -138,8 +202,9 @@ check_yaml_fence_balanced() {
     local f="$1"
     [ -f "$f" ] || return 0
     local result
-    result="$(awk '
+    result="$(awk -v BOM=$'\xef\xbb\xbf' '
         BEGIN { in_block = 0; closed = 0 }
+        NR == 1 { sub("^" BOM, "") }
         { sub(/\r$/, "") }
         in_block == 0 && /^[[:space:]]*```[[:space:]]*yaml[[:space:]]*$/ { in_block = 1; next }
         in_block == 1 && /^[[:space:]]*```[[:space:]]*$/ { closed = 1; exit }
@@ -156,8 +221,9 @@ parse_yaml_block() {
     # exit codes, so the check must run in the parent shell.
     local f="$1"
     [ -f "$f" ] || return 0
-    awk '
+    awk -v BOM=$'\xef\xbb\xbf' '
         BEGIN { in_block = 0; pending_key = ""; pending_indent = -1; pending_buf = "" }
+        NR == 1 { sub("^" BOM, "") }
         { sub(/\r$/, "") }
         # Find first ```yaml fence.
         in_block == 0 && /^[[:space:]]*```[[:space:]]*yaml[[:space:]]*$/ {
@@ -219,10 +285,20 @@ parse_yaml_block() {
                 # Extract value.
                 val = substr($0, idx + 1)
                 sub(/^[[:space:]]+/, "", val)
-                # Strip trailing inline comment (best effort: " #...").
-                sub(/[[:space:]]+#.*$/, "", val)
-                # Strip trailing spaces.
-                sub(/[[:space:]]+$/, "", val)
+
+                # Flow list detection FIRST — strip inline comment only after
+                # the closing `]`, so values like ["a", "dev #tag"] survive.
+                if (val ~ /^\[/) {
+                    # Find last `]` on the line; strip everything after it.
+                    if (match(val, /\][[:space:]]*#.*$/)) {
+                        val = substr(val, 1, RSTART)
+                    }
+                    sub(/[[:space:]]+$/, "", val)
+                } else {
+                    # Plain scalar / literal indicator: strip trailing comment + spaces.
+                    sub(/[[:space:]]+#.*$/, "", val)
+                    sub(/[[:space:]]+$/, "", val)
+                }
 
                 # Multi-line literal indicator.
                 if (val == "|" || val == "|-" || val == "|+" || val == ">" || val == ">-" || val == ">+") {
@@ -244,6 +320,8 @@ parse_yaml_block() {
                         item = parts[i]
                         gsub(/^[[:space:]]+|[[:space:]]+$/, "", item)
                         gsub(/^["'\'']|["'\'']$/, "", item)
+                        # Drop empty items (trailing-comma artefacts: ["a","b",]).
+                        if (item == "") continue
                         if (out == "") out = item
                         else out = out "," item
                     }
@@ -332,11 +410,17 @@ build_resolver() {
     fi
 
     # Merge YAML blocks. Later writes override earlier ones (deployment > git).
+    # Reserved keys are owned by the script (e.g. `preset` comes from stack.yaml
+    # and is validated above) — any ruleset YAML attempt to redefine them is
+    # ignored to prevent silent override.
     local line key val
     while IFS= read -r line; do
         [ -n "$line" ] || continue
         key="${line%%=*}"
         val="${line#*=}"
+        case "$key" in
+            preset) continue ;;
+        esac
         resolver_set "$key" "$val"
     done <<EOF
 $(parse_yaml_block "$GIT_RULES")
@@ -346,6 +430,9 @@ EOF
         [ -n "$line" ] || continue
         key="${line%%=*}"
         val="${line#*=}"
+        case "$key" in
+            preset) continue ;;
+        esac
         resolver_set "$key" "$val"
     done <<EOF
 $(parse_yaml_block "$DEPLOY_RULES")
@@ -444,6 +531,13 @@ COUNT_FILE=""
 
 process_file() {
     local src="$1" dst="$2"
+    # Refuse symlinks in the plugin source tree. A malicious or misconfigured
+    # plugin could ship `commands/X.md -> /etc/passwd` and have freeze copy it
+    # into the project. Plugin tree must be plain files only.
+    if [ -L "$src" ]; then
+        err "refusing symlink in plugin source: $src"
+        return 4
+    fi
     local content
     if ! content="$(cat -- "$src")"; then
         err "cannot read $src"
@@ -798,6 +892,13 @@ do_freeze() {
     local total_files=0
     local SKIPPED_FILES=0
     local rc
+    # Manifest staging file. Promoted to $MANIFEST on success. Cleanup happens
+    # via the global trap in cleanup_runtime — uses the MANIFEST_TMP global so
+    # the trap can find it even if we exit non-zero mid-loop.
+    if [ "$DRY_RUN" -ne 1 ]; then
+        MANIFEST_TMP="$(mktemp -t freeze.manifest.XXXXXX)" || { err "mktemp failed"; exit 4; }
+        printf '# Frozen by /freeze. Do not edit. Used by --reset to know what to remove.\n' > "$MANIFEST_TMP"
+    fi
 
     # Commands.
     if [ -d "$PLUGIN_ROOT/commands" ]; then
@@ -819,6 +920,7 @@ do_freeze() {
                 exit "$rc"
             fi
             total_files=$((total_files + 1))
+            [ -n "$MANIFEST_TMP" ] && printf '%s\n' "$dst" >> "$MANIFEST_TMP"
             if [ "$DRY_RUN" -eq 1 ]; then
                 printf '  %s  +%d/-%d branches\n' \
                     "$base" \
@@ -848,6 +950,7 @@ do_freeze() {
                 exit "$rc"
             fi
             total_files=$((total_files + 1))
+            [ -n "$MANIFEST_TMP" ] && printf '%s\n' "$dst" >> "$MANIFEST_TMP"
             if [ "$DRY_RUN" -eq 1 ]; then
                 printf '  %s  +%d/-%d branches\n' \
                     "$base" \
@@ -855,6 +958,14 @@ do_freeze() {
                     $((BRANCH_PRUNED - pre_p))
             fi
         done
+    fi
+
+    if [ -n "$MANIFEST_TMP" ]; then
+        if ! mv -- "$MANIFEST_TMP" "$MANIFEST"; then
+            err "failed to write manifest at $MANIFEST"
+            rm -f -- "$MANIFEST_TMP"
+            exit 4
+        fi
     fi
 
     if [ "$DRY_RUN" -eq 1 ]; then
@@ -866,10 +977,37 @@ do_freeze() {
 }
 
 # -----------------------------------------------------------------------------
+# Concurrency lock. Uses atomic `mkdir` — POSIX-portable, no flock needed.
+# -----------------------------------------------------------------------------
+LOCK_DIR=".claude/.freeze.lock"
+MANIFEST_TMP=""
+
+cleanup_runtime() {
+    # Best-effort cleanup of transient resources. Idempotent.
+    [ -n "$MANIFEST_TMP" ] && rm -f -- "$MANIFEST_TMP" 2>/dev/null || true
+    rmdir "$LOCK_DIR" 2>/dev/null || true
+}
+
+acquire_lock() {
+    # .claude must exist for the lock to land somewhere reasonable.
+    if [ ! -d ".claude" ]; then
+        # No project state to lock against — let downstream checks (missing
+        # stack.yaml etc) produce the proper error.
+        return 0
+    fi
+    if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+        err "another freeze is running (lock at $LOCK_DIR). If you are sure no other run is active, remove the directory manually."
+        exit 4
+    fi
+    trap cleanup_runtime EXIT INT TERM
+}
+
+# -----------------------------------------------------------------------------
 # Entry point.
 # -----------------------------------------------------------------------------
 main() {
     parse_args "$@"
+    acquire_lock
     if [ "$RESET" -eq 1 ]; then
         do_reset
     fi

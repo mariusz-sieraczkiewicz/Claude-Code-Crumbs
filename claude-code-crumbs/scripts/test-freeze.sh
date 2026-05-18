@@ -300,5 +300,180 @@ if [ "$rc" -ne 2 ]; then
 fi
 grep -q "unterminated" "$WORK/unterm.log" || fail "missing 'unterminated' in stderr"
 
+# -----------------------------------------------------------------------------
+# Test 8: flow list with `#` inside quoted value survives comment-strip.
+# -----------------------------------------------------------------------------
+mv "$WORK/proj/.claude/ruleset/git-workflow.md" "$WORK/proj/.claude/ruleset/git-workflow.md.bak"
+cat > "$WORK/proj/.claude/ruleset/git-workflow.md" <<'EOF'
+# Git Workflow
+
+```yaml
+pr_required: true
+ticket_prefixes: ["CHG", "dev #tag", "JIRA"]
+allow_commit_to_main: false
+```
+EOF
+# Add a marker that emits ticket_prefixes via VAL.
+cat > "$WORK/plugin/commands/flowlist.md" <<'EOF'
+prefixes: <!-- FREEZE:VAL ticket_prefixes -->none<!-- FREEZE:ENDVAL -->
+EOF
+"$FREEZE" --reset --force > /dev/null 2>&1 || true
+"$FREEZE" --force --plugin-root="$WORK/plugin" > "$WORK/flowlist.log" 2>&1 \
+    || fail "freeze with flow-list-comment-value failed"
+if ! grep -q 'dev #tag' "$WORK/proj/.claude/commands/flowlist.md"; then
+    echo "FAIL: flow list with '#' inside quoted value got truncated"
+    cat "$WORK/proj/.claude/commands/flowlist.md"
+    exit 1
+fi
+mv "$WORK/proj/.claude/ruleset/git-workflow.md.bak" "$WORK/proj/.claude/ruleset/git-workflow.md"
+rm -f "$WORK/plugin/commands/flowlist.md"
+
+# -----------------------------------------------------------------------------
+# Test 9: symlink in plugin tree refused.
+# -----------------------------------------------------------------------------
+"$FREEZE" --reset --force > /dev/null 2>&1 || true
+echo "secret" > "$WORK/secret.txt"
+ln -s "$WORK/secret.txt" "$WORK/plugin/commands/symlinked.md"
+set +e
+"$FREEZE" --force --plugin-root="$WORK/plugin" > "$WORK/symlink.log" 2>&1
+rc=$?
+set -e
+rm -f "$WORK/plugin/commands/symlinked.md" "$WORK/secret.txt"
+if [ "$rc" -eq 0 ]; then
+    fail "freeze followed symlink in plugin tree (rc=$rc)"
+fi
+grep -q "refusing symlink" "$WORK/symlink.log" || fail "missing 'refusing symlink' in stderr"
+
+# -----------------------------------------------------------------------------
+# Test 10: BOM directly before team_preset on line 1 resolves correctly.
+# (Worst case — BOM strip only fires on NR==1.)
+# -----------------------------------------------------------------------------
+"$FREEZE" --reset --force > /dev/null 2>&1 || true
+mv "$WORK/proj/.claude/stack.yaml" "$WORK/proj/.claude/stack.yaml.bak"
+printf '\xef\xbb\xbfteam_preset: enterprise\nstack:\n  name: bomtest\n' > "$WORK/proj/.claude/stack.yaml"
+"$FREEZE" --force --plugin-root="$WORK/plugin" > "$WORK/bom.log" 2>&1 \
+    || { cat "$WORK/bom.log"; fail "freeze failed on BOM-prefixed stack.yaml"; }
+grep -q "preset=enterprise" "$WORK/bom.log" || fail "preset not detected past BOM"
+mv "$WORK/proj/.claude/stack.yaml.bak" "$WORK/proj/.claude/stack.yaml"
+
+# -----------------------------------------------------------------------------
+# Test 11: reserved key `preset` in ruleset YAML is ignored.
+# -----------------------------------------------------------------------------
+"$FREEZE" --reset --force > /dev/null 2>&1 || true
+mv "$WORK/proj/.claude/ruleset/git-workflow.md" "$WORK/proj/.claude/ruleset/git-workflow.md.bak"
+cat > "$WORK/proj/.claude/ruleset/git-workflow.md" <<'EOF'
+# Git Workflow
+
+```yaml
+preset: hijacked
+pr_required: true
+allow_commit_to_main: false
+```
+EOF
+"$FREEZE" --force --plugin-root="$WORK/plugin" > "$WORK/shadow.log" 2>&1 \
+    || fail "freeze failed after preset-shadow attempt"
+# Validated preset must still be 'enterprise' (from stack.yaml), not 'hijacked'.
+grep -q "preset=enterprise" "$WORK/shadow.log" || fail "ruleset shadowed validated preset"
+mv "$WORK/proj/.claude/ruleset/git-workflow.md.bak" "$WORK/proj/.claude/ruleset/git-workflow.md"
+
+# -----------------------------------------------------------------------------
+# Test 12: --reset is surgical via manifest — preserves user-authored files.
+# -----------------------------------------------------------------------------
+"$FREEZE" --reset --force > /dev/null 2>&1 || true
+"$FREEZE" --force --plugin-root="$WORK/plugin" > /dev/null 2>&1 \
+    || fail "pre-manifest freeze failed"
+# Drop a user file alongside the frozen ones.
+echo "user-authored" > "$WORK/proj/.claude/commands/my-custom.md"
+"$FREEZE" --reset --force > "$WORK/manifreset.log" 2>&1 \
+    || fail "manifest-based reset failed"
+if [ ! -f "$WORK/proj/.claude/commands/my-custom.md" ]; then
+    fail "manifest-based reset deleted user-authored file"
+fi
+[ -f "$WORK/proj/.claude/commands/sample.md" ] && fail "frozen sample.md not removed"
+[ -f "$WORK/proj/.claude/.freeze-manifest" ] && fail "manifest not removed after reset"
+rm -f "$WORK/proj/.claude/commands/my-custom.md"
+rmdir "$WORK/proj/.claude/commands" 2>/dev/null || true
+
+# -----------------------------------------------------------------------------
+# Test 13a: manifest path traversal refused.
+# -----------------------------------------------------------------------------
+"$FREEZE" --reset --force > /dev/null 2>&1 || true
+"$FREEZE" --force --plugin-root="$WORK/plugin" > /dev/null 2>&1 \
+    || fail "freeze before traversal test failed"
+EVIDENCE="$WORK/traversal-evidence.txt"
+echo "must-survive" > "$EVIDENCE"
+# Tamper with manifest: inject path traversal targeting the evidence file.
+# Compute manifest-relative path from $WORK/proj/.claude/.freeze-manifest to $EVIDENCE.
+printf '../../../%s\n' "$(basename "$EVIDENCE")" >> "$WORK/proj/.claude/.freeze-manifest"
+"$FREEZE" --reset --force > "$WORK/traversal.log" 2>&1 || true
+if [ ! -f "$EVIDENCE" ]; then
+    fail "SECURITY: --reset deleted file outside project via manifest traversal"
+fi
+grep -q "unsafe path" "$WORK/traversal.log" || fail "missing 'unsafe path' warning"
+rm -f "$EVIDENCE"
+
+# -----------------------------------------------------------------------------
+# Test 13b: symlinked manifest refused.
+# -----------------------------------------------------------------------------
+mkdir -p "$WORK/proj/.claude"
+echo "victim-content" > "$WORK/victim.txt"
+ln -sf "$WORK/victim.txt" "$WORK/proj/.claude/.freeze-manifest"
+set +e
+"$FREEZE" --reset --force > "$WORK/symlink-manifest.log" 2>&1
+rc=$?
+set -e
+rm -f "$WORK/proj/.claude/.freeze-manifest"
+[ -f "$WORK/victim.txt" ] || fail "SECURITY: symlinked manifest let freeze delete target"
+if [ "$rc" -ne 4 ]; then
+    fail "expected exit 4 for symlinked manifest, got $rc"
+fi
+grep -q "manifest is a symlink" "$WORK/symlink-manifest.log" \
+    || fail "missing 'manifest is a symlink' in stderr"
+rm -f "$WORK/victim.txt"
+
+# -----------------------------------------------------------------------------
+# Test 13c: flow list with trailing comma drops phantom empty item.
+# -----------------------------------------------------------------------------
+"$FREEZE" --reset --force > /dev/null 2>&1 || true
+mv "$WORK/proj/.claude/ruleset/git-workflow.md" "$WORK/proj/.claude/ruleset/git-workflow.md.bak"
+cat > "$WORK/proj/.claude/ruleset/git-workflow.md" <<'EOF'
+# Git Workflow
+
+```yaml
+pr_required: true
+ticket_prefixes: ["CHG", "JIRA", ]
+allow_commit_to_main: false
+```
+EOF
+cat > "$WORK/plugin/commands/flowcomma.md" <<'EOF'
+prefixes: <!-- FREEZE:VAL ticket_prefixes -->none<!-- FREEZE:ENDVAL -->
+EOF
+"$FREEZE" --force --plugin-root="$WORK/plugin" > "$WORK/flowcomma.log" 2>&1 \
+    || fail "freeze with trailing-comma flow list failed"
+# Must emit "CHG,JIRA" (NO trailing comma, no phantom empty).
+if ! grep -Eq '^prefixes: CHG,JIRA$' "$WORK/proj/.claude/commands/flowcomma.md"; then
+    echo "FAIL: trailing-comma flow list produced phantom empty item"
+    cat "$WORK/proj/.claude/commands/flowcomma.md"
+    exit 1
+fi
+mv "$WORK/proj/.claude/ruleset/git-workflow.md.bak" "$WORK/proj/.claude/ruleset/git-workflow.md"
+rm -f "$WORK/plugin/commands/flowcomma.md"
+
+# -----------------------------------------------------------------------------
+# Test 13: concurrent freeze lock.
+# -----------------------------------------------------------------------------
+"$FREEZE" --reset --force > /dev/null 2>&1 || true
+# Manually plant lock dir, then attempt freeze.
+mkdir -p "$WORK/proj/.claude/.freeze.lock"
+set +e
+"$FREEZE" --force --plugin-root="$WORK/plugin" > "$WORK/lock.log" 2>&1
+rc=$?
+set -e
+rmdir "$WORK/proj/.claude/.freeze.lock"
+if [ "$rc" -ne 4 ]; then
+    fail "expected exit 4 for concurrent lock, got $rc"
+fi
+grep -q "another freeze" "$WORK/lock.log" || fail "missing 'another freeze' in stderr"
+
 echo "PASS: all freeze.sh self-tests"
 exit 0
