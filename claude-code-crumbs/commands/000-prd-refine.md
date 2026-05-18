@@ -15,6 +15,32 @@ Arguments: `$ARGUMENTS` may contain `--mode=A`, `--mode=B`, or `--mode=C` to ove
 
 ---
 
+## Phase 0.0 — Multi-context detection (BEFORE State A/B/C)
+
+If `CONTEXT-MAP.md` exists at repo root, this is a MULTI-CONTEXT monorepo (per `.claude/skills/grill-with-docs/SKILL.md`). The plugin v0.1.0 operates on a SINGLE context at a time.
+
+Prompt the user verbatim:
+
+```
+Detected `CONTEXT-MAP.md` — this is a multi-context monorepo. The plugin operates on one context at a time. Which context directory should /000 work in? (e.g. `src/ordering`, `src/billing`)
+```
+
+After the user provides a path:
+1. Verify the path exists and contains (or is intended to contain) its own `CONTEXT.md` / `PRD.md`.
+2. Change effective cwd to that directory for the remainder of /000.
+3. Bootstrap targets become relative to that context dir (e.g. `src/ordering/CONTEXT.md`, `src/ordering/.claude/ruleset/`).
+4. The plugin's `.claude/` shared state can stay at repo root, but per-context PRD/CONTEXT/epics/tasks/ADRs live in the chosen subdir.
+
+If user declines (Enter / Escape) → abort with the exact message:
+
+```
+Multi-context monorepo not supported without an explicit context path. v0.2+ may add automatic per-context routing.
+```
+
+If `CONTEXT-MAP.md` is absent, skip this phase entirely and proceed to Step 0.
+
+---
+
 ## Step 0 — State detection
 
 Inspect the repo root:
@@ -169,6 +195,26 @@ The baseline `.claude/stack.yaml` (copied in A.3 from `stack.yaml.example`) cont
    → If the answer is non-empty: write `extras.signing_team_id: <answer>` to stack.yaml. If empty: omit the key.
 
 After all prompts complete, print a summary of the keys written and point the user to `commands/006-merge.md` and `commands/007-promote.md` for downstream usage of these values.
+
+### A.4.2 — OSS configuration (only when team_preset=oss)
+
+This phase runs **only if** the user selected `oss` in A.1. For any other preset (`solo`, `small-team`, `enterprise`), skip this entire section and proceed to A.5.
+
+The `oss` preset's `git-workflow.md` ships with `require_dco_signoff: true` and an implicit fork→upstream PR topology. Neither is safe to assume blindly — the user may have cloned the canonical repo directly (no fork), and DCO sign-off discipline is a discrete policy choice. Prompt for each.
+
+1. **Fork vs upstream topology.** Ask verbatim:
+   "Is `origin` your fork? If yes, what's the upstream remote name? (default: `upstream`; press Enter to skip if no fork-based workflow)"
+   - On a non-empty answer (a remote name like `upstream` / `mainline` / `canonical`): ask the follow-up verbatim:
+     "What's the upstream repo? (e.g. `upstream-org/repo-name`) — or press Enter to derive from `git remote get-url <upstream_remote>` at /006 time"
+     → Write `extras.upstream_remote: <name>` to stack.yaml. If the upstream repo was provided, also write `extras.upstream_repo: <owner/repo>`.
+   - On explicit skip (plain Enter on the first question, or user typed `skip` / `no`): do not write `extras.upstream_remote`; `/006-merge` will fall back to opening the PR against `origin`.
+   - Probe `git remote get-url <upstream_remote>`. If it fails, print: "Run `git remote add upstream <url>` later; /006-merge will fall back to origin if no upstream."
+
+2. **DCO sign-off discipline.** Ask verbatim:
+   "OSS preset enables DCO sign-off (Developer Certificate of Origin trailer on every commit). /002-implement will use `git commit -s`. OK? [Y/n]"
+   - Default `Y` (accept Enter, `y`, `yes` case-insensitive). On `n` / `no`: write `extras.require_dco_signoff_override: false` to stack.yaml and document inline: "This overrides the preset toggle in `.claude/ruleset/git-workflow.md`. The override is informational — to fully disable DCO sign-off, also edit `git-workflow.md`'s YAML toggle block to set `require_dco_signoff: false` so `/002-implement` and `/006-merge` read the disabled value from the canonical source."
+
+After all prompts complete, print a summary of the keys written and point the user to `commands/006-merge.md` for downstream fork→upstream and DCO behaviour.
 
 ### A.5 — Inline context-building
 

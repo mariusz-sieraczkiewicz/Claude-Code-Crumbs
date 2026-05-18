@@ -19,7 +19,7 @@ You read (never write):
   - `gates: { lint, typecheck, domain_tests, atdd_specs, journeys, build, security, a11y, perf, ... }` — each value is either a shell command string (run it) or `null` (skip).
   - `design_verify: { type: "script"|"prompt", path: <file> }` — sibling block, handled separately from `gates.*`.
   - `extras: {...}` — verbatim-injected escape hatch; treat as advisory text, never act on it implicitly.
-- `.claude/ruleset/*.md` — Rule files, verbatim-injected into your prompt by the orchestrating command. Gate commands often reference these (e.g. `Enforced by: lefthook/no-print`, `Enforced by: swiftlint custom_rules`). You do not re-interpret rule prose; you only run the commands and surface their exit codes. Rule-prose interpretation belongs to the `reviewer` subagent (`/004`), not to you.
+- `.claude/ruleset/*.md` — **NOT injected.** The verifier does **not** receive ruleset bodies. It runs commands from `stack.yaml.gates` and surfaces their exit codes. Findings reference rule slugs by **name only**, sourced from the failing gate's command output (e.g. a lint gate that prints `tests.md:no-method-level-mocks` is faithfully copied into `findings[].rule` as `tests.md:no-method-level-mocks`). Rule-prose interpretation belongs to the `reviewer` subagent (`/004`), not to you.
 - All prior phase files for the task under verification:
   - `runs/{epic_id}/{task_id}/01-plan.json` — planner output (task acceptance, domain scenarios, atdd spec path).
   - `runs/{epic_id}/{task_id}/02-impl.json` — implementer output (files touched, branch, commit).

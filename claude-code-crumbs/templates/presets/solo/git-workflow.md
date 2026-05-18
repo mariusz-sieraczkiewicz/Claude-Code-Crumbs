@@ -38,6 +38,7 @@ Rules:
 **There is no PR flow.** Implications for the plugin:
 - `/002-implement` runs the TDD loop and commits straight to `main` (or to the branch you happen to be on).
 - `/006-merge` is effectively a **no-op**: it tags the commit with the task id (`E-007/T-3`) for traceability and exits. It does not call `gh pr create`.
+  - Tag format: `<epic_id>/<task_id>` (e.g. `E-007/T-014`). Implemented by `/006-merge` Phase 0 step 2 when `pr_required: false` AND `tag_task_commits: true`. Existing tags are skipped silently (idempotent).
 - `/004-code-review` still runs as a self-review subagent — it just has no human reviewer to hand off to. Findings still block DoD.
 
 ## Auto-invoke toggles

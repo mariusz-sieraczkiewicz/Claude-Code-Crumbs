@@ -4,7 +4,19 @@ set -eu
 # inject-ruleset.sh
 # Concatenate <ruleset>/*.md into a single string for subagent injection.
 # Each file is prefixed with: --- <filename without extension> ---
-# Usage: ./inject-ruleset.sh   (no args)
+#
+# Usage:
+#   ./inject-ruleset.sh                              # inject ALL rule files (default)
+#   ./inject-ruleset.sh --rules <slug,slug,...>      # inject SUBSET of rule files
+#
+# Subset selection (`--rules`):
+#   - <slug,slug,...> is a comma-separated list of rule basenames (no `.md`).
+#   - Only rule files whose basename appears in the list are emitted, PLUS the
+#     mandatory core set: architecture, testing, code-style, git-workflow.
+#   - The mandatory core is ALWAYS included regardless of what `--rules` lists.
+#   - Unknown slugs are silently ignored (the matching loop simply skips them).
+#   - Omit `--rules` (or pass an empty value) to fall back to the original
+#     "inject all" behaviour.
 #
 # Ruleset directory resolution order:
 #   1. .claude/stack.yaml -> paths.ruleset (if present)
@@ -12,6 +24,40 @@ set -eu
 
 DEFAULT_RULESET_DIR=".claude/ruleset"
 STACK_YAML=".claude/stack.yaml"
+
+# Mandatory core rules — always injected, regardless of `--rules` value.
+# These rules are load-bearing for every implementation task:
+#   - architecture:  layering / vertical-slice boundaries
+#   - testing:       Step library, Worlds, TDD entry-point
+#   - code-style:    formatting / lint baseline
+#   - git-workflow:  branch, commit, and signing policy
+MANDATORY_CORE="architecture,testing,code-style,git-workflow"
+
+RULES_FILTER=""
+
+# Parse args.
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --rules)
+            shift
+            if [ $# -eq 0 ]; then
+                echo "Error: --rules requires a comma-separated slug list" >&2
+                exit 2
+            fi
+            RULES_FILTER="$1"
+            shift
+            ;;
+        --rules=*)
+            RULES_FILTER="${1#--rules=}"
+            shift
+            ;;
+        *)
+            echo "Error: unrecognised argument: $1" >&2
+            echo "Usage: $0 [--rules slug1,slug2,...]" >&2
+            exit 2
+            ;;
+    esac
+done
 
 RULESET_DIR=""
 
@@ -118,6 +164,16 @@ if [ "$COUNT" -eq 0 ]; then
     exit 2
 fi
 
+# Build the effective allow-list when `--rules` was given.
+# Format: leading + trailing commas so we can substring-match `,<slug>,` safely.
+ALLOW_LIST=""
+if [ -n "$RULES_FILTER" ]; then
+    # Merge user-supplied slugs with the mandatory core.
+    COMBINED="${RULES_FILTER},${MANDATORY_CORE}"
+    # Sentinel commas at both ends to make `,<slug>,` matches unambiguous.
+    ALLOW_LIST=",${COMBINED},"
+fi
+
 for f in "$RULESET_DIR"/*.md; do
     [ -e "$f" ] || continue
     case "$(basename "$f")" in
@@ -127,6 +183,15 @@ for f in "$RULESET_DIR"/*.md; do
             ;;
     esac
     base="$(basename "$f" .md)"
+
+    # If a filter is active, skip files whose basename is not in the allow-list.
+    if [ -n "$ALLOW_LIST" ]; then
+        case "$ALLOW_LIST" in
+            *",${base},"*) : ;;  # included, fall through and emit
+            *) continue ;;
+        esac
+    fi
+
     printf -- '--- %s ---\n' "$base"
     cat -- "$f"
     printf '\n'

@@ -15,7 +15,7 @@ Output language for all artifacts and user-facing messages is **English**, regar
 - **`docs/planning/epic-{id}-tasks.yaml`** — task list for the epic, where `{id}` is the 3-digit zero-padded epic id (e.g. `epic-001-tasks.yaml`). Iterate only entries with `status: pending`. Skip `done`, `in_progress`, `blocked` silently (they are reported in the pre-flight count, not processed).
 - **`docs/planning/epics.yaml`** — Business scenarios for the epic, referenced by each task's `domain_scenarios` field. Loaded once and reused across every per-task subagent dispatch.
 - **`.claude/ruleset/*.md`** — all 18 canonical rule files, verbatim-loaded into memory once at the start of the batch. The same content block is injected into every subagent dispatch (`implementer`, `verifier`, `reviewer`, `feedback-implementer`).
-- **`.claude/ruleset/git-workflow.md`** — parse the YAML toggle block (same keys as `/002-implement`: `auto_invoke_review`, `auto_invoke_verify`, `allow_commit_to_main`, `pr_required`, `branch_name_pattern`, `require_signed_commits`). Toggles apply uniformly to every task in the batch.
+- **`.claude/ruleset/git-workflow.md`** — parse the YAML toggle block (same keys as `/002-implement`: `auto_invoke_review`, `auto_invoke_verify`, `allow_commit_to_main`, `pr_required`, `branch_name_pattern`, `require_signed_commits`, `require_dco_signoff`). Toggles apply uniformly to every task in the batch.
 - **`.claude/stack.yaml`** — read `extras` (propagated verbatim to all subagents), `paths` (SoT overrides), and `gates` (referenced by the `verifier` subagent).
 
 ## Workflow
@@ -55,9 +55,23 @@ Output language for all artifacts and user-facing messages is **English**, regar
 - If `pending_ids` is empty → print: `Nothing to do. All tasks for <epic-id> are done, in_progress, or blocked.` Exit cleanly (no error).
 - Verify `.claude/stack.yaml` exists and contains a `gates` block. If missing → abort with the path.
 - Verify `.claude/ruleset/` contains all 18 rule files. If any are missing → abort listing the missing filenames and suggest: `Run /000-prd-refine to re-seed the ruleset/ directory.`
-- Load the 18 ruleset files into a single verbatim block (in stable lexicographic order). Hold it in memory for the whole batch. The block is identical for every subagent dispatch in this batch — load once, inject many times.
+- Confirm the 18 ruleset files are present on disk. Do **not** pre-load a single mega-block: ruleset injection is now subagent-specific. The implementer/feedback-implementer get a per-task subset (`rules_in_scope` ∪ mandatory core), the verifier gets none, the reviewer gets all 18. Invoke `scripts/inject-ruleset.sh` (with or without `--rules <slugs>`) at each dispatch site to capture the appropriate slice on stdout.
+- **Capture business-scenarios hash.** Extract the epic's `business_scenarios` block-scalar verbatim from `docs/planning/epics.yaml` for the resolved `<epic-id>` and compute `sha256` over the raw bytes. Hold the value as a shell variable `EPIC_BS_HASH` (substituted as a literal by the orchestrator before each subsequent Bash tool call — environment variables do not persist across separate Bash tool invocations in this harness). This hash is the baseline for the per-iteration stale-detect check in Phase 1 Step 1. Example capture (with the literal epic id substituted):
+
+  ```sh
+  # The orchestrator extracts the business_scenarios block-scalar from
+  # docs/planning/epics.yaml for the resolved epic id and pipes it into sha256sum.
+  EPIC_BS_HASH="$(yq -r '.epics[] | select(.id=="E-007") | .business_scenarios' docs/planning/epics.yaml | sha256sum | awk '{print $1}')"
+  ```
+
+  The hash MUST be captured AFTER the epic-existence verification above and BEFORE the user-confirmation prompt, so the baseline reflects the state the user agrees to.
+- **Detached HEAD check.** Run `git rev-parse --abbrev-ref HEAD`. If it returns the literal string `HEAD`, the working tree is in a detached-HEAD state and downstream branch logic will misbehave. ABORT (release the Phase 0 lock first per the close-out cleanup contract) with: `HEAD is detached. Check out a branch first: \`git checkout <branch-name>\` (e.g. main).`
 - Verify the current branch is clean (no uncommitted changes outside `.claude/runs/` and `docs/planning/`). If dirty → abort with: `Working tree has uncommitted changes outside the runs and planning directories. Commit or stash before /002-auto-implement.`
 - Resolve the branch base from `git-workflow.md` (`base_branch` key; defaults to `main`). Hold the resolved base ref in memory for the reviewer dispatches (they diff against it).
+- **Git identity preflight.** Every per-task implementer dispatch runs `git commit`; a fresh machine with no global git identity will fail mid-batch with a cryptic git error. Run these checks before the loop starts:
+  1. `git config --get user.email` must return non-empty.
+  2. `git config --get user.name` must return non-empty.
+  3. If either is empty → ABORT (release the Phase 0 lock first per the close-out cleanup contract) with: `Git identity not configured. Run \`git config --global user.email "<you@example>"\` and \`git config --global user.name "<Your Name>"\` then re-run.`
 - **Signed-commits preflight.** If `git-workflow.md.require_signed_commits: true`:
   1. Run `git config --get user.signingkey` — must return non-empty.
   2. Run `git config --get commit.gpgsign` — must return `true` (or `gpg.format=ssh` plus `user.signingkey` set).
@@ -65,6 +79,7 @@ Output language for all artifacts and user-facing messages is **English**, regar
      - For GPG: `gpg --list-secret-keys "$(git config --get user.signingkey)" >/dev/null`
      - For SSH: `ssh-add -L | grep -q "$(git config --get user.signingkey)"` or accept if `gpg.format=ssh` and the key file exists on disk.
   4. If any check fails → ABORT (release the Phase 0 lock first per the close-out cleanup contract) with: `require_signed_commits=true but signing not configured. Set git config user.signingkey and ensure your agent (gpg-agent / ssh-agent) is running. Re-run after fixing.`
+- **DCO sign-off flag.** Read `require_dco_signoff` from the `git-workflow.md` YAML toggle block (default: `false`; the `oss` preset ships it as `true`). If true, set the in-memory flag `REQUIRE_DCO_SIGNOFF=true` and pass it into every per-task `implementer` dispatch payload (Step 1 commit-policy header below). The implementer agent uses `git commit -s` (which appends a `Signed-off-by:` trailer) when this flag is set. The plugin does NOT validate the DCO trailer at this stage — that is `/006-merge`'s Phase 0 pre-flight job (BEFORE `git push`).
 - Print the plan to the user (single block):
 
   ```
@@ -80,6 +95,14 @@ Output language for all artifacts and user-facing messages is **English**, regar
 For each task id in `pending_ids`, **in declared order** (sequential, never parallel):
 
 #### Step 1 — Implementer subagent
+
+- **Stale-epic detection.** At the start of each per-task iteration (before resolving the branch name, before any subagent dispatch):
+  1. Re-read the epic entry for `${EPIC_ID}` from `docs/planning/epics.yaml`.
+  2. If the epic entry is MISSING (the user deleted it mid-batch): HALT the batch (release the Phase 0 lock first per the close-out cleanup contract). Print: `Epic ${EPIC_ID} no longer present in epics.yaml. Batch aborted at task ${TASK_ID}. Subsequent pending tasks were not processed.`
+  3. Compute `sha256` of the epic's `business_scenarios` block (the Gherkin block-scalar) using the same extraction recipe as Phase 0. Compare against the baseline `EPIC_BS_HASH` captured at Phase 0 pre-flight.
+  4. If the hash differs: HALT the batch (release the Phase 0 lock first). Print: `Business scenarios for ${EPIC_ID} were modified during /002-auto-implement. Stop to avoid acting on stale data. Re-run /002-auto-implement to pick up the new scenarios.`
+
+  This guard exists because Phase 0 reads `epics.yaml` once and holds the result for the batch lifetime. A user editing `epics.yaml` mid-batch (deleting the epic, rewording a `## Scenario:` block) would otherwise drive the inner loop with stale data. The check is per-task, not per-subagent — re-reading on every Task-tool dispatch would be overkill — but it MUST run before the implementer subagent for the current task is invoked.
 
 - **Pre-dispatch: resolve branch name and commit-msg context.** Mirrors `/002-implement` Phase 1 substitution rules. Recognised substitution keys for `branch_name_pattern`: `{task_id}`, `{slug}`, `{ticket_id}`.
   1. Substitute `{task_id}` with the current task id and `{slug}` with the task's `slug` (or kebab-cased `title` fallback).
@@ -97,13 +120,16 @@ For each task id in `pending_ids`, **in declared order** (sequential, never para
 - Prompt body MUST include, verbatim:
   - the task entry from `epic-{id}-tasks.yaml`,
   - the referenced Business scenarios from `epics.yaml` (Gherkin block-scalar copied as-is),
-  - the full 18-file ruleset block,
+  - the **ruleset SUBSET** for this task — invoke `scripts/inject-ruleset.sh --rules <slugs>` where `<slugs>` = the planner's `01-plan.json.payload.rules_in_scope` for this task ∪ the mandatory core `{architecture, testing, code-style, git-workflow}`. The script honours the subset filter and always includes the mandatory core. Do **not** inline the full 18-file block — the implementer works under the planner's per-task scope; the reviewer in Step 5 is the one that sweeps all 18.
   - `stack.yaml.extras`,
   - the resolved `git-workflow.md` toggles,
   - **commit-msg context** under a header `--- commit-msg context ---`:
     - `cm_ticket: <resolved-ticket-id-or-null>` — the value resolved in the pre-dispatch step above.
     - `commit_subject_pattern: <from git-workflow.md commit-msg toggle>` — verbatim regex/string (e.g. `^(feat|fix|chore|refactor|test|docs)(\([a-z0-9-]+\))?: .+ \[[A-Z]+-[0-9]+\]$`).
     The implementer is responsible for including the ticket id in the commit subject (per the enterprise `^... \[TICKET-ID\]$` pattern); the conductor's job is to surface it.
+  - **commit policy** under a header `--- commit policy ---`:
+    - `require_signed_commits: <true|false>` — when true, the implementer commits with `-S` (GPG/SSH signing).
+    - `require_dco_signoff: <true|false>` — when true, the implementer commits with `-s` (appends `Signed-off-by:` trailer). MUST be applied on the ORIGINAL commit — amending later to add `-s` is forbidden by the no-amend rule, and `/006-merge` enforces the trailer in its Phase 0 pre-flight BEFORE `git push`.
 - The subagent reads/writes `.claude/runs/{epic_id}/{task_id}/02-impl.json` (and any prior phase files in that directory).
 - Wait for completion. On return, read `02-impl.json`.
 - Before dispatch, set the task `status: in_progress` in `epic-{id}-tasks.yaml` (preserve YAML formatting, comments, and key order). This matches `/002-implement` behaviour and ensures that if the user kills the batch mid-task, the runs-directory state is consistent with the tasks file.
@@ -128,7 +154,7 @@ Read `02-impl.json.status`:
 #### Step 3 — Verifier subagent
 
 - Invoke `Task` tool with `subagent_type: "verifier"`.
-- Prompt body MUST include: the full ruleset block, `stack.yaml.gates`, `stack.yaml.extras`, the task id, the epic id, and pointers to read all prior phase files in `.claude/runs/{epic_id}/{task_id}/`.
+- Prompt body MUST include: `stack.yaml.gates`, `stack.yaml.extras`, the task id, the epic id, and pointers to read all prior phase files in `.claude/runs/{epic_id}/{task_id}/`. **Do NOT inject ruleset bodies.** The verifier does not interpret rule prose — it runs gate commands and surfaces their exit codes; Findings reference rule slugs by name only, sourced from the failing gate's command output.
 - Subagent writes `.claude/runs/{epic_id}/{task_id}/03-verify.json`.
 - Wait for completion.
 
@@ -145,7 +171,7 @@ Read `03-verify.json.status`:
     # dispatch feedback-implementer (or /005-implement-feedback fallback)
     unset CRUMBS_PARENT_COMMAND
     ```
-  1. Invoke `Task` tool with `subagent_type: "feedback-implementer"`. Prompt includes the ruleset block, prior `02-impl.json`, prior `03-verify.json`, `stack.yaml.extras`, the iteration suffix, and explicit instruction to fix only the gate findings — not to refactor unrelated code.
+  1. Invoke `Task` tool with `subagent_type: "feedback-implementer"`. Prompt includes the ruleset **subset** (`scripts/inject-ruleset.sh --rules <slugs>` where `<slugs>` = `01-plan.json.payload.rules_in_scope` ∪ mandatory core `{architecture, testing, code-style, git-workflow}` — same subset the implementer received), prior `02-impl.json`, prior `03-verify.json`, `stack.yaml.extras`, the iteration suffix, and explicit instruction to fix only the gate findings — not to refactor unrelated code.
   2. Subagent writes `.claude/runs/{epic_id}/{task_id}/05a-feedback-impl.json` (then `05b-…`, `05c-…` on subsequent iterations). Each file is a fresh artifact, not an overwrite.
   3. Re-dispatch `verifier` subagent. It overwrites `03-verify.json` (latest result wins). Prior verify outputs are not preserved by this command — if the user needs the history, they inspect the runs directory before the next iteration overwrites it. The `05{a|b|c}-feedback-impl.json` files retain the per-iteration fix record.
   4. Read the refreshed `03-verify.json`. If `ok` → exit the loop and continue to Step 5.
@@ -157,7 +183,7 @@ Read `03-verify.json.status`:
 #### Step 5 — Reviewer subagent
 
 - Invoke `Task` tool with `subagent_type: "reviewer"`.
-- Prompt body MUST include: the full ruleset block, `stack.yaml.extras`, pointers to all prior phase files, and an instruction to `git diff` against the branch base (resolved from `git-workflow.md`).
+- Prompt body MUST include: the **full 18-file ruleset block** (invoke `scripts/inject-ruleset.sh` with no `--rules` flag — the reviewer is the holistic gate, cross-cutting checks span the full set), `stack.yaml.extras`, pointers to all prior phase files, and an instruction to `git diff` against the branch base (resolved from `git-workflow.md`).
 - Subagent writes `.claude/runs/{epic_id}/{task_id}/04-review.json`.
 - Wait for completion.
 
@@ -255,7 +281,13 @@ If a task halted with `loop-limit` and was left `in_progress`, the next run will
 
 ## Subagent invocation contract
 
-Every `Task` tool call dispatched by this command MUST include the **verbatim ruleset block** — the concatenation of all 18 `.claude/ruleset/*.md` files in lexicographic order, separated by a fenced delimiter that the receiving subagent treats as a hard boundary (each file is prefixed with `### .claude/ruleset/<filename>` for traceability). The plugin ships a helper at `scripts/inject-ruleset.sh` (delivered in Wave 8) that emits the block on stdout; the main thread captures its output once at Phase 0 and inlines it into every subsequent dispatch prompt. Do not use `@`-include — `@`-references are not guaranteed to propagate into subagent contexts, which is the whole reason this batch command exists rather than the user invoking `/002-implement` in a shell loop.
+`Task` tool calls dispatched by this command include the verbatim ruleset content from `.claude/ruleset/*.md` (each file prefixed with `--- <basename> ---` as emitted by `scripts/inject-ruleset.sh`), but the **scope of injection varies per subagent**:
+
+- **implementer** and **feedback-implementer** receive a **subset** — the planner's `01-plan.json.payload.rules_in_scope` for the current task ∪ the mandatory core `{architecture, testing, code-style, git-workflow}`. Invoke `scripts/inject-ruleset.sh --rules <slugs>`. Rationale: the planner already decided which task-specific rules apply; injecting only that subset plus the always-relevant core keeps the subagent focused on the slice at hand.
+- **verifier** receives **NO ruleset bodies**. It runs gate commands from `stack.yaml.gates` and surfaces exit codes; rule slugs in Findings come from the gate's own output.
+- **reviewer** receives **all 18 files** — invoke `scripts/inject-ruleset.sh` with no flags. Cross-cutting checks span the full set; the reviewer is the holistic gate.
+
+Do not use `@`-include — `@`-references are not guaranteed to propagate into subagent contexts, which is the whole reason this batch command exists rather than the user invoking `/002-implement` in a shell loop.
 
 Each dispatch prompt also includes:
 
@@ -314,7 +346,7 @@ For an epic `E-007` with five tasks (`T-001` done, `T-002 T-003 T-004` pending, 
 - `/003-verify-dod <task-id>` and `/004-code-review <task-id>` — standalone gate invocations, useful for inspecting a halted task without re-running the implementer.
 - `/006-merge <epic-id>` — invoked by the user after Phase 2 prints its merge suggestion. Honours `git-workflow.md` for one-MR-per-task vs solo-no-MR behaviour.
 - `scripts/archive-epic-runs.sh` (Wave 8) — helper script invoked from Phase 2 to tar+remove the runs directory.
-- `scripts/inject-ruleset.sh` (Wave 8) — helper script invoked once in Phase 0 to emit the verbatim ruleset block.
+- `scripts/inject-ruleset.sh` — helper script invoked per subagent dispatch. Pass `--rules <slugs>` to emit a per-task subset (mandatory core always included); omit the flag to emit all 18 files.
 - `CONTEXT.md` — canonical glossary. Statuses, subagent chain, ruleset injection, too-big detection, and runs directory layout are all defined there; this command must not drift from those definitions.
 - `PRD.md §5` and `§10` — command roster and v1 scope. `/002-auto-implement` is one of the nine commands in v1; this command's behaviour must remain consistent with the role described in §5 ("Epic-level batch orchestrator").
 - `.claude-plugin/agents/` — the four subagent definitions (`implementer`, `verifier`, `reviewer`, `feedback-implementer`) that this command dispatches. The `planner` subagent is **not** dispatched by this command (it is the `/001-plan` agent; re-split happens out-of-band when the user runs `/001-plan --resplit`).

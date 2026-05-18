@@ -13,7 +13,7 @@ This command is the single-task counterpart of `/002-auto-implement`. It dispatc
 - **`docs/planning/epic-{id}-tasks.yaml`** — locate the task entry by scanning every `epic-*-tasks.yaml` under `docs/planning/` (where `{id}` is the 3-digit zero-padded epic id, e.g. `epic-001-tasks.yaml`). If not found anywhere, abort with: `Task <task-id> not found in any epic-*-tasks.yaml. Run /001-plan first.`
 - **`docs/planning/epics.yaml`** — locate the Business scenarios referenced by the task's `domain_scenarios` field. Read the Gherkin block-scalar verbatim from the matching epic entry. If a referenced scenario is missing, abort with the path and missing scenario name.
 - **`.claude/ruleset/*.md`** — all 18 canonical rule files, verbatim-loaded into memory for downstream subagent injection (no `@`-include — content is pasted into the subagent prompt body).
-- **`.claude/ruleset/git-workflow.md`** — parse the YAML toggle block at the top of the file for `auto_invoke_review`, `auto_invoke_verify`, `allow_commit_to_main`, `pr_required`, `branch_name_pattern`, `require_signed_commits`. Defaults below apply when a key is absent.
+- **`.claude/ruleset/git-workflow.md`** — parse the YAML toggle block at the top of the file for `auto_invoke_review`, `auto_invoke_verify`, `allow_commit_to_main`, `pr_required`, `branch_name_pattern`, `require_signed_commits`, `require_dco_signoff`. Defaults below apply when a key is absent.
 - **`.claude/stack.yaml`** — read `extras` (propagated verbatim to all subagents), `paths` (SoT overrides used by downstream gates), and `gates` (referenced by `/003-verify-dod`).
 
 ## Workflow
@@ -22,6 +22,7 @@ This command is the single-task counterpart of `/002-auto-implement`. It dispatc
 
 - Verify the task entry exists in some `epic-{id}-tasks.yaml`. Scan every file matching that glob; the first match wins. If absent → abort (see Inputs).
 - Capture the `epic_id` from the matching file's name (e.g. `epic-001-tasks.yaml` → `epic_id = E-001`, matching the entry in `epics.yaml`). Cross-check that the same epic id appears in `epics.yaml`; if not, abort with both paths.
+- **Detached HEAD check.** Run `git rev-parse --abbrev-ref HEAD`. If it returns the literal string `HEAD`, the working tree is in a detached-HEAD state and branch logic downstream will misbehave. ABORT with: `HEAD is detached. Check out a branch first: \`git checkout <branch-name>\` (e.g. main).`
 - **Dirty working tree check.** Run `git status --porcelain`. If the output is non-empty:
   - If `allow_commit_to_main: false` (default; non-solo presets) → abort: `Working tree has uncommitted changes. Commit or stash them before /002-implement.`
   - If `allow_commit_to_main: true` (solo preset) → proceed but print a visible warning: `Working tree dirty; proceeding under allow_commit_to_main=true (solo preset). Implementer commit will include all current staged/unstaged changes.`
@@ -39,6 +40,10 @@ This command is the single-task counterpart of `/002-auto-implement`. It dispatc
 - Ensure `.claude/runs/{epic_id}/{task_id}/artifacts/` exists for transient subagent outputs (logs, drafts).
 - Confirm `.claude/ruleset/` contains all 18 canonical rule files. If any are missing, list them and abort — the implementer cannot be dispatched without the full ruleset.
 - Confirm `.claude/stack.yaml` exists and parses. If absent, abort with: `stack.yaml missing. Run /000-prd-refine to bootstrap the project.`
+- **Git identity preflight.** The implementer subagent will `git commit`; a fresh machine with no global git identity fails mid-task with a cryptic git error. Run these checks first:
+  1. `git config --get user.email` must return non-empty.
+  2. `git config --get user.name` must return non-empty.
+  3. If either is empty → ABORT with: `Git identity not configured. Run \`git config --global user.email "<you@example>"\` and \`git config --global user.name "<Your Name>"\` then re-run.`
 - **Signed-commits preflight.** If `git-workflow.md.require_signed_commits: true`:
   1. Run `git config --get user.signingkey` — must return non-empty.
   2. Run `git config --get commit.gpgsign` — must return `true` (or `gpg.format=ssh` plus `user.signingkey` set).
@@ -46,6 +51,43 @@ This command is the single-task counterpart of `/002-auto-implement`. It dispatc
      - For GPG: `gpg --list-secret-keys "$(git config --get user.signingkey)" >/dev/null`
      - For SSH: `ssh-add -L | grep -q "$(git config --get user.signingkey)"` or accept if `gpg.format=ssh` and the key file exists on disk.
   4. If any check fails → ABORT with: `require_signed_commits=true but signing not configured. Set git config user.signingkey and ensure your agent (gpg-agent / ssh-agent) is running. Re-run after fixing.`
+- **DCO sign-off flag.** Read `require_dco_signoff` from the `git-workflow.md` YAML toggle block (default: `false`; the `oss` preset ships it as `true`). If true, set the in-memory flag `REQUIRE_DCO_SIGNOFF=true` and pass it into the implementer dispatch context (Phase 2, step 8 below). The implementer agent uses `git commit -s` (which appends a `Signed-off-by:` trailer) when this flag is set. The plugin does NOT validate the DCO trailer here — that is `/006-merge`'s Phase 0 pre-flight job (and it runs before `git push` so the user can rebase the fork branch without a force-push from origin).
+- **Task lock.** Per-task lock prevents concurrent invocations of `/002-implement` against the same task id (two terminals racing on the branch, commit, or `02-impl.json`). The orchestrator substitutes the resolved epic id and task id into the path string BEFORE invoking the Bash tool (environment variables do not persist across separate Bash tool calls in this harness):
+
+  ```sh
+  LOCK_DIR=".claude/runs/.lock-${EPIC_ID}-${TASK_ID}"
+  if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+      LOCK_INFO=""
+      [ -f "$LOCK_DIR/info" ] && LOCK_INFO=" (held by: $(cat "$LOCK_DIR/info"))"
+      echo "Error: task ${TASK_ID} is already being processed${LOCK_INFO}." >&2
+      echo "If you are sure no other process is running, remove $LOCK_DIR and retry." >&2
+      exit 5
+  fi
+  echo "$$@$(hostname) $(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$LOCK_DIR/info"
+  ```
+
+  Exit code `5` is reserved for the "already running" case so callers can distinguish concurrency from other pre-flight failures.
+
+  **No `trap`-based cleanup.** A `trap` set inside a Bash tool call only lives for the duration of that single invocation; the orchestrator returns to the Claude harness immediately after, and the trap exits — releasing the lock prematurely. Instead, the lock is released by an explicit `rm -rf "$LOCK_DIR"` in the FINAL Phase (success path, Phase 6) AND in every halt/abort branch (`too_big_proposal`, `blocked`, verify/review loop-limit, schema validation failure, dispatch error). Every halt path MUST explicitly release the lock; do not assume any wrapper does it.
+
+  **Trade-off:** if the orchestrator itself crashes (host crash, harness terminated), the lock directory persists as a stale lock and manual `rm -rf .claude/runs/.lock-<epic>-<task>/` is required. The error message at acquisition points the user at the exact path.
+
+  **Cross-reference with `/002-auto-implement`.** The batch conductor holds an *epic*-level lock (`.claude/runs/.lock-<epic_id>/`) and dispatches the `implementer`, `verifier`, `reviewer`, and `feedback-implementer` subagents *directly* via the `Task` tool — it does NOT invoke `/002-implement` internally (verified against `commands/002-auto-implement.md`). The two lock namespaces (`.lock-<epic_id>` vs `.lock-<epic_id>-<task_id>`) therefore never collide and never self-deadlock. A user running `/002-auto-implement E-007` in one terminal and `/002-implement T-014` in another (with `T-014` ∈ `E-007`) is a real conflict the locks do not catch directly — but the second invocation will fail on the branch-collision check in Phase 1, or on the `status: in_progress` guard if the batch already flipped the task status. Do not extend either lock to cover the other; keep them orthogonal.
+
+### Phase 0.5 — Resume detection
+
+After acquiring the Task lock and BEFORE re-dispatching the implementer subagent, scan `.claude/runs/${EPIC_ID}/${TASK_ID}/` for prior artifacts from a previously interrupted run (Ctrl-C, host crash, halt that left `status: in_progress`). The goal is to give the user a meaningful resume hint instead of a bare `Task in_progress, clear status manually` error.
+
+Branch on the highest-numbered artifact present:
+
+- If `04-review.json` exists with `status: "ok"` AND `03-verify.json.status == "ok"` AND `02-impl.json.payload.commit_sha` matches HEAD (or is an ancestor of HEAD per `git merge-base --is-ancestor <sha> HEAD`) → fast-forward to Phase 6 (mark task `done`, suggest `/006-merge`). Print: `Task already complete (verify ok, review ok, commit on HEAD). Marked done.`
+- If `04-review.json` has `status: "fail"` OR `03-verify.json.status == "fail"` AND any `05{a|b|c}-feedback-impl.json` exists → suggest `/005-implement-feedback ${TASK_ID}` to continue the feedback loop. Print a resume summary with the last 2 findings from the most recent failing artifact. Halt; do not re-dispatch the implementer.
+- If `02-impl.json` exists with `status: "ok"` but no `03-verify.json` → resume by invoking `/003-verify-dod` (skip the implementer phase). Continue from Phase 4.
+- If `02-impl.json` exists with `status: "too_big_proposal"` → halt with the prior `payload.reason` and `payload.suggested_split`; suggest `/001-plan --resplit ${TASK_ID}`.
+- If `02-impl.json` exists with `status: "blocked"` → halt with the prior blockers summary from `payload.reason`.
+- If only `01-plan.json` exists (or no `NN-*.json` files at all) → run the implementer phase normally (Phase 1 → Phase 2).
+
+In all "resume" paths above, the task status in `epic-{id}-tasks.yaml` is set to `in_progress` (idempotent re-set; no-op if already `in_progress`). On any halt path inside Phase 0.5, the Task lock acquired in Phase 0 MUST be released via `rm -rf "$LOCK_DIR"` before exit.
 
 ### Phase 1 — Branch
 
@@ -75,7 +117,7 @@ Use the **Task tool** with `subagent_type: "implementer"`. Inject the following 
 
 1. **Task entry (YAML)** — the entire YAML entry for the task as it appears in `epic-{id}-tasks.yaml`. Include `id`, `slug`, `title`, `status`, `domain_scenarios`, `atdd_spec`, `acceptance`, `notes`, and any other fields present.
 2. **Business scenarios** — for each name listed in the task's `domain_scenarios`, paste the matching `## Scenario: <name>` Gherkin block verbatim from `epics.yaml`. Preface with `--- Business Scenario: <name> ---`.
-3. **Verbatim ruleset** — inject the ruleset by capturing `scripts/inject-ruleset.sh` output via the Bash tool and including it verbatim in the implementer's prompt. The script handles path resolution (honours `paths.ruleset` from `stack.yaml`, falls back to `.claude/ruleset/`), alphabetical ordering of `*.md` files, and the `--- <basename> ---` header per file. This mirrors `/002-auto-implement` exactly; do not re-implement the read+concatenate logic inline. Do not summarise, do not omit — the implementer is expected to follow every active rule.
+3. **Verbatim ruleset SUBSET** — inject the ruleset **subset** via `scripts/inject-ruleset.sh --rules <comma-separated-slugs>` where slugs = the planner's `01-plan.json.payload.rules_in_scope` for this task ∪ the mandatory core `{architecture, testing, code-style, git-workflow}`. Capture the script's stdout via the Bash tool and inline it verbatim into the implementer's prompt. The script handles path resolution (honours `paths.ruleset` from `stack.yaml`, falls back to `.claude/ruleset/`), alphabetical ordering of `*.md` files, the `--- <basename> ---` header per file, and the subset filter (mandatory core is always included regardless of `--rules`). This mirrors `/002-auto-implement` exactly; do not re-implement the read+concatenate logic inline. Do not summarise, do not omit any rule in the subset. The remaining rules outside the subset are the reviewer's concern (`/004`), not the implementer's — they are the holistic gate that sweeps the full 18.
 4. **`stack.yaml.extras`** — paste the `extras` mapping verbatim under a header `--- stack.yaml.extras ---`. This is the escape hatch for stack-specific quirks (e.g. `bash_buffering_warning`, `user_ping_interval_minutes`).
 5. **Output contract** — instruct the implementer to write its result to `.claude/runs/{epic_id}/{task_id}/02-impl.json`, validated against `schemas/run-phase.schema.json`. The top-level `status` field must be one of `ok`, `too_big_proposal`, `blocked`. Required `payload` keys vary by status:
    - `ok` → `commit_sha`, `files_changed`, `domain_tests_added`, `atdd_spec_path`.
@@ -86,6 +128,9 @@ Use the **Task tool** with `subagent_type: "implementer"`. Inject the following 
    - `cm_ticket: <resolved-ticket-id-or-null>` — the value resolved in Phase 1 (task `cm_ticket`, falling back to epic `cm_ticket`, or `null` if neither was set and the pattern did not require one).
    - `commit_subject_pattern: <from git-workflow.md commit-msg toggle>` — verbatim regex/string from the toggle block (e.g. `^(feat|fix|chore|refactor|test|docs)(\([a-z0-9-]+\))?: .+ \[[A-Z]+-[0-9]+\]$`).
    The implementer is responsible for including the ticket id in the commit subject when one is present; the main thread is responsible for surfacing it.
+8. **Commit policy flags** — under a header `--- commit policy ---`, pass the resolved git-workflow.md toggles that govern the implementer's `git commit` invocation:
+   - `require_signed_commits: <true|false>` — when true, the implementer commits with `-S` (GPG/SSH signing).
+   - `require_dco_signoff: <true|false>` — when true, the implementer commits with `-s` (appends a `Signed-off-by: Name <email>` trailer to the commit message). MUST be applied on the ORIGINAL commit — amending later to add `-s` is forbidden by the no-amend rule, and `/006-merge` enforces the trailer in its Phase 0 pre-flight BEFORE `git push`.
 
 The implementer is expected to:
 
@@ -94,6 +139,7 @@ The implementer is expected to:
 - Produce **one or more Domain-tests** covering happy path + edge cases.
 - Make **one commit** on the task branch (or on `main` if the solo preset is active). Commit message follows `.claude/ruleset/git-workflow.md` conventions (Conventional Commits by default). Never amend.
 - Sign the commit if `require_signed_commits: true` is set in the toggle block.
+- Sign-off the commit (`git commit -s`) if `require_dco_signoff: true` is set. The sign-off MUST be applied on the original commit; amending to add it later is forbidden.
 - Write the final artifact `02-impl.json` with a top-level `status` field: `ok`, `too_big_proposal`, or `blocked`.
 
 ### Phase 3 — Read implementer output
@@ -191,6 +237,7 @@ auto_invoke_review: true | false       # default true
 allow_commit_to_main: true | false     # default false
 pr_required: true | false              # default true
 require_signed_commits: true | false   # default false
+require_dco_signoff: true | false      # default false (true for oss preset)
 branch_name_pattern: "task/{task_id}-{slug}"
 ```
 
@@ -210,6 +257,7 @@ The four shipped presets populate the toggle block at bootstrap as follows. Afte
 | `allow_commit_to_main`    | true  | false      | false | false      |
 | `pr_required`             | false | true       | true  | true       |
 | `require_signed_commits`  | false | false      | false | true       |
+| `require_dco_signoff`     | false | false      | true  | false      |
 
 The `branch_name_pattern` is `task/{task_id}-{slug}` across all presets unless the project overrides.
 

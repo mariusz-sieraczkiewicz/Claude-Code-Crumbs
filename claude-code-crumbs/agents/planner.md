@@ -49,6 +49,8 @@ You have **two entry modes**. Auto-detect from the input payload the main thread
 5. Write `runs/{epic_id}/{old_task_id}/01-plan.json` documenting the re-split.
 6. If the user-supplied `reason` is missing or empty, **halt** with a clarification request (see "When to halt").
 
+Before dispatching, the orchestrator checks resplit-lineage depth and refuses if >=3. The planner subagent itself does NOT receive prior resplit history in its prompt — the depth check is a main-thread gate (see `commands/001-plan.md` Phase 1.5). Maximum resplit depth is 3 per Business Scenario lineage.
+
 ## Source-of-truth precedence
 
 Brief source for Business scenarios, in priority order:
@@ -174,6 +176,7 @@ You halt (write a `blocked` phase JSON, stop, do not retry) in exactly these sit
 2. **Re-split without reason** — user invoked re-split but provided no `reason` (or an empty/whitespace one). Write a `blocked` phase JSON with `findings: [{rule: "missing_input", message: "re-split invoked without a reason; please supply why the original task is judged too big"}]`. Halt.
 3. **Scenario forbidden vocabulary detected** in user-supplied content — surface it as a finding and ask the user to reword. Halt.
 4. **Ruleset conflict** — two injected rules give contradictory guidance for the current decomposition. Halt with a finding; main thread escalates to user.
+5. **Resplit lineage depth exceeded** — handled by main thread before planner dispatch (`commands/001-plan.md` Phase 1.5, exit 6). The planner subagent is never invoked when depth >=3; no halt artifact is written by the planner itself.
 
 Do not loop. Do not retry. Halts are cheap; speculative output is expensive.
 
@@ -188,7 +191,7 @@ tasks:
     domain_scenarios:
       - <scenario-name-realised>
       - <edge-case-scenario-name>
-    atdd_spec: tests/atdd/{slug}.spec.ts
+    atdd_spec: tests/atdd/{slug}<ext>    # <ext> per stack.language table below; e.g. .spec.ts | _spec.py | Spec.swift
     rules_in_scope:
       - architecture
       - data-access
@@ -204,7 +207,20 @@ Field semantics:
 - `id` — `T-NNN` zero-padded within the epic, monotonic. Re-split creates new ids; never reuses the old one.
 - `title` — short imperative phrase ("Persist subscription state in Postgres", not "Subscription persistence work").
 - `domain_scenarios` — names matching `## Scenario:` headings in the epic's `business_scenarios` block. Drives RED.
-- `atdd_spec` — path the implementer will create. Extension matches the stack (e.g. `.spec.ts`, `.swift`).
+- `atdd_spec` — path the implementer will create. Extension is derived from `stack.yaml.stack.language` per the table below. If `stack.yaml.paths.atdd_spec_extension` is set, use that string verbatim as the extension (project-level override).
+
+  | `stack.language`        | extension          |
+  |-------------------------|--------------------|
+  | `typescript`            | `.spec.ts`         |
+  | `javascript`            | `.spec.ts`         |
+  | `python`                | `_spec.py`         |
+  | `swift`                 | `Spec.swift`       |
+  | `go`                    | `_spec_test.go`    |
+  | `ruby`                  | `_spec.rb`         |
+  | `rust`                  | `_spec.rs`         |
+  | (anything else / unset) | `.spec` (generic)  |
+
+  Example: with `stack.language: python` and slug `subscription-cancel`, the field becomes `atdd_spec: tests/atdd/subscription-cancel_spec.py`. With `paths.atdd_spec_extension: ".feature"`, the same slug becomes `atdd_spec: tests/atdd/subscription-cancel.feature` regardless of language.
 - `rules_in_scope` — bare ruleset names (no `.md`); the implementer reads these and injects them into its own working context.
 - `depends_on` — task ids that must reach `done` first. Use sparingly; favour independently mergeable tasks.
 - `cm_ticket` — optional change-management ticket id matching `^[A-Z]{2,}-[0-9]+$`. Only emit when the project's `git-workflow.md` declares `require_ticket_reference: true` AND the team tracks tickets per task. Must use one of the prefixes listed in `git-workflow.md` `ticket_prefixes:`. When absent, downstream `/002`/`/006` substitute `{ticket_id}` from the parent epic's `cm_ticket`.

@@ -22,7 +22,10 @@ This command **only opens** the MR/PR. It never auto-merges, never `--force` pus
   - `default_reviewers` (list) — comma-joined for `--reviewer`.
   - `pr_labels` (list) — comma-joined for `--label`.
   - `require_signed_commits` (bool) — if `true`, verify `%G?` is `G` for all commits on the branch.
+  - `require_dco_signoff` (bool) — if `true` (typical for `oss`), verify every commit in `<base>..HEAD` has a `Signed-off-by:` trailer. Enforced in Phase 0, BEFORE `git push`.
+  - `require_codeowners_review` (bool) — if `true` (typical for `enterprise` and `oss`), skip `--reviewer` because CODEOWNERS auto-assigns server-side.
   - `branch_name_pattern` (string) — for the pre-flight branch check.
+- `.claude/stack.yaml` — `extras.upstream_remote` (default `upstream`) and `extras.upstream_repo` (optional `owner/repo`) for OSS fork→upstream PR routing.
 - `runs/{epic_id}/{task_id}/` — context for body composition (final findings, commit summary, gate results).
 - Local git state: `git rev-parse --abbrev-ref HEAD`, `git remote get-url origin`, `git log <base>..HEAD`.
 
@@ -38,9 +41,16 @@ The active preset is determined by which `git-workflow.md` is present in `.claud
 
 ### Phase 0 — Pre-flight
 
+> **Step ordering is load-bearing.** The `pr_required: false` short-circuit (step 2) MUST run BEFORE any host/remote/network operation (steps 3+). Solo + no-remote setups have no `origin`; running host detection first surfaces a confusing `Cannot resolve host` error instead of the clean `Solo preset — no MR required` exit. Do not reorder.
+
 1. **Task exists and done.** Load the task entry from `epic-{id}-tasks.yaml` (the `{id}` comes from the task's epic linkage). If the task is missing → abort: `Task <id> not found in any epic-*-tasks.yaml.` If `status != done` → abort: `Task must be /002-implement-complete (status: done) before merging.`
-2. **Branch matches pattern.** Compare `git rev-parse --abbrev-ref HEAD` against `branch_name_pattern`. Mismatch → warn (`Branch <name> does not match pattern <pattern>; proceeding.`) but do not abort.
-3. **Detect remote and platform.** Use the 3-step host-aware detection algorithm (works for GitHub Enterprise and self-hosted GitLab — host is **not** matched against `github.com` / `gitlab.com` literals). Host resolution order: `stack.yaml.extras.git_host` (override; useful when `origin` is a fork) → `git remote get-url origin`. Once resolved, the same `gh|glab auth status --hostname` probe determines the platform.
+2. **`pr_required` toggle short-circuit (runs BEFORE any remote/host/network operation).** Read the `pr_required` toggle from `.claude/ruleset/git-workflow.md`. If `pr_required: false`:
+   - If the toggle block also has `tag_task_commits: true` (solo preset default): run `git tag "${EPIC_ID}/${TASK_ID}" HEAD` (substitute the literal epic id and task id resolved in step 1, e.g. `git tag E-007/T-014 HEAD`). If the tag already exists (`git rev-parse --verify "${EPIC_ID}/${TASK_ID}" >/dev/null 2>&1`), skip the tag creation silently. Print: `Solo preset — tagged HEAD as <epic_id>/<task_id>. No MR required.` Exit 0.
+   - Else: print `Solo preset — /006-merge is a no-op for this task. Task complete on main.` Exit 0.
+
+   This short-circuit ensures solo + no-remote runs never reach host detection. Do NOT push, do NOT call `gh`/`glab`, do NOT touch the network on the solo path.
+3. **Branch matches pattern.** Compare `git rev-parse --abbrev-ref HEAD` against `branch_name_pattern`. Mismatch → warn (`Branch <name> does not match pattern <pattern>; proceeding.`) but do not abort.
+4. **Detect remote and platform.** Use the 3-step host-aware detection algorithm (works for GitHub Enterprise and self-hosted GitLab — host is **not** matched against `github.com` / `gitlab.com` literals). Host resolution order: `stack.yaml.extras.git_host` (override; useful when `origin` is a fork) → `git remote get-url origin`. Once resolved, the same `gh|glab auth status --hostname` probe determines the platform.
 
    ```sh
    # Step 1 — resolve host. extras.git_host (override) wins; else derive from origin.
@@ -82,12 +92,51 @@ The active preset is determined by which `git-workflow.md` is present in `.claud
 
    GitHub Enterprise and self-hosted GitLab are supported via per-host `gh auth login --hostname <host>` / `glab auth login --hostname <host>`. If `origin` points at a fork and the user wants PRs against an upstream on a different host, set `stack.yaml.extras.git_host` to override origin-derived detection; otherwise the host is derived from `git remote get-url origin`.
 
-4. **Solo preset short-circuit.** If `pr_required: false`: print `Solo preset — no MR required. Branch <name> is on main.` and exit cleanly. Do not push, do not call `gh`/`glab`.
-5. **CLI installed.** `command -v gh` or `command -v glab` — this check runs **before** the auth-status probe in step 3. If missing → abort with the install hint: `Install <tool> first: https://cli.github.com` or `https://gitlab.com/gitlab-org/cli`.
-6. **Auth check.** Already folded into step 3 — the `gh auth status --hostname "$HOST"` / `glab auth status --hostname "$HOST"` probe doubles as platform detection AND auth verification. If neither CLI is authenticated for `$HOST`, the abort message from step 3 names the exact `--hostname` flag the user needs.
+5. **CLI installed.** `command -v gh` or `command -v glab` — this check runs **before** the auth-status probe in step 4. If missing → abort with the install hint: `Install <tool> first: https://cli.github.com` or `https://gitlab.com/gitlab-org/cli`.
+6. **Auth check.** Already folded into step 4 — the `gh auth status --hostname "$HOST"` / `glab auth status --hostname "$HOST"` probe doubles as platform detection AND auth verification. If neither CLI is authenticated for `$HOST`, the abort message from step 4 names the exact `--hostname` flag the user needs.
 
    **Plugin cannot verify external CM-system state.** Whether the referenced CM ticket is in `Approved for Deployment` state is enforced server-side by the platform (workflow `required_reviewers`, branch protection, or a `ticket-link-check` CI job). The plugin does not contact your CM/Jira/ServiceNow API.
 7. **Signed commits (conditional).** If `require_signed_commits: true`, run `git log --pretty='%G?' <base_branch>..HEAD` and confirm every line is `G`. Any other value (`N`, `B`, `U`, `X`, `Y`, `R`, `E`) → abort: `Unsigned or invalid signature on commit <sha>. Sign commits before opening the MR.`
+8. **DCO sign-off (conditional, pre-push).** If `require_dco_signoff: true` (typical for the `oss` preset), iterate every commit in `<base>..HEAD` and verify each commit message body contains a `Signed-off-by:` trailer:
+
+   ```sh
+   MISSING=0
+   for sha in $(git rev-list <base>..HEAD); do
+       if ! git log -1 --format=%B "$sha" | grep -qE '^Signed-off-by: '; then
+           echo "Commit $sha is missing DCO sign-off." >&2
+           MISSING=1
+       fi
+   done
+   [ "$MISSING" -eq 0 ] || exit 1
+   ```
+
+   On any miss → ABORT BEFORE Phase 1 push with:
+
+   ```
+   Commits in this branch lack DCO sign-off. Re-run /002-implement (it now signs commits when require_dco_signoff: true), OR rebase with: git rebase --signoff <base>..HEAD. Force-push to the FORK after rebase is acceptable.
+   ```
+
+   This check runs in Phase 0 (BEFORE any `git push`) so the fork's remote branch is not advanced with sign-off-less commits.
+9. **Upstream remote resolution (OSS).** If the active preset is `oss`, resolve fork→upstream topology now (Phase 3 needs it for `--repo` and `--head`):
+
+   - Read `extras.upstream_remote` from `.claude/stack.yaml` (default: `upstream`).
+   - Read `extras.upstream_repo` from `.claude/stack.yaml` (optional override).
+   - Probe `git remote get-url <upstream_remote>`:
+     - **Succeeds:** if `extras.upstream_repo` is unset, derive it:
+
+       ```sh
+       UPSTREAM_REPO="$(git remote get-url "$UPSTREAM_REMOTE" | sed -E 's#^(https?://|git@)[^:/]+[:/]([^/]+/[^/.]+)(\.git)?$#\2#')"
+       FORK_OWNER="$(git remote get-url origin | sed -E 's#^(https?://|git@)[^:/]+[:/]([^/]+)/[^/.]+(\.git)?$#\2#')"
+       ```
+
+       Hold `UPSTREAM_REPO` and `FORK_OWNER` in memory for Phase 3.
+     - **Fails (no upstream remote):** print a warning and continue against `origin`:
+
+       ```
+       OSS preset typically expects an `upstream` remote pointing at the canonical repo. Set one or run `git remote add upstream <url>` before /006-merge to get fork→upstream PR. Currently opening against origin.
+       ```
+
+       Leave `UPSTREAM_REPO`/`FORK_OWNER` unset; Phase 3 falls back to the default `gh pr create` behaviour (PR opens against origin's own default branch).
 
 ### Phase 1 — Push branch
 
@@ -139,28 +188,34 @@ Parse `<ticket-id>` from the branch name (e.g. `task/T-001-CM-12345-something` �
 
 ```
 ## DCO
-- Signed-off-by: <author>  (verified from commit messages)
+- Signed-off-by: <author>  (verified in Phase 0 pre-flight)
 - CLA: <linked or not applicable>
 ```
 
-Verify every commit in `<base>..HEAD` carries a `Signed-off-by:` trailer (`git log --format=%B`). Missing trailer on any commit → abort: `OSS preset requires DCO sign-off. Re-commit with 'git commit --amend -s' (manual — this command does not amend).`
+DCO sign-off is enforced in Phase 0 step 8 — BEFORE `git push`. Phase 2 only renders the body section; it does not re-check. If Phase 0 passed, every commit in `<base>..HEAD` carries a `Signed-off-by:` trailer by construction.
 
 ### Phase 3 — Open MR/PR
 
 **Network timeout posture.** This command invokes GitHub/GitLab CLI commands that perform network I/O. The CLI tools (`gh`, `glab`) use their own default timeouts; this command does NOT wrap them in an external timeout. If a CLI call hangs >120s, halt the command (Ctrl-C) and re-run after checking network connectivity. Do not auto-retry — duplicate PRs/MRs/workflow triggers may result.
 
-**Enterprise:** required reviewers, CODEOWNERS, and merge-block-until-checks-pass are enforced by GitHub/GitLab branch protection — the plugin does NOT pass `--reviewer` flags for enterprise (CODEOWNERS auto-assigns server-side).
+**CODEOWNERS-driven review.** When any preset has `require_codeowners_review: true` (both **enterprise** and **oss** typically set this), required reviewers, CODEOWNERS, and merge-block-until-checks-pass are enforced server-side by GitHub/GitLab branch protection. The plugin does NOT pass `--reviewer` flags in that case — CODEOWNERS auto-assigns server-side. For other presets, `--reviewer <default_reviewers>` applies as normal.
+
+**Fork→upstream topology (OSS).** When the active preset is `oss` AND Phase 0 step 9 resolved an `UPSTREAM_REPO` + `FORK_OWNER`, the GitHub PR MUST target the upstream repo with `--repo "$UPSTREAM_REPO"` and the cross-fork head `--head "$FORK_OWNER:$BRANCH"`. Without these flags, `gh` defaults to opening the PR on the fork's own default branch, which violates the OSS contract (fork→upstream:main).
 
 GitHub (prepend `GH_HOST="$HOST"` so GHE hosts route correctly):
 
 ```bash
 GH_HOST="$HOST" gh pr create \
+  ${UPSTREAM_REPO:+--repo "$UPSTREAM_REPO"} \
+  ${UPSTREAM_REPO:+--head "$FORK_OWNER:$BRANCH"} \
   --base <base_branch> \
   --title "<title>" \
   --body "<body>" \
   --reviewer <reviewers-csv> \
   --label <labels-csv>
 ```
+
+`${UPSTREAM_REPO:+...}` expansion only emits `--repo`/`--head` when the variable is set (i.e. OSS preset with an upstream remote resolved). For non-OSS presets, or OSS without an upstream remote (the Phase 0 step 9 warning case), the flags are absent and `gh` falls back to its default behaviour (PR opens on origin).
 
 GitLab (prepend `GLAB_HOST="$HOST"` so self-hosted GitLab routes correctly):
 
@@ -173,7 +228,7 @@ GLAB_HOST="$HOST" glab mr create \
   --label <labels-csv>
 ```
 
-Omit `--reviewer` if `default_reviewers` is empty. Omit `--label` if `pr_labels` is empty. Capture stdout — both tools print the resulting URL. Print the URL verbatim.
+Omit `--reviewer` if `default_reviewers` is empty OR if `require_codeowners_review: true` for the active preset (enterprise OR oss — CODEOWNERS handles assignment server-side). Omit `--label` if `pr_labels` is empty. Capture stdout — both tools print the resulting URL. Print the URL verbatim.
 
 ### Phase 4 — Update task entry
 
@@ -213,7 +268,7 @@ Then a next-step hint:
 | `require_signed_commits: true` + unsigned commit | Abort with the offending sha. |
 | `git push` fails | Abort, surface raw git stderr, no retry. |
 | Enterprise preset + no CM ticket id | Abort with the expected ticket-id pattern. |
-| OSS preset + missing DCO sign-off | Abort with manual `git commit --amend -s` hint. |
+| OSS preset + missing DCO sign-off | Abort in Phase 0 (BEFORE push) with the re-run-`/002-implement` or `git rebase --signoff` hint. |
 | Task already has `pr_url` | Print existing URL, exit (no duplicate MR). |
 
 ## Vocabulary discipline

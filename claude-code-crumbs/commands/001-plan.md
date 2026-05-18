@@ -99,7 +99,63 @@ If either is missing, abort with: "Task T-NNN was not flagged as too_big. Re-spl
 
 Also read the original task entry from `epic-{id}-tasks.yaml` (for its `domain_scenarios` list — these are the anchor the new tasks inherit).
 
-### Phase 1 — Dispatch planner subagent (re-split mode)
+### Phase 1.5 — Resplit depth check
+
+Before dispatching the planner, count prior resplit archives whose lineage overlaps this task's Business Scenarios. Maximum resplit depth is 3 per Business Scenario lineage. Beyond that, the planner is failing to decompose meaningfully and manual intervention is required.
+
+```sh
+# Extract source task's domain_scenarios names from epic-{id}-tasks.yaml.
+# Prefer yq when available; fall back to a POSIX awk parser for the flat task list.
+EPIC_NUM="${EPIC_ID#E-}"
+TASKS_FILE="docs/planning/epic-${EPIC_NUM}-tasks.yaml"
+
+if command -v yq >/dev/null 2>&1; then
+    SCENARIO_NAMES="$(yq -r ".tasks[] | select(.id == \"$TASK_ID\") | .domain_scenarios[]" "$TASKS_FILE" 2>/dev/null)"
+else
+    SCENARIO_NAMES="$(awk -v t="$TASK_ID" '
+        /^  - id:/ { in_task = ($3 == t) ? 1 : 0; in_ds = 0 }
+        in_task && /^    domain_scenarios:/ { in_ds = 1; next }
+        in_task && in_ds && /^      - / { sub(/^      - /, ""); print; next }
+        in_ds && /^    [a-zA-Z]/ { in_ds = 0 }
+    ' "$TASKS_FILE")"
+fi
+
+# Count prior resplit archives whose archived 01-plan.json references any of these scenarios.
+DEPTH=0
+ARCHIVE_ROOT=".claude/runs-archive/${EPIC_ID}"
+if [ -d "$ARCHIVE_ROOT" ]; then
+    for archive in "$ARCHIVE_ROOT"/*-resplit-*/; do
+        [ -d "$archive" ] || continue
+        plan="${archive}01-plan.json"
+        [ -f "$plan" ] || continue
+        # Match if any scenario name appears in the archived plan artifact.
+        printf '%s\n' "$SCENARIO_NAMES" | while IFS= read -r name; do
+            [ -n "$name" ] || continue
+            if grep -qF -- "$name" "$plan"; then
+                exit 9
+            fi
+        done
+        # `exit 9` from the subshell signals overlap.
+        if [ $? -eq 9 ]; then
+            DEPTH=$((DEPTH + 1))
+        fi
+    done
+fi
+
+if [ "$DEPTH" -ge 3 ]; then
+    echo "Resplit lineage for scenarios sharing this task has depth $DEPTH (>= 3)." >&2
+    echo "The planner is failing to decompose. Halting." >&2
+    echo "Manual remediation options:" >&2
+    echo "  1. Inspect the prior resplit archives in .claude/runs-archive/${EPIC_ID}/" >&2
+    echo "  2. Re-author the Business Scenario in epics.yaml to be smaller in scope" >&2
+    echo "  3. Edit ${TASKS_FILE} directly and accept the task as written" >&2
+    exit 6
+fi
+```
+
+Exit code `6` is reserved for this halt (distinct from existing planner exit codes). If the check passes, proceed to Phase 2.
+
+### Phase 2 — Dispatch planner subagent (re-split mode)
 
 Use the Task tool with `subagent_type: "planner"`, mode set to `resplit`. Brief:
 
@@ -115,13 +171,13 @@ The planner produces:
 - New task entries replacing the original in `epic-{id}-tasks.yaml`. New task ids continue the existing numbering (e.g., if the original was `T-007` and the epic had tasks up to `T-012`, new tasks become `T-013`, `T-014`, …). **All new tasks inherit the original task's `domain_scenarios` list verbatim** — re-split does not change BS coverage, only granularity.
 - `runs/{epic_id}/{task_id}/01-plan.json` — re-split phase output, recording which task was split, the reason, and the new task ids.
 
-### Phase 2 — Archive old task
+### Phase 3 — Archive old task
 
 Move the old task's `runs/{epic_id}/{task_id}/` directory to `runs-archive/{epic_id}/{task_id}-resplit-{timestamp}-{short_uuid}/` where `{timestamp}` is `YYYYMMDD-HHMMSS` UTC and `{short_uuid}` is the first 8 chars of `uuidgen | tr -d '-'` (POSIX equivalent: `date +%s%N | sha1sum | cut -c1-8`). The suffix avoids collisions on sub-second re-splits. Example: `runs-archive/E-003/T-014-resplit-20260518-143022-a3f9b2c1/`. The main thread invokes `mv` directly (or a small shell snippet); the planner does not touch the filesystem outside the planning artifacts.
 
 Do NOT preserve a `parent` pointer on the new task entries. The history of the too_big_proposal lives in the archive directory only — new tasks start with a clean slate.
 
-### Phase 3 — Summary
+### Phase 4 — Summary
 
 Print:
 

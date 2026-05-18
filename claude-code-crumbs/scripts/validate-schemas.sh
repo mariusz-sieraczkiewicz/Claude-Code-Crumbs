@@ -49,6 +49,14 @@ try:
         else:
             data = json.load(f)
     jsonschema.validate(instance=data, schema=schema)
+    # Cross-check task_id vs parent directory for runs/ phase JSONs.
+    # WARNING only — does not change exit code. Stderr.
+    if "/.claude/runs/" in file_path or file_path.startswith(".claude/runs/"):
+        if isinstance(data, dict):
+            expected_task_id = os.path.basename(os.path.dirname(file_path))
+            actual_task_id = data.get("task_id")
+            if actual_task_id and expected_task_id.startswith("T-") and actual_task_id != expected_task_id:
+                sys.stderr.write("WARN: task_id mismatch in " + file_path + ": dir=" + expected_task_id + " json=" + str(actual_task_id) + "\n")
     print("OK")
 except jsonschema.ValidationError as e:
     msg = e.message.replace("\n", " ")
@@ -94,9 +102,14 @@ fi
 # 3) .claude/runs/**/*.json
 if [ -d ".claude/runs" ]; then
     # find is POSIX; -print0 + read -d works on BSD + GNU.
+    # Warn (but do not fail) on symlinked phase JSONs.
     while IFS= read -r -d '' file; do
+        if [ -L "$file" ]; then
+            echo "WARN: symlink found in runs/, skipping: $file" >&2
+            continue
+        fi
         validate_one "$RUN_PHASE_SCHEMA" "$file"
-    done < <(find ".claude/runs" -type f -name "*.json" -print0)
+    done < <(find ".claude/runs" -name "*.json" -print0)
 fi
 
 exit "$EXIT_CODE"

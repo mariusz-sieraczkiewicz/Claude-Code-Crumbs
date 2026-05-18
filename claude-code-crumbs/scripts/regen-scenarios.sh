@@ -9,6 +9,18 @@ EPICS_YAML="docs/planning/epics.yaml"
 OUT_FILE="docs/planning/SCENARIOS.md"
 TMP_FILE="${OUT_FILE}.tmp.$$"
 
+# Sweep stale tmp files (>5 minutes old) from any prior crashed run.
+for stale in "${OUT_FILE}".tmp.*; do
+    [ -e "$stale" ] || continue
+    # Skip if it's our own (current PID).
+    [ "$stale" = "$TMP_FILE" ] && continue
+    # Check file age via POSIX `find -mmin`.
+    if find "$stale" -mmin +5 -print -quit 2>/dev/null | grep -q .; then
+        echo "Cleaning stale tmp file: $stale" >&2
+        rm -f "$stale"
+    fi
+done
+
 # Atomic write discipline: write to SCENARIOS.md.tmp first, rename on success.
 # On any error before the final rename, leave the tmp file in place and exit non-zero
 # so the user can inspect what went wrong. The real SCENARIOS.md is never touched

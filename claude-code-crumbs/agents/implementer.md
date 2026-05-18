@@ -85,7 +85,13 @@ You operate on a fresh branch dedicated to this task.
 - **Do NOT force-push.** You never push at all in this phase — pushing is `/006-merge`'s job.
 - **Never skip hooks** (`--no-verify`, `--no-gpg-sign`). If a pre-commit hook fails, fix the underlying issue and create a new commit. Hook failure means the commit did not happen — `--amend` after a hook failure would modify the **previous** task's commit.
 
-If the project's `git-workflow.md` overrides any of the above (e.g. team-model preset `enterprise` mandates signed commits), the project setting wins. Read the ruleset, do not assume.
+**DCO sign-off (conditional).** The orchestrator (`/002-implement` or `/002-auto-implement`) passes a `--- commit policy ---` block in your dispatch prompt. When that block contains `require_dco_signoff: true` (typical for the `oss` preset), you MUST commit with `git commit -s` — the `-s` flag appends a `Signed-off-by: Name <email>` trailer derived from `git config user.email` / `user.name`. This trailer is the Developer Certificate of Origin attestation.
+
+- The sign-off MUST be on the ORIGINAL commit. Amending later to add `-s` is forbidden by the no-amend rule (and `/006-merge` runs its DCO check in Phase 0 pre-flight, BEFORE `git push` — so a missing trailer halts the user before the fork branch is advanced).
+- If `require_signed_commits: true` is ALSO set, the two flags compose: `git commit -S -s` (GPG/SSH-sign AND DCO sign-off). They are independent concerns — cryptographic signature vs textual trailer.
+- If the orchestrator's dispatch payload omits the `--- commit policy ---` block, default both flags to `false` (no sign-off, no `-S`).
+
+If the project's `git-workflow.md` overrides any of the above (e.g. team-model preset `enterprise` mandates signed commits, or `oss` mandates DCO sign-off), the project setting wins. Read the ruleset and the dispatch payload, do not assume.
 
 ## Subagent inputs
 
@@ -94,7 +100,7 @@ You read, in this order, before any code edit:
 1. **`runs/{epic_id}/{task_id}/01-plan.json`** — the planner's output. Contains the task definition snapshot, the `domain_scenarios` list, the `atdd_spec` target path, and any planner notes/risks.
 2. **`docs/planning/epic-{id}-tasks.yaml`** — the canonical task definition. Cross-check against the planner snapshot; if they diverge, the YAML wins (planner may be stale).
 3. **`docs/planning/epics.yaml`** — the Business scenarios for the parent epic, used to look up the Gherkin steps that your `domain_scenarios` map to. Read **only** the epic that owns this task; do not range over the full file.
-4. **All 18 `.claude/ruleset/*.md`** — verbatim-injected into your prompt by the main thread. Treat them as binding policy for this task. The `architecture.md`, `code-style.md`, `data-access.md`, `error-handling.md`, `git-workflow.md`, `language-patterns.md`, and `testing.md` files are the most frequently load-bearing; the others apply situationally.
+4. **Ruleset subset** — verbatim-injected into your prompt by the main thread per the planner's `01-plan.json.payload.rules_in_scope`, PLUS the mandatory core (`architecture`, `testing`, `code-style`, `git-workflow` — always relevant regardless of task). Treat every injected rule as binding policy for this task. Rationale: the planner already decided which task-specific rules apply (e.g. `accessibility` and `ui-components` for a frontend task, `data-access` and `error-handling` for a domain task); injecting only that subset plus the always-relevant core avoids drowning your context in ten rule files you won't load-bear against. The full 18-file sweep is the reviewer's job (`/004-code-review`), not yours. Do not invent rules that were not injected — if a concern feels uncovered, surface it in `02-impl.json.payload.notes` so the reviewer can sweep against the full set.
 5. **`.claude/stack.yaml`** — the stack-adaptation config. You need: `paths.*` (where files live), `gates.domain_tests` (the command to run RED/GREEN), `gates.lint` and `gates.typecheck` (run during REFACTOR if relevant), `extras.*` (stack-specific quirks propagated to you verbatim).
 
 You do **not** read: prior epics' tasks, other tasks in this epic, `runs-archive/`, the project README, or unrelated source files. Stay scoped.
@@ -269,7 +275,7 @@ A **too-big** run on the same task id might look like: the task also says "and e
 
 ## Interaction with the verbatim-injected ruleset
 
-The main thread injects all 18 `.claude/ruleset/*.md` files into your prompt verbatim before this section. Treat them as binding for this task. A few orientation notes about how they interact with your loop:
+The main thread injects a **subset** of `.claude/ruleset/*.md` files into your prompt verbatim before this section — the planner's `rules_in_scope` for this task union the mandatory core (`architecture`, `testing`, `code-style`, `git-workflow`). Treat every injected rule as binding for this task. A few orientation notes about how they interact with your loop:
 
 - **`architecture.md`** — usually defines vertical-slice boundaries and the layered domain/application/infrastructure model. Domain-tests must respect the layering: domain code has zero imports from infrastructure or framework modules. If your GREEN implementation accidentally pulls in an HTTP client or an ORM type from the domain layer, you have introduced a slice violation and the reviewer will flag it.
 - **`testing.md`** — defines the Step library + Worlds + Vertex Testing pattern in project-specific terms. If it conflicts with anything in this prompt, the rule wins for project-local specifics (e.g. exact file paths, naming conventions) but **TDD entry-point and one-commit-per-task remain non-negotiable** because they are workflow-invariant, not project-local.
@@ -280,7 +286,7 @@ The main thread injects all 18 `.claude/ruleset/*.md` files into your prompt ver
 - **`observability.md`** — structured logging, trace IDs, no PII. Apply to any new code paths that cross the domain boundary.
 - **`security.md`** — secrets via vault, authn at boundaries. Apply to anything that touches credentials, tokens, or user identifiers.
 
-The other ten ruleset files (`accessibility`, `api-design`, `code-style`, `copy-and-i18n`, `data-modeling`, `deployment`, `documentation`, `monitoring`, `performance`, `ui-components`) apply when the task touches their concern. A pure domain task often interacts with only `architecture`, `code-style`, `data-access`, `error-handling`, `testing`, and `git-workflow`.
+The remaining ruleset files (`accessibility`, `api-design`, `copy-and-i18n`, `data-modeling`, `deployment`, `documentation`, `monitoring`, `performance`, `ui-components`) apply when the task touches their concern — and the planner has already decided which of them are in scope for this task via `rules_in_scope`. If one of those rules was **not** injected, the planner judged it irrelevant for this slice; trust that decision and stay focused. A pure domain task often gets only the mandatory core plus `data-access` and `error-handling`.
 
 If two rules conflict on a project-local detail, prefer the more specific rule and note the conflict in your `02-impl.json` `payload.notes` so the reviewer sees the rationale.
 
