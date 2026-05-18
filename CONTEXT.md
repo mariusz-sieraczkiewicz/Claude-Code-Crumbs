@@ -11,7 +11,7 @@ The shippable artifact in `.claude-plugin/` — bundle of skills + commands + ag
 _Avoid_: extension, package, module
 
 **Workflow**:
-The opinionated sequence `plan-tasks → plan-and-implement → verify-dod → code-review → implement-feedback` (and optional `promote`).
+The opinionated sequence `plan → implement (epic-default: per-task plan-checkpoint + TDD) → verify-dod (self-heal) → code-review (self-heal) → [optional /005 user-feedback round]` (and optional `promote`). `/003` and `/004` each wrap their **subagent** (`verifier` / `reviewer`) in an internal Phase 2 (fix) → Phase 3 (re-verify) → Loop (max 3), gated by toggles. `/005` is an epic-level user-feedback round, not a finding-fixer.
 _Avoid_: pipeline, process, methodology
 
 **Universality**:
@@ -100,7 +100,7 @@ Test that exercises **multi-class domain scenarios** with **no infrastructure** 
 _Avoid_: "unit test" (misleading — tests multiple classes), "integration test"
 
 **Subagent chain**:
-The orchestration pattern used by `/001`..`/005` commands. Each command spawns a **dedicated subagent type** (defined in `.claude-plugin/agents/`) with isolated context. Communication between subagents goes through the **filesystem** (artifacts written under `.claude/runs/{epic-id}/{task-id}/`), not through main thread. The chain is **iterative, not linear**: `planner` → `implementer` → `verifier` → `reviewer` → (on fail) `feedback-implementer` → loop back to `verifier`. **Implementer may also signal "task too big"** and kick back to `planner` for re-split.
+The orchestration pattern used by `/001`..`/005` commands. Each command spawns a **dedicated subagent type** (defined in `.claude-plugin/agents/`) with isolated context. Communication between subagents goes through the **filesystem** (artifacts written under `.claude/runs/{epic-id}/{task-id}/`), not through main thread. The chain is **iterative, not linear**: `planner` → `implementer` → `verifier` → `reviewer` → (on fail) `feedback-implementer` → loop back to `verifier`. `verifier` and `reviewer` themselves are **read-only subagents**; the iterative self-heal loop (Phase 2 fix → Phase 3 re-verify → Loop max 3) is now orchestrated **inside `/003` and `/004` commands** (not by `/002`), gated by `auto_fix_on_verify_fail` / `auto_fix_on_review_fail` toggles in `git-workflow.md`. `/002-implement` auto-chains `/003` then `/004` after the epic loop completes (gated by `auto_invoke_review`). **Implementer may also signal "task too big"** and kick back to `planner` for re-split. `feedback-implementer` runs a single mode (iteration-fix): invoked by `/003` or `/004` Phase 2 with findings; emits `NNb-fix.json` artifacts. `/005` Step 3 dispatches `implementer` (via `/002-implement` semantics), not `feedback-implementer`.
 
 **Planner role expansion** (vs mentora/sielappkowo):
 `/001-plan` not only decomposes an epic into tasks but **also authors Business scenarios** for the epic (writes them into `epics.yaml` as Gherkin block-scalar) when they are absent or underspecified. Planner has two entry modes: (1) **fresh** — given epic id, author BS + decompose; (2) **re-split** — given an existing task flagged "too big" by implementer, decompose that one task into smaller tasks. BS authoring source = **PRD per-epic section** (`## Epic E-007: ...` in `PRD.md`) + **adaptive grilling**: if the PRD section is sufficient (covers happy path + at least one edge case + scope boundary), planner generates BS directly; otherwise emits clarifying questions in `runs/{epic}/00-plan-questions.json` and waits for user answers before proceeding.
@@ -112,18 +112,21 @@ The orchestration pattern used by `/001`..`/005` commands. Each command spawns a
   - **State C (PRD + epics exist)**: edit guidance (free-form refine with plugin pointing at sections), not section-by-section grilling. Same inline context-building behaviour.
   - **PRD-level immutability**: `/000-prd-refine` does not modify existing epic sections in PRD. If user wants PRD-level change to an existing epic, command nudges toward creating a new epic. Implementation-level adjustments stay with `/001-plan`.
 - `/001-plan` — epic decomposition + BS authoring (replaces mentora `plan-tasks`)
-- `/002-implement` — **task orchestrator** (replaces `plan-and-implement`). Per task:
-  1. Starts a new branch (naming convention in `git-workflow.md`)
-  2. TDD impl loop (Domain-tests RED → code GREEN → REFACTOR → write ATDD spec)
-  3. Commit after task green (single commit per task by default)
-  4. **Auto-invokes** `/003-verify-dod` then `/004-code-review` — toggleable via `.claude/ruleset/git-workflow.md`
-  5. On clean review: proposes opening MR/PR (does not auto-open; surfaces command for user)
-- `/003-verify-dod` — DoD gate (also invokable standalone)
-- `/004-code-review` — review gate (also invokable standalone)
-- `/005-implement-feedback` — fixes from /003/004 findings; loops back to verifier
+- `/002-implement` — **dual-mode orchestrator** (replaces `plan-and-implement` + the deleted batch conductor). Dispatches on arg shape:
+  - **Epic-default mode** (`<epic-id>`): iterates all `status: pending` tasks in dependency order; each task gets its own `implementer` subagent dispatch. Per task:
+    1. Starts a new branch (naming convention in `git-workflow.md`)
+    2. **Plan checkpoint** (Phase 1.5) — plan-only `implementer` dispatch + `AskUserQuestion` (Approve / Iterate / Cancel); Iterate re-dispatches with feedback (numbered `02a-plan`, `02b-plan`, ...)
+    3. Approve → TDD impl loop (Domain-tests RED → code GREEN → REFACTOR → write ATDD spec)
+    4. Commit after task green (single commit per task by default)
+    5. After all tasks `done` → **auto-invoke** `/003-verify-dod`; on `/003 ok` → auto-invoke `/004-code-review` (gated by `auto_invoke_review` toggle in `.claude/ruleset/git-workflow.md`)
+    6. On clean review: proposes opening MR/PR (does not auto-open; surfaces command for user)
+    - Locking: epic mode holds `.lock-<epic_id>`; task mode holds `.lock-<epic_id>-<task_id>`
+  - **Single-task mode** (`<task-id>`): same Phase 0..6 TDD semantics scoped to one task (resume detection, branch, etc.)
+- `/003-verify-dod` — DoD gate with **self-healing loop** (also invokable standalone). Phase 1 detect → Phase 2 fix (dispatch `feedback-implementer` with findings → `03b-fix.json`) → Phase 3 re-verify (dispatch `verifier` → `03c-verify.json`) → Loop Phase 2 → Phase 3 **max 3 iterations** (subsequent iterations numbered `03d/03e/03f/03g`). Self-heal gated by `auto_fix_on_verify_fail` toggle (default true for solo/small-team/oss; false for enterprise → read-only fallback + suggest `/005`). Fail after 3 iterations escalates to user.
+- `/004-code-review` — review gate with **self-healing loop** (also invokable standalone). Same Phase shape as `/003`, artifacts numbered `04b-fix.json` / `04c-review.json`, gated by `auto_fix_on_review_fail` toggle (same default split).
+- `/005-implement-feedback` — **epic-level user feedback flow**. Args `<epic-id> [feedback-text]`. Step 0 gather feedback (interactive if `$2` empty) → Step 1 clarify + research (PRD epic section, `epic-{id}-tasks.yaml`, relevant ruleset) → Step 2 plan new tasks appended to `epic-{id}-tasks.yaml` (no renumbering of done tasks) → Step 3 ATDD implementation of new tasks (delegates to `/002-implement` semantics scoped to new task IDs) → Step 4 `/003-verify-dod` semantics scoped to new tasks → Step 5 `/004-code-review` semantics on uncommitted diff from new tasks → Step 6 **gatekeeper audit** subagent (zero-tolerance verification of draft completion report). Final status `COMPLETE` or `NEEDS_ATTENTION`. NOT a finding-fixer.
 - `/006-merge` — opens MR/PR (separate command, user-invoked after `/002` proposes it). **Applies conventions from `.claude/ruleset/git-workflow.md`**: PR title format, description template, base branch, reviewers, labels. Invokes `gh pr create` / `glab mr create` accordingly.
 - `/007-promote` — *(lightweight)* triggers a **pre-existing platform workflow** (e.g. `gh workflow run promote-staging.yml`, GitLab pipeline). Plugin reads target workflow from `stack.yaml.promote`. Plugin does **not** orchestrate the promotion itself; the platform (GitHub Actions / GitLab CI) owns the actual deploy logic. Optional command — skipped if `stack.yaml.promote` is empty.
-- `/002-auto-implement` — *(NEW)* **epic-level orchestrator**. Takes finished `/001-plan` output and runs the full chain (`/002-implement` → `/003-verify-dod` → `/004-code-review` → `/005-implement-feedback` on fail) for **every pending task** in the epic. **Each step runs as a dedicated subagent** (isolated context). Alternative to running each command manually per task.
 
 **Too-big detection** (`/002` → `/001` re-split):
 Implementer signals "task too big" via **agent judgment** (LLM-driven, no hard metrics). Signal mechanism: implementer writes `runs/{epic}/{task}/02-impl.json` with `status: "too_big_proposal"`, `reason`, `suggested_split: [draft tasks]`, then halts. User reviews and decides to invoke `/001-plan --resplit <task-id>`. Re-split **replaces** the old task in `tasks.yaml` with new ones (linked to the same Business scenarios); old task is archived to `runs-archive/`, not preserved as a `parent`.
@@ -133,13 +136,25 @@ Filesystem location for subagent handoff artifacts. Gitignored. Layout:
 ```
 .claude/runs/{epic-id}/{task-id}/
   01-plan.json
-  02-impl.json
-  03-verify.json
-  04-review.json
-  05-feedback-impl.json   # numbered with letter suffix if rerun: 05a, 05b
+  02a-plan.json           # plan-checkpoint dispatches (Phase 1.5); 02b-plan, 02c-plan on Iterate
+  02-impl.json            # TDD execution (Phase 2)
+  03-verify.json          # /003 Phase 1 detect
+  03b-fix.json            # /003 Phase 2 fix (feedback-implementer)
+  03c-verify.json         # /003 Phase 3 re-verify (verifier)
+  03d/03e/03f/03g...      # subsequent self-heal iterations (max 3)
+  04-review.json          # /004 Phase 1 detect
+  04b-fix.json            # /004 Phase 2 fix
+  04c-review.json         # /004 Phase 3 re-review
   artifacts/              # transient files (logs, drafts)
+
+.claude/runs/{epic-id}/_feedback/{round_id}/   # /005 epic-level feedback rounds (multi-round subdirectory)
+  05a-plan.json           # new tasks planned for this round
+  05b-impl.json           # ATDD implementation of new tasks
+  05c-verify.json         # /003 semantics scoped to new tasks
+  05d-review.json         # /004 semantics on new diff
+  05e-gatekeeper.json     # gatekeeper audit
 ```
-Each `NN-<phase>.json` validated against plugin-shipped JSON Schema on write. Each phase reads **all prior phase files** as input (append-only history). On epic close-out, plugin **auto-archives** `runs/{epic-id}/` into `runs-archive/{epic-id}-{timestamp}.tar.gz`.
+Each `NN-<phase>.json` validated against plugin-shipped JSON Schema on write. Each phase reads **all prior phase files** as input (append-only history). The intra-`/003` / `/004` self-heal artifacts (`03b-fix`, `03c-verify`, `04b-fix`, `04c-review`) replace the old "single `05-feedback-impl.json` with letter suffix" pattern for finding-fixes. `/005` rounds live under `_feedback/{round_id}/` so multiple feedback rounds per epic don't collide. On epic close-out, plugin **auto-archives** `runs/{epic-id}/` into `runs-archive/{epic-id}-{timestamp}.tar.gz`.
 
 **Ruleset injection**:
 Plugin reads `.claude/ruleset/*.md` verbatim and **injects content directly** into subagent prompts (not via `@`-include — `@`-references do not always propagate in subagents). Same for `stack.yaml.extras` field, propagated verbatim to **all** subagents.

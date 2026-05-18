@@ -24,7 +24,7 @@ The plugin is opinionated about *how* to deliver and *what* artifacts exist; it 
 - **Team-agnostic** — four collaboration presets (solo, small-team, OSS, enterprise) seed `git-workflow.md` + `deployment.md` at bootstrap (axis (c))
 - **Opinionated discipline** — TDD entry-point is mandatory; both planning and implementation start from failing tests (constrained axis (d))
 - **Zero-tolerance gates** — any finding from `/003` or `/004` blocks DoD; no severity tiers, no overrides
-- **Iterative planning ↔ implementation** — `/002-implement` can signal "task too big" and kick back to `/001-plan` for re-split
+- **Iterative planning ↔ implementation** — `/002-implement` can signal "task too big" and kick back to `/001-plan` for re-split; per-task plan checkpoint allows the user to iterate the plan before TDD begins
 
 ### Non-goals
 
@@ -61,11 +61,10 @@ A single, shared **Step library** maps Business scenario verbs to executable act
 |---|---|---|
 | `/000-prd-refine` | Context-aware product-level definition. Bootstraps project on first invocation; adds/edits epics afterwards. Builds `CONTEXT.md` glossary inline; offers ADRs at trade-off decisions. | (interactive, no dedicated subagent) |
 | `/001-plan` | Epic decomposition + Business scenario authoring. Reads PRD per-epic section as the brief source; grills user when underspecified. Re-split mode handles "task too big" callbacks. | `planner` |
-| `/002-implement` | Single-task TDD orchestrator. New branch → Domain-test RED → code GREEN → REFACTOR → write ATDD spec → commit → auto-invoke `/003` then `/004` (toggleable via `git-workflow.md`) → propose MR/PR on clean review. | `implementer` |
-| `/002-auto-implement` | Epic-level batch orchestrator. Runs `/002 → /003 → /004 → /005` for every pending task in an epic. Each step runs as a dedicated subagent. | spawns the chain |
-| `/003-verify-dod` | DoD gate. Runs all `stack.yaml.gates`. Zero tolerance. Standalone-invokable. | `verifier` |
-| `/004-code-review` | Review gate. Reads ruleset/* verbatim-injected. Zero tolerance. Standalone-invokable. | `reviewer` |
-| `/005-implement-feedback` | Reads `/003` and `/004` findings; fixes implementation; loops back to `verifier`. | `feedback-implementer` |
+| `/002-implement` | Dual-mode TDD orchestrator. **Epic-default mode** (`<epic-id>` arg): iterates all pending tasks in dependency order, each dispatched to its own `implementer` subagent; per task a **plan checkpoint** (plan-only dispatch + Approve/Iterate/Cancel) precedes the TDD loop (Domain-test RED → code GREEN → REFACTOR → write ATDD spec → commit); after every task is done, auto-chains to `/003-verify-dod` then `/004-code-review` (gated by `auto_invoke_review` toggle). **Single-task mode** (`<task-id>` arg): same TDD loop scoped to one task. | `implementer` |
+| `/003-verify-dod` | DoD gate with self-healing. Phase 1 detect (runs all `stack.yaml.gates`) → Phase 2 fix (dispatches `feedback-implementer` with findings) → Phase 3 re-verify → Loop max 3 iterations. Self-heal Phases 2/3/Loop gated by `auto_fix_on_verify_fail` toggle (default true for solo/small-team/oss; false for enterprise → read-only fallback + suggest `/005`). Zero tolerance. Standalone-invokable. | `verifier` |
+| `/004-code-review` | Review gate with self-healing. Same Phase 1 detect → Phase 2 fix → Phase 3 re-review → Loop (max 3) shape as `/003`, gated by `auto_fix_on_review_fail` toggle (same default split). Ruleset content verbatim-injected. Zero tolerance. Standalone-invokable. | `reviewer` |
+| `/005-implement-feedback` | **Epic-level user feedback flow**: gather feedback (interactive if absent) → clarify + research → plan new tasks (appended to `epic-{id}-tasks.yaml`) → ATDD implementation of new tasks → DoD verify (scoped to new tasks) → code review (scoped to new diff) → gatekeeper audit. **NOT a finding-fixer** — `/003` and `/004` self-heal internally. | `planner` → `implementer` → `verifier` → `reviewer` + gatekeeper (general-purpose) |
 | `/006-merge` | Opens MR/PR using conventions from `ruleset/git-workflow.md`. Invokes `gh pr create` / `glab mr create`. | (no subagent — direct CLI) |
 | `/007-promote` | Triggers a pre-existing platform workflow (`gh workflow run …`). Plugin does not orchestrate deploy logic. Optional — skipped if `stack.yaml.promote` empty. | (no subagent — direct CLI) |
 
@@ -149,7 +148,7 @@ docs/
 
 In v1 the plugin must deliver:
 
-- All 9 commands listed in §5 (`/000-prd-refine` through `/007-promote` + `/002-auto-implement`).
+- All 8 commands listed in §5 (`/000-prd-refine` through `/007-promote`).
 - 5 subagent types: `planner`, `implementer`, `verifier`, `reviewer`, `feedback-implementer`.
 - 18 ruleset templates with English baseline principles.
 - 4 team-model presets seeding `git-workflow.md` + `deployment.md`.

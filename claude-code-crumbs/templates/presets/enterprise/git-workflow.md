@@ -84,6 +84,8 @@ require_security_review_for_sensitive_paths: true
 dismiss_stale_approvals_on_push: true
 block_self_approval: true
 auto_invoke_verify: true
+auto_fix_on_verify_fail: false   # compliance: /003-verify-dod findings exit read-only; the review board mediates fixes via /005-implement-feedback so each remediation has a human checkpoint and audit trail
+auto_fix_on_review_fail: false   # compliance: /004-code-review Violations exit read-only; auto-fix would bypass the mandatory human checkpoint required by change-management policy
 branch_name_pattern: "task/{ticket_id}/{task_id}-{slug}"   # nested under change-management ticket id
 ```
 

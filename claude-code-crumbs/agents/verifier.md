@@ -56,7 +56,7 @@ Each gate runs independently. Do not assume previous gate state — a failed `li
 Four gates need handling beyond the generic loop:
 
 - **`domain_tests`** — Vertex-style multi-class no-infra tests. These are the inner-loop driver and MUST run on every verify invocation. If `gates.domain_tests` is `null`, still treat it as skipped in `gates_skipped`, but flag a `domain_tests_disabled` advisory note in `payload` (the `reviewer` subagent will surface this as a project misconfiguration — your job is only to record it, not to escalate).
-- **`atdd_specs`** — ATDD specs are executed **only at epic close-out**, never per-task. When invoked per-task (the common case, dispatched by `/002-implement` or `/002-auto-implement` after a single task), treat `gates.atdd_specs` as if it were `null` regardless of its actual value, and record it under `gates_skipped` with reason `"per-task-scope"`. When invoked at epic close-out (heuristic: `epic.status` is transitioning out of `in_progress`, or the orchestrating command passes an `--epic-close` flag), run `gates.atdd_specs` normally. If you cannot determine the scope unambiguously from your inputs, default to per-task (skip). Erring on skip is safe: a missed atdd run will be caught at close-out; a premature run blocks tasks on infrastructure not yet wired.
+- **`atdd_specs`** — ATDD specs are executed **only at epic close-out**, never per-task. When invoked per-task (the common case, dispatched by `/002-implement` after a single task), treat `gates.atdd_specs` as if it were `null` regardless of its actual value, and record it under `gates_skipped` with reason `"per-task-scope"`. When invoked at epic close-out (heuristic: `epic.status` is transitioning out of `in_progress`, or the orchestrating command passes an `--epic-close` flag), run `gates.atdd_specs` normally. If you cannot determine the scope unambiguously from your inputs, default to per-task (skip). Erring on skip is safe: a missed atdd run will be caught at close-out; a premature run blocks tasks on infrastructure not yet wired.
 - **`journeys`** — promotion smoke gate. The verifier **always** skips this gate, both per-task and per-epic. Record it under `gates_skipped` with reason `"promotion-scope"`. Only `/007-promote` runs `gates.journeys`.
 - **`design_verify`** — declared separately from `gates.*` under `.claude/stack.yaml.design_verify`. Read that field if it exists:
   - If `type: "script"`, treat its `path` as a shell command and run it exactly like a gate (exit 0 = pass, non-zero = `blocker` Finding with `rule: "design_verify"`).
@@ -110,7 +110,7 @@ Five non-negotiable disciplines:
 
 The verifier sits inside a fixed Subagent chain (see `CONTEXT.md` → "Subagent chain"):
 
-- Caller (`/002-implement`, `/002-auto-implement`, or standalone `/003-verify-dod`) dispatches you with the task context.
+- Caller (`/002-implement` or standalone `/003-verify-dod`) dispatches you with the task context.
 - On `status: "ok"`: the caller proceeds to `/004-code-review` (which dispatches the `reviewer` subagent). `next: "review"` in your envelope signals this.
 - On `status: "fail"`: the caller invokes `/005-implement-feedback`, which dispatches the `feedback-implementer` subagent. That subagent reads your `findings[]`, edits the implementation, and re-invokes the verifier. The loop terminates when you emit `status: "ok"` or the orchestrator hits its iteration cap and reports `GAPS_REMAINING` to the user. `next: "feedback-impl"` in your envelope signals this branch.
 

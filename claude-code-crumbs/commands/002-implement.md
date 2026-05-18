@@ -1,17 +1,35 @@
 ---
-description: Single-task TDD orchestrator. New branch, implementer subagent, auto-invokes verify+review, proposes merge on clean.
-argument-hint: <task-id>
+description: Implement an epic (default) or a single task. Epic mode iterates every pending task with a per-task plan checkpoint, then auto-invokes /003-verify-dod and /004-code-review. Task mode runs the single-task TDD chain.
+argument-hint: <epic-id> | <task-id>
 ---
 
-Orchestrate one task end-to-end for **$ARGUMENTS** following the TDD entry-point discipline: Domain-test RED → code GREEN → REFACTOR → write one ATDD spec → commit → auto-invoke `/003-verify-dod` → `/004-code-review` → propose `/006-merge` on clean.
+Implement the work for **$ARGUMENTS**. The command dispatches on argument shape:
 
-This command is the single-task counterpart of `/002-auto-implement`. It dispatches the `implementer` subagent, reads its output artifact, and chains the verify/review/feedback loop with a hard cap.
+- **`<epic-id>`** (matches `^E-`) → **epic mode** (default). Iterate every `status: pending` task in `epic-{id}-tasks.yaml` in dependency order. Each task runs the full per-task flow below (Phase 0 → Phase 6), with a mandatory **Phase 1.5 plan checkpoint** before TDD execution. When the epic loop finishes (every task at `status: done`), auto-invoke `/003-verify-dod <epic-id>` and — gated by the `auto_invoke_review` toggle — `/004-code-review <epic-id>`.
+- **`<task-id>`** (matches `^T-`) → **single-task mode** (legacy). Runs the single-task flow (Phase 0 → Phase 6) for that one task only. No auto-chain at epic granularity. This preserves the legacy `/002-implement <task-id>` contract for resume scenarios and ad-hoc task re-runs.
+- Anything else → abort with: `Argument "<value>" is neither an epic id (E-…) nor a task id (T-…). Run /001-plan first or supply a valid id.`
+
+The per-task flow dispatches the `implementer` subagent in two phases: first **`plan-only`** (Phase 1.5, presented to the user for approval), then **full TDD** (Phase 2). The plan checkpoint is non-negotiable — both modes go through it.
+
+## Mode dispatch
+
+```
+$ARGUMENTS
+   ├─ matches ^E-      → epic mode      (default; batch over pending tasks)
+   ├─ matches ^T-      → task mode      (single-task, legacy semantics)
+   └─ otherwise        → abort with usage error
+```
+
+The id is resolved at Phase 0 against the filesystem:
+
+- Epic mode: locate `docs/planning/epic-{id}-tasks.yaml` (3-digit zero-padded form, e.g. `E-001` → `epic-001-tasks.yaml`; or by exact filename match for non-numeric ids like `epic-restore-flow-tasks.yaml`). If not found, abort with the search path.
+- Task mode: scan every `docs/planning/epic-*-tasks.yaml` for an entry whose `id` matches the argument. The first match wins; capture `epic_id` from the matching file's name.
 
 ## Inputs
 
-- **`<task-id>`** — passed as `$ARGUMENTS` (e.g. `T-001`). Required positional argument.
-- **`docs/planning/epic-{id}-tasks.yaml`** — locate the task entry by scanning every `epic-*-tasks.yaml` under `docs/planning/` (where `{id}` is the 3-digit zero-padded epic id, e.g. `epic-001-tasks.yaml`). If not found anywhere, abort with: `Task <task-id> not found in any epic-*-tasks.yaml. Run /001-plan first.`
-- **`docs/planning/epics.yaml`** — locate the Business scenarios referenced by the task's `domain_scenarios` field. Read the Gherkin block-scalar verbatim from the matching epic entry. If a referenced scenario is missing, abort with the path and missing scenario name.
+- **`<epic-id>`** or **`<task-id>`** — passed as `$ARGUMENTS`. Required positional argument.
+- **`docs/planning/epic-{id}-tasks.yaml`** — the task list. Epic mode reads the whole file (iterating pending tasks); task mode reads the one matching entry.
+- **`docs/planning/epics.yaml`** — Business scenarios referenced by each task's `domain_scenarios` field. Read each Gherkin block-scalar verbatim from the matching epic entry. If a referenced scenario is missing, abort with the path and missing scenario name.
 - **`.claude/ruleset/*.md`** — all 18 canonical rule files, verbatim-loaded into memory for downstream subagent injection (no `@`-include — content is pasted into the subagent prompt body).
 - **`.claude/ruleset/git-workflow.md`** — parse the YAML toggle block at the top of the file. Toggle keys consulted:
   - `auto_invoke_review`, `auto_invoke_verify`, `allow_commit_to_main`, `pr_required`, `branch_name_pattern`
@@ -24,11 +42,47 @@ This command is the single-task counterpart of `/002-auto-implement`. It dispatc
   Defaults below apply when a key is absent.
 - **`.claude/stack.yaml`** — read `extras` (propagated verbatim to all subagents), `paths` (SoT overrides used by downstream gates), and `gates` (referenced by `/003-verify-dod`).
 
-## Workflow
+## Epic mode workflow
+
+Epic mode is a thin loop around the per-task flow. The loop body IS the per-task flow (Phase 0 → Phase 6) executed exactly as in task mode. The differences are:
+
+1. **Pre-loop pre-flight** (epic-level): validate the epic file exists, the working tree is clean, git identity is configured, and acquire the **epic lock** (see "Lock semantics" below). The epic lock is held for the entire batch.
+2. **Task iteration**: select the next `status: pending` task whose `depends_on` are all `done`. If multiple tasks are eligible, pick the lexicographically smallest `id` (stable, predictable order). If no task is eligible but pending tasks remain, abort with the unresolvable dependency cycle printed.
+3. **Per-task flow**: run Phase 0 → Phase 6 for the selected task. The task acquires its own task lock (see "Lock semantics") nested under the epic lock. On per-task halt (`too_big_proposal`, `blocked`, loop-limit), the epic loop also halts — there is no skip-and-continue. The user re-runs `/002-implement <epic-id>` after fixing.
+4. **Post-loop auto-chain** (epic-level, runs ONLY after every task in the epic reaches `status: done`):
+   - Auto-invoke `/003-verify-dod <epic-id>` unconditionally. No user prompt.
+   - If `/003-verify-dod` returns `status: ok` AND `auto_invoke_review` is **not** `false` (default: `true`) → auto-invoke `/004-code-review <epic-id>`. The self-healing Phase 2/3 loops inside `/003` and `/004` are owned by those commands; this command only chains them.
+   - If `/003-verify-dod` returns `status: fail` (after its own self-heal cap has been exhausted) → halt epic mode with the verifier findings; do NOT invoke `/004`. The user re-runs after fixing or runs `/005-implement-feedback <epic-id>` for a fresh feedback round.
+   - If `auto_invoke_review: false` → skip the `/004` call and print: `Auto-review disabled by toggle. Run /004-code-review <epic-id> manually.`
+5. **Lock release**: the epic lock is released on success (after the auto-chain returns) AND on every halt/abort branch.
+
+### Epic mode pseudo-code
+
+```
+acquire_epic_lock(EPIC_ID)
+try:
+    while pending_tasks_remain(EPIC_ID):
+        task = next_eligible_pending_task(EPIC_ID)
+        if task is None:
+            abort("Pending tasks remain but dependencies unresolvable.")
+        run_per_task_flow(EPIC_ID, task.id)        # Phase 0 → Phase 6 below
+    # All tasks done.
+    verify_result = invoke("/003-verify-dod", EPIC_ID)
+    if verify_result.status != "ok":
+        halt_with(verify_result.findings)
+    if toggles.auto_invoke_review:
+        invoke("/004-code-review", EPIC_ID)
+    else:
+        inform("Auto-review disabled by toggle. Run /004-code-review <epic-id> manually.")
+finally:
+    release_epic_lock(EPIC_ID)
+```
+
+## Per-task flow (used by both modes)
 
 ### Phase 0 — Pre-flight
 
-- Verify the task entry exists in some `epic-{id}-tasks.yaml`. Scan every file matching that glob; the first match wins. If absent → abort (see Inputs).
+- Verify the task entry exists in some `epic-{id}-tasks.yaml`. In task mode, scan every file matching that glob; the first match wins. In epic mode, the file is already known. If absent → abort (see Inputs).
 - Capture the `epic_id` from the matching file's name (e.g. `epic-001-tasks.yaml` → `epic_id = E-001`, matching the entry in `epics.yaml`). Cross-check that the same epic id appears in `epics.yaml`; if not, abort with both paths.
 - **Detached HEAD check.** Run `git rev-parse --abbrev-ref HEAD`. If it returns the literal string `HEAD`, the working tree is in a detached-HEAD state and branch logic downstream will misbehave. ABORT with: `HEAD is detached. Check out a branch first: \`git checkout <branch-name>\` (e.g. main).`
 - **Dirty working tree check.** Run `git status --porcelain`. If the output is non-empty:
@@ -43,9 +97,9 @@ This command is the single-task counterpart of `/002-auto-implement`. It dispatc
   3. Regex-extract every `## Scenario: (.+)` header from that block; collect the captured names into a set.
   4. For each name in the task's `domain_scenarios`, check membership in that set.
   5. On the first miss, abort: `Task <task-id> references domain_scenario "<name>" which is not in epic <epic-id>'s business_scenarios. Fix the task entry or re-run /001-plan.`
-- Verify the task `status` is `pending` or `blocked`. If `done` or `in_progress`, abort with:
-  - `done` → `Task <task-id> is already done. Use /001-plan --resplit to revisit.`
-  - `in_progress` → `Task <task-id> is already in_progress. Clear status manually before re-running /002-implement.`
+- Verify the task `status` is `pending` or `blocked`. If `done` or `in_progress`, behaviour depends on mode:
+  - Task mode: `done` → `Task <task-id> is already done. Use /001-plan --resplit to revisit.`; `in_progress` → `Task <task-id> is already in_progress. Clear status manually before re-running /002-implement.`
+  - Epic mode: `done` → skip silently (task already complete, loop continues to next eligible); `in_progress` → abort the entire epic with the same message as task mode (do not silently overwrite an in-flight task).
 - Set the task `status: in_progress` in `epic-{id}-tasks.yaml` (write back; preserve YAML formatting, comments, and key order).
 - Ensure `.claude/runs/{epic_id}/{task_id}/` exists (create recursively if missing).
 - Ensure `.claude/runs/{epic_id}/{task_id}/artifacts/` exists for transient subagent outputs (logs, drafts).
@@ -87,20 +141,19 @@ This command is the single-task counterpart of `/002-auto-implement`. It dispatc
 
   **Trade-off:** if the orchestrator itself crashes (host crash, harness terminated), the lock directory persists as a stale lock and manual `rm -rf .claude/runs/.lock-<epic>-<task>/` is required. The error message at acquisition points the user at the exact path.
 
-  **Cross-reference with `/002-auto-implement`.** The batch conductor holds an *epic*-level lock (`.claude/runs/.lock-<epic_id>/`) and dispatches the `implementer`, `verifier`, `reviewer`, and `feedback-implementer` subagents *directly* via the `Task` tool — it does NOT invoke `/002-implement` internally (verified against `commands/002-auto-implement.md`). The two lock namespaces (`.lock-<epic_id>` vs `.lock-<epic_id>-<task_id>`) therefore never collide and never self-deadlock. A user running `/002-auto-implement E-007` in one terminal and `/002-implement T-014` in another (with `T-014` ∈ `E-007`) is a real conflict the locks do not catch directly — but the second invocation will fail on the branch-collision check in Phase 1, or on the `status: in_progress` guard if the batch already flipped the task status. Do not extend either lock to cover the other; keep them orthogonal.
-
 ### Phase 0.5 — Resume detection
 
 After acquiring the Task lock and BEFORE re-dispatching the implementer subagent, scan `.claude/runs/${EPIC_ID}/${TASK_ID}/` for prior artifacts from a previously interrupted run (Ctrl-C, host crash, halt that left `status: in_progress`). The goal is to give the user a meaningful resume hint instead of a bare `Task in_progress, clear status manually` error.
 
 Branch on the highest-numbered artifact present:
 
-- If `04-review.json` exists with `status: "ok"` AND `03-verify.json.status == "ok"` AND `02-impl.json.payload.commit_sha` matches HEAD (or is an ancestor of HEAD per `git merge-base --is-ancestor <sha> HEAD`) → fast-forward to Phase 6 (mark task `done`, suggest `/006-merge`). Print: `Task already complete (verify ok, review ok, commit on HEAD). Marked done.`
-- If `04-review.json` has `status: "fail"` OR `03-verify.json.status == "fail"` AND any `05{a|b|c}-feedback-impl.json` exists → suggest `/005-implement-feedback ${TASK_ID}` to continue the feedback loop. Print a resume summary with the last 2 findings from the most recent failing artifact. Halt; do not re-dispatch the implementer.
-- If `02-impl.json` exists with `status: "ok"` but no `03-verify.json` → resume by invoking `/003-verify-dod` (skip the implementer phase). Continue from Phase 4.
+- If `04-review.json` exists with `status: "ok"` AND `03-verify.json.status == "ok"` AND `02-impl.json.payload.commit_sha` matches HEAD (or is an ancestor of HEAD per `git merge-base --is-ancestor <sha> HEAD`) → fast-forward to Phase 6 (mark task `done`, suggest `/006-merge` in task mode; loop to next task in epic mode). Print: `Task already complete (verify ok, review ok, commit on HEAD). Marked done.`
+- If `04-review.json` has `status: "fail"` OR `03-verify.json.status == "fail"` AND any `05{a|b|c}-feedback-impl.json` exists → suggest `/005-implement-feedback ${EPIC_ID}` to continue the feedback loop. Print a resume summary with the last 2 findings from the most recent failing artifact. Halt; do not re-dispatch the implementer. (In epic mode, this halts the whole batch — the user must clear the failing finding before re-running.)
+- If `02-impl.json` exists with `status: "ok"` but no `03-verify.json` → in task mode, resume by invoking `/003-verify-dod` (skip the implementer phase) and continue from Phase 4; in epic mode, the per-task `/003`/`/004` slots are no-ops (the epic-level auto-chain runs at the end), so mark the task `done` and continue the epic loop.
 - If `02-impl.json` exists with `status: "too_big_proposal"` → halt with the prior `payload.reason` and `payload.suggested_split`; suggest `/001-plan --resplit ${TASK_ID}`.
 - If `02-impl.json` exists with `status: "blocked"` → halt with the prior blockers summary from `payload.reason`.
-- If only `01-plan.json` exists (or no `NN-*.json` files at all) → run the implementer phase normally (Phase 1 → Phase 2).
+- If `02X-plan.json` artifacts exist (Phase 1.5 plan-only history) but no `02-impl.json` → resume at Phase 1.5: re-present the most recent plan to the user via `AskUserQuestion`. Do not re-dispatch a fresh plan unless the user picks **Iterate**.
+- If only `01-plan.json` exists (or no `NN-*.json` files at all) → run the per-task flow normally (Phase 1 → Phase 2).
 
 In all "resume" paths above, the task status in `epic-{id}-tasks.yaml` is set to `in_progress` (idempotent re-set; no-op if already `in_progress`). On any halt path inside Phase 0.5, the Task lock acquired in Phase 0 MUST be released via `rm -rf "$LOCK_DIR"` before exit.
 
@@ -125,32 +178,105 @@ In all "resume" paths above, the task status in `epic-{id}-tasks.yaml` is set to
 - Otherwise:
   - Determine the default base branch (`main` unless `stack.yaml.paths.default_branch` overrides).
   - **Branch collision check.** Before syncing, run `git show-ref --verify --quiet refs/heads/<computed-branch-name>`. If the branch exists:
-    - If `HEAD` already points at that branch (`git rev-parse --abbrev-ref HEAD` equals the computed name) AND any commit on that branch carries the current task id OR the resolved ticket id in its subject (per the enterprise convention `feat(scope): description [TICKET-ID]`, the task id is not in the Conventional-Commits scope) — match via `git log --oneline --grep="$TASK_ID\|$TICKET_ID" <branch>` — treat this as a **resume**: skip base checkout, skip branch creation, continue at Phase 2.
+    - If `HEAD` already points at that branch (`git rev-parse --abbrev-ref HEAD` equals the computed name) AND any commit on that branch carries the current task id OR the resolved ticket id in its subject (per the enterprise convention `feat(scope): description [TICKET-ID]`, the task id is not in the Conventional-Commits scope) — match via `git log --oneline --grep="$TASK_ID\|$TICKET_ID" <branch>` — treat this as a **resume**: skip base checkout, skip branch creation, continue at Phase 1.5.
     - Otherwise → abort: `Branch <computed-branch-name> exists but does not appear to be a resume from a prior /002-implement run. Inspect manually before retrying.`
   - Run `git checkout <base>` then `git pull --ff-only` to sync.
   - Create and check out the new branch: `git checkout -b <computed-branch-name>`.
 <!-- FREEZE:ENDIF -->
 
-### Phase 2 — Dispatch implementer subagent
+### Phase 1.5 — Plan checkpoint (plan-only implementer dispatch + user approval)
+
+The plan checkpoint is the human-in-the-loop gate between branch creation and full TDD execution. It restores the sielappkowo "Present plan, iterate until accepted" discipline inside the crumbs JSON-artifact contract.
+
+**Goal.** Before any RED test is written or any production code is touched, the implementer produces a written plan (files to touch + RED test sketch + GREEN shape + REFACTOR notes), the user reviews it, and the user either **Approves**, requests **Iterate** (with feedback), or **Cancels**. Approval is the trigger for Phase 2.
+
+#### Step 1 — Dispatch implementer in `plan-only` sub-mode
+
+Use the **Task tool** with `subagent_type: "implementer"`. Inject everything that Phase 2 would normally inject (task YAML, Business scenarios verbatim, ruleset SUBSET via `scripts/inject-ruleset.sh`, `stack.yaml.extras`, prior history) PLUS a header:
+
+```
+--- sub-mode ---
+plan-only: true
+```
+
+In `plan-only` sub-mode the implementer does **NOT** write code, does **NOT** create or modify any test, does **NOT** commit, and does **NOT** touch the working tree. It only produces a plan artifact.
+
+The plan artifact contract:
+
+- **Path.** `.claude/runs/{epic_id}/{task_id}/02<letter>-plan.json`, where `<letter>` increments per iteration: first dispatch writes `02a-plan.json`, an Iterate response writes `02b-plan.json`, then `02c-plan.json`, etc. Append-only — never overwrite a prior iteration.
+- **Schema.** Conforms to `schemas/run-phase.schema.json` with `phase: "impl"`, `agent: "implementer"`, `status: "ok"`. The plan content lives in `payload`:
+  - `payload.sub_mode: "plan-only"` (required discriminator)
+  - `payload.iteration: "a" | "b" | "c" | ...` (matches the letter in the filename)
+  - `payload.files_to_touch: [{ path, intent }]` — the set of files the implementer intends to create or edit, each with a one-line intent.
+  - `payload.red_sketch: <prose-or-pseudo-code>` — the failing Domain-test sketch, scoped to the first `domain_scenario` on the task. Includes the World wiring, the Step library calls, and the assertion that will go red.
+  - `payload.green_shape: <prose>` — the minimal production-code shape that will make RED go green (interfaces, function signatures, data flow). NO implementation bodies.
+  - `payload.refactor_notes: <prose>` — known refactor moves anticipated after GREEN (extract function, push concept into domain model, etc.). Empty is acceptable for trivial tasks.
+  - `payload.atdd_spec_shape: <prose>` — how the single ATDD spec will be authored after Domain-tests are green (path, happy-path Step-library calls, World wiring).
+  - `payload.open_questions: [<prose>]` — any ambiguity the user should resolve before approval. Empty array is the happy case.
+  - `payload.user_feedback: <prose-or-null>` — for iterations `b` and later, the verbatim feedback text from the previous `AskUserQuestion` Iterate option.
+
+- **Status semantics.** `ok` means "plan produced, awaiting user decision". `too_big_proposal` and `blocked` are valid plan-only outcomes too — the implementer may decide during planning that the task is unsplittable-but-too-large, or that a prerequisite is missing. Both halt the per-task flow exactly as in Phase 3.
+
+#### Step 2 — Present plan to user via `AskUserQuestion`
+
+After the plan artifact is written, validate it against the schema and then call the `AskUserQuestion` tool with:
+
+- **Question.** A short prompt referencing the task id and the current plan iteration, e.g. `Task T-014 plan iteration "a": approve, iterate, or cancel?`
+- **Header.** `Plan checkpoint`.
+- **Multi-select.** `false` (single choice).
+- **Options.**
+  1. `label: "Approve"`, `description: "Proceed to Phase 2 (full TDD) with this plan as input context."`
+  2. `label: "Iterate"`, `description: "Provide feedback; the implementer re-plans (next letter, e.g. 02b-plan.json)."`
+  3. `label: "Cancel"`, `description: "Abort this task. Release lock. In epic mode, the whole epic loop halts."`
+
+Beneath the question, surface a compact rendering of the plan payload (the user reads JSON poorly; flatten it into bullets):
+
+```
+Files to touch:
+  - <path>: <intent>
+  - ...
+RED sketch: <one-paragraph summary>
+GREEN shape: <one-paragraph summary>
+REFACTOR notes: <one-paragraph or "none">
+ATDD spec shape: <one-paragraph summary>
+Open questions: <bullet list or "none">
+```
+
+If `payload.open_questions` is non-empty, the user is strongly encouraged to pick **Iterate** (the plan is not yet ready). Do not block the Approve option, but flag the open questions in the prompt.
+
+#### Step 3 — Branch on user choice
+
+- **Approve** → record the approved plan path (e.g. `02b-plan.json`) for Phase 2 to inject. Continue to Phase 2.
+- **Iterate** → collect the user's free-form feedback (via a follow-up `AskUserQuestion` with a single `open` option, or via the `additional` field if the harness supports it). Re-dispatch the implementer in `plan-only` sub-mode with `payload.user_feedback` set to the verbatim feedback text. The new plan is written to the next letter (`02b-plan.json`, then `02c-plan.json`, …). Re-present (Step 2). The iteration counter has no hard cap, but emit a visible warning to the user after every 3 consecutive iterations: `5 plan iterations and counting — consider /001-plan --resplit ${TASK_ID} or accepting the current plan.`
+- **Cancel** → halt the per-task flow:
+  - Revert task `status` from `in_progress` back to `pending` in `epic-{id}-tasks.yaml`.
+  - Release the Task lock (`rm -rf "$LOCK_DIR"`).
+  - In epic mode, also release the epic lock and halt the epic loop entirely.
+  - Print: `Task <task-id> cancelled at plan checkpoint. Status reverted to pending. Re-run /002-implement to resume.`
+
+The approved plan path is the SINGLE input passed to Phase 2 below (as a `--- approved plan ---` block alongside the existing injection set). Phase 2 does not re-plan; it executes.
+
+### Phase 2 — Dispatch implementer subagent (full TDD)
 
 Use the **Task tool** with `subagent_type: "implementer"`. Inject the following into the subagent prompt body (verbatim, no `@`-includes):
 
 1. **Task entry (YAML)** — the entire YAML entry for the task as it appears in `epic-{id}-tasks.yaml`. Include `id`, `slug`, `title`, `status`, `domain_scenarios`, `atdd_spec`, `acceptance`, `notes`, and any other fields present.
 2. **Business scenarios** — for each name listed in the task's `domain_scenarios`, paste the matching `## Scenario: <name>` Gherkin block verbatim from `epics.yaml`. Preface with `--- Business Scenario: <name> ---`.
-3. **Verbatim ruleset SUBSET** — inject the ruleset **subset** via `scripts/inject-ruleset.sh --rules <comma-separated-slugs>` where slugs = the planner's `01-plan.json.payload.rules_in_scope` for this task ∪ the mandatory core `{architecture, testing, code-style, git-workflow}`. Capture the script's stdout via the Bash tool and inline it verbatim into the implementer's prompt. The script handles path resolution (honours `paths.ruleset` from `stack.yaml`, falls back to `.claude/ruleset/`), alphabetical ordering of `*.md` files, the `--- <basename> ---` header per file, and the subset filter (mandatory core is always included regardless of `--rules`). This mirrors `/002-auto-implement` exactly; do not re-implement the read+concatenate logic inline. Do not summarise, do not omit any rule in the subset. The remaining rules outside the subset are the reviewer's concern (`/004`), not the implementer's — they are the holistic gate that sweeps the full 18.
+3. **Verbatim ruleset SUBSET** — inject the ruleset **subset** via `scripts/inject-ruleset.sh --rules <comma-separated-slugs>` where slugs = the planner's `01-plan.json.payload.rules_in_scope` for this task ∪ the mandatory core `{architecture, testing, code-style, git-workflow}`. Capture the script's stdout via the Bash tool and inline it verbatim into the implementer's prompt. The script handles path resolution (honours `paths.ruleset` from `stack.yaml`, falls back to `.claude/ruleset/`), alphabetical ordering of `*.md` files, the `--- <basename> ---` header per file, and the subset filter (mandatory core is always included regardless of `--rules`). Do not re-implement the read+concatenate logic inline. Do not summarise, do not omit any rule in the subset. The remaining rules outside the subset are the reviewer's concern (`/004`), not the implementer's — they are the holistic gate that sweeps the full 18.
 4. **`stack.yaml.extras`** — paste the `extras` mapping verbatim under a header `--- stack.yaml.extras ---`. This is the escape hatch for stack-specific quirks (e.g. `bash_buffering_warning`, `user_ping_interval_minutes`).
-5. **Output contract** — instruct the implementer to write its result to `.claude/runs/{epic_id}/{task_id}/02-impl.json`, validated against `schemas/run-phase.schema.json`. The top-level `status` field must be one of `ok`, `too_big_proposal`, `blocked`. Required `payload` keys vary by status:
+5. **Approved plan** — paste the contents of the approved plan artifact (e.g. `02b-plan.json` from Phase 1.5) verbatim under a header `--- approved plan ---`. The implementer treats this as binding: file set, RED sketch, GREEN shape, REFACTOR notes, and ATDD spec shape are pre-agreed with the user. Deviations are allowed only when the implementer hits an issue the plan missed; in that case the implementer emits `status: blocked` with a `payload.reason` describing the gap, and the flow halts back to the user.
+6. **Output contract** — instruct the implementer to write its result to `.claude/runs/{epic_id}/{task_id}/02-impl.json`, validated against `schemas/run-phase.schema.json`. The top-level `status` field must be one of `ok`, `too_big_proposal`, `blocked`. Required `payload` keys vary by status:
    - `ok` → `commit_sha`, `files_changed`, `domain_tests_added`, `atdd_spec_path`.
    - `too_big_proposal` → `reason` (prose), `suggested_split` (array of draft task titles, 2..n entries).
    - `blocked` → `reason` (prose), optional `suggested_follow_up`.
-6. **Prior history** — paste any pre-existing artifacts under `.claude/runs/{epic_id}/{task_id}/` (e.g. `01-plan.json` from `/001-plan`) verbatim under a header `--- Prior phase: 01-plan.json ---`. Subagents are append-only readers of the runs history.
+7. **Prior history** — paste any pre-existing artifacts under `.claude/runs/{epic_id}/{task_id}/` (e.g. `01-plan.json` from `/001-plan` and the approved `02<letter>-plan.json`) verbatim under headers `--- Prior phase: 01-plan.json ---` etc. Subagents are append-only readers of the runs history.
 <!-- FREEZE:IF require_ticket_reference -->
-7. **Commit-msg context** — under a header `--- commit-msg context ---`, pass the values needed for the implementer to compose a compliant commit subject (per enterprise `^... \[TICKET-ID\]$` pattern from `git-workflow.md`):
+8. **Commit-msg context** — under a header `--- commit-msg context ---`, pass the values needed for the implementer to compose a compliant commit subject (per enterprise `^... \[TICKET-ID\]$` pattern from `git-workflow.md`):
    - `cm_ticket: <resolved-ticket-id-or-null>` — the value resolved in Phase 1 (task `cm_ticket`, falling back to epic `cm_ticket`, or `null` if neither was set and the pattern did not require one).
    - `commit_subject_pattern: <from git-workflow.md commit-msg toggle>` — verbatim regex/string from the toggle block (e.g. `^(feat|fix|chore|refactor|test|docs)(\([a-z0-9-]+\))?: .+ \[[A-Z]+-[0-9]+\]$`).
    The implementer is responsible for including the ticket id in the commit subject when one is present; the main thread is responsible for surfacing it.
 <!-- FREEZE:ENDIF -->
-8. **Commit policy flags** — under a header `--- commit policy ---`, pass the resolved git-workflow.md toggles that govern the implementer's `git commit` invocation:
+9. **Commit policy flags** — under a header `--- commit policy ---`, pass the resolved git-workflow.md toggles that govern the implementer's `git commit` invocation:
 <!-- FREEZE:IF require_signed_commits -->
    - `require_signed_commits: <true|false>` — when true, the implementer commits with `-S` (GPG/SSH signing).
 <!-- FREEZE:ENDIF -->
@@ -160,6 +286,7 @@ Use the **Task tool** with `subagent_type: "implementer"`. Inject the following 
 
 The implementer is expected to:
 
+- Execute the approved plan from Phase 1.5. The plan is binding for file scope, RED sketch, GREEN shape, and ATDD spec shape.
 - Run the **TDD entry-point** loop per `.claude/ruleset/testing.md`: Domain-test RED → minimal production code GREEN → REFACTOR. Repeat per acceptance until the task is fully green.
 - Produce **one ATDD spec** at `tests/atdd/<slug>.spec.ts` (path may differ per `stack.yaml.paths.atdd_dir`). The spec is **authored only** during the task — it is **not executed per-task**. It will be executed at epic close-out.
 - Produce **one or more Domain-tests** covering happy path + edge cases.
@@ -191,73 +318,73 @@ Branch on `status`:
 
   Next step: /001-plan --resplit <task-id>
   ```
-  Set the task `status` back to `pending` in `epic-{id}-tasks.yaml`. Halt; do **not** proceed to verify or review. Note: the planner re-split (`/001-plan --resplit`) is responsible for archiving the pending task's stub `01-plan.json` if it exists.
+  Set the task `status` back to `pending` in `epic-{id}-tasks.yaml`. Halt; do **not** proceed to verify or review. In epic mode, also halt the epic loop. Note: the planner re-split (`/001-plan --resplit`) is responsible for archiving the pending task's stub `01-plan.json` if it exists.
 
-- **`status: "blocked"`** — implementer hit a blocker it cannot resolve (missing dependency, ambiguous scenario, external decision required). Print `payload.reason` verbatim and the suggested follow-up if present. Leave task `status: in_progress` so the user can clear it manually after resolution. Halt.
+- **`status: "blocked"`** — implementer hit a blocker it cannot resolve (missing dependency, ambiguous scenario, external decision required). Print `payload.reason` verbatim and the suggested follow-up if present. Leave task `status: in_progress` so the user can clear it manually after resolution. Halt. In epic mode, also halt the epic loop.
 
-- **`status: "ok"`** — implementation green. Continue to Phase 4.
+- **`status: "ok"`** — implementation green. Continue to Phase 4 (task mode) or directly to Phase 6 task-status-update + loop-continue (epic mode — `/003`/`/004` run once at epic close-out, not per task).
 
-### Phase 4 — Auto-invoke /003-verify-dod
+### Phase 4 — Auto-invoke /003-verify-dod (task mode only)
+
+This phase runs **only in task mode**. In epic mode, `/003-verify-dod` is invoked once for the entire epic after every task is `done` (see "Epic mode workflow" above); skip Phase 4 inside the per-task loop.
 
 If `auto_invoke_verify` is **not** `false` (default: `true`):
 
-1. Spawn `/003-verify-dod` against `<task-id>`. The verifier runs all `stack.yaml.gates` plus rule-based DoD checks.
-2. After completion, read `.claude/runs/{epic_id}/{task_id}/03-verify.json` and validate against the schema.
+1. Spawn `/003-verify-dod` against `<task-id>`. The verifier runs all `stack.yaml.gates` plus rule-based DoD checks. `/003`'s own Phase 2/3 self-heal loop (max 3 iterations) is owned by `/003`, not this command.
+2. After completion, read `.claude/runs/{epic_id}/{task_id}/03-verify.json` (or the last `03X-verify.json` iteration if `/003` self-healed) and validate against the schema.
 3. Branch on `status`:
    - **`status: "ok"`** → continue to Phase 5.
-   - **`status: "fail"`** → spawn `/005-implement-feedback` with the verifier findings. The feedback-implementer fixes implementation and the chain loops back to `/003-verify-dod`. Number the feedback artifacts `05a-feedback-impl.json`, `05b-...`, `05c-...`.
-
-     **Parent-context env marker.** Before invoking `/005-implement-feedback`, this command MUST set `CRUMBS_PARENT_COMMAND=002-implement` in the dispatch environment, then `unset CRUMBS_PARENT_COMMAND` immediately after the invocation returns. This is how `/005` distinguishes chained from standalone invocation (the filesystem heuristic is racy and unreliable after `/004` has written `04-review.json`). Example:
-
-     ```sh
-     export CRUMBS_PARENT_COMMAND=002-implement
-     # invoke /005-implement-feedback <task-id>
-     unset CRUMBS_PARENT_COMMAND
-     ```
-
-**Hard cap: 3 feedback iterations per task, SHARED across verify and review gates (matches /005-implement-feedback letter-suffix scheme 05a/05b/05c). On the 4th would-be iteration, halt the auto-loop and surface findings to the user (do not emit a synthetic phase file with a non-enum status).**
-```
-Verify failed 3 times in a row for task <task-id>. Escalating to user.
-Last findings: .claude/runs/{epic_id}/{task_id}/03-verify.json
-Last feedback attempt: .claude/runs/{epic_id}/{task_id}/05c-feedback-impl.json
-```
-Leave task `status: in_progress`.
+   - **`status: "fail"`** → `/003`'s self-heal cap was exhausted. Halt the per-task flow with the verifier findings; surface the path of the last failing artifact. Leave task `status: in_progress`.
 
 If `auto_invoke_verify: false`, skip Phase 4 entirely and inform the user: `Auto-verify disabled by toggle. Run /003-verify-dod <task-id> manually.`
 
-### Phase 5 — Auto-invoke /004-code-review
+### Phase 5 — Auto-invoke /004-code-review (task mode only)
+
+This phase runs **only in task mode**. In epic mode, `/004-code-review` is invoked once for the entire epic after `/003` returns ok (see "Epic mode workflow" above); skip Phase 5 inside the per-task loop.
 
 If `auto_invoke_review` is **not** `false` (default: `true`):
 
-1. Spawn `/004-code-review` against `<task-id>`. The reviewer reads the verbatim-injected ruleset, the diff, and the runs history.
-2. After completion, read `.claude/runs/{epic_id}/{task_id}/04-review.json` and validate against the schema.
+1. Spawn `/004-code-review` against `<task-id>`. The reviewer reads the verbatim-injected ruleset, the diff, and the runs history. `/004`'s own Phase 2/3 self-heal loop (max 3 iterations) is owned by `/004`, not this command.
+2. After completion, read `.claude/runs/{epic_id}/{task_id}/04-review.json` (or the last `04X-review.json` iteration if `/004` self-healed) and validate against the schema.
 3. Branch on `status`:
    - **`status: "ok"`** → continue to Phase 6.
-   - **`status: "fail"`** → spawn `/005-implement-feedback` with reviewer findings. The chain loops: feedback-impl → back to `/003-verify-dod` → back to `/004-code-review`. The feedback iteration counter is **shared** with Phase 4 (a single task has at most 3 feedback rounds total, not 3 per gate).
-
-     **Parent-context env marker.** As in Phase 4, set `CRUMBS_PARENT_COMMAND=002-implement` before invoking `/005-implement-feedback` and `unset CRUMBS_PARENT_COMMAND` after it returns.
-
-**Hard cap: 3 feedback iterations per task, SHARED across verify and review gates (matches /005-implement-feedback letter-suffix scheme 05a/05b/05c). On the 4th would-be iteration, halt the auto-loop and surface findings to the user (do not emit a synthetic phase file with a non-enum status).** Halt with the same escalation pattern as Phase 4, pointing at `04-review.json` and the latest `05X-feedback-impl.json`.
+   - **`status: "fail"`** → `/004`'s self-heal cap was exhausted. Halt the per-task flow with the reviewer findings; surface the path of the last failing artifact. Leave task `status: in_progress`.
 
 If `auto_invoke_review: false`, skip Phase 5 and inform the user: `Auto-review disabled by toggle. Run /004-code-review <task-id> manually.`
 
-### Phase 6 — Propose merge
+### Phase 6 — Close task (task mode: propose merge; epic mode: loop)
 
-Reached only when both `03-verify.json` and `04-review.json` show `status: "ok"` (or the corresponding toggle disabled them).
+Reached only when both verify and review are `ok` (or their toggles disabled the auto-invoke).
 
 - Set task `status: done` in `epic-{id}-tasks.yaml`. Update any `summary.by_status` counter if the file maintains one.
+- Release the task lock (`rm -rf .claude/runs/.lock-${EPIC_ID}-${TASK_ID}`).
+- **Task mode**:
 <!-- FREEZE:IF pr_required -->
-- Print a one-liner to the user:
-  ```
-  Task <task-id> complete. Open MR? Run /006-merge <task-id>
-  ```
-- **Do NOT auto-invoke `/006-merge`.** Merging is always user-triggered to preserve a human checkpoint before the PR/MR lands.
+  - Print a one-liner to the user:
+    ```
+    Task <task-id> complete. Open MR? Run /006-merge <task-id>
+    ```
+  - **Do NOT auto-invoke `/006-merge`.** Merging is always user-triggered to preserve a human checkpoint before the PR/MR lands.
 <!-- FREEZE:ELSE -->
-- Print a one-liner to the user:
-  ```
-  Task <task-id> complete and on main. /006-merge is a no-op for the solo preset.
-  ```
+  - Print a one-liner to the user:
+    ```
+    Task <task-id> complete and on main. /006-merge is a no-op for the solo preset.
+    ```
 <!-- FREEZE:ENDIF -->
+- **Epic mode**: do not print merge guidance. Return control to the epic loop, which will pick the next eligible pending task (Phase 0) or, if none remain, run the epic-level auto-chain (`/003-verify-dod` → optional `/004-code-review`).
+
+## Lock semantics
+
+Two lock granularities coexist and are **orthogonal** — they live in different directories and never collide:
+
+- **Epic lock** (`.claude/runs/.lock-<epic_id>/`) — acquired at the start of epic mode, held across every per-task iteration AND across the post-loop `/003` / `/004` auto-chain, released at the end (success or any halt branch). Task mode does NOT acquire the epic lock.
+- **Task lock** (`.claude/runs/.lock-<epic_id>-<task_id>/`) — acquired inside Phase 0 of the per-task flow, held until Phase 6 (success) or any halt branch. Both modes use the task lock.
+
+Because the lock directory names differ structurally (`<epic>` vs `<epic>-<task>`), a running epic and an ad-hoc task-mode invocation of the same task id will fail-fast on the **task** lock at Phase 0, not the epic lock — the task lock is the narrowest concurrency guard and is checked first inside Phase 0. The epic lock guards the higher-order semantic ("an epic batch is in flight; do not start another epic batch").
+
+Acquisition uses the same `mkdir`-then-write-info atomic pattern as the task lock (Phase 0). Exit code `5` is reserved for "already running" on either lock so callers can distinguish concurrency from other failures.
+
+**Stale-lock recovery.** If the orchestrator crashes (host crash, harness terminated), the lock directory persists. The error message at acquisition points the user at the exact path; manual `rm -rf <lock-dir>` is required. Do NOT auto-clean stale locks — silent reclamation hides bugs and corrupts concurrent runs.
 
 ## Toggle precedence
 
@@ -279,7 +406,7 @@ branch_name_pattern: "task/{task_id}-{slug}"
 
 Notes:
 - Missing block or missing key → defaults apply (no warning).
-- The toggle block is parsed once at Phase 0 and held for the entire run; mid-run edits are ignored.
+- The toggle block is parsed once at the start of the run and held for the entire batch; mid-run edits are ignored.
 - The chosen `team_preset` recorded in `.claude/stack.yaml` is informational only — this command never reads it. Behaviour is driven solely by the toggle block, which the preset wrote at bootstrap.
 
 ### Preset → toggle mapping (informational)
@@ -325,13 +452,17 @@ The `branch_name_pattern` is `task/{task_id}-{slug}` across all presets unless t
 
 ## Failure modes
 
+- **Bad argument** → abort at mode-dispatch with the usage error (`Argument "<value>" is neither an epic id (E-…) nor a task id (T-…). …`).
 - **Task not found** → abort at Phase 0 with the path and id.
-- **Task already `done` or `in_progress`** → abort at Phase 0 with the specific message.
-- **Schema validation fails** on any of `02-impl.json`, `03-verify.json`, `04-review.json`, `05X-feedback-impl.json` → halt with the artifact path and the validator error.
-- **Implementer returns `too_big_proposal`** → halt at Phase 3; revert task to `pending`.
-- **Implementer returns `blocked`** → halt at Phase 3; leave task `in_progress`.
-- **Verify fails 3 consecutive times** → halt at Phase 4; leave task `in_progress`.
-- **Review fails 3 consecutive times** (counter shared with verify) → halt at Phase 5; leave task `in_progress`.
+- **Epic not found** → abort at the epic-mode pre-flight with the search path.
+- **Task already `done`** → task mode aborts; epic mode skips silently and continues the loop.
+- **Task already `in_progress`** → both modes abort with the specific message.
+- **Schema validation fails** on any of `02X-plan.json`, `02-impl.json`, `03-verify.json`, `04-review.json`, `05X-feedback-impl.json` → halt with the artifact path and the validator error.
+- **User picks Cancel at Phase 1.5** → halt; revert task to `pending`; release both locks; epic mode halts the batch.
+- **Implementer returns `too_big_proposal`** → halt at Phase 3; revert task to `pending`; epic mode halts the batch.
+- **Implementer returns `blocked`** → halt at Phase 3; leave task `in_progress`; epic mode halts the batch.
+- **Verify fails after `/003`'s self-heal cap** → halt at Phase 4 (task mode) or at the epic-level auto-chain (epic mode); leave task `in_progress`.
+- **Review fails after `/004`'s self-heal cap** → halt at Phase 5 (task mode) or at the epic-level auto-chain (epic mode); leave task `in_progress`.
 - **Subagent invocation error** (missing file, tool failure, ruleset directory absent) → halt with the underlying error and the offending path. Do not retry silently.
 - **Branch creation fails** (dirty working tree, base branch behind, etc.) → halt at Phase 1 with the git error verbatim. Do not force any operation.
 
@@ -340,18 +471,20 @@ The `branch_name_pattern` is `task/{task_id}-{slug}` across all presets unless t
 - Task `status` transitions:
   - `pending`/`blocked` → `in_progress` at Phase 0 start.
   - `in_progress` → `done` only on full success at Phase 6.
-  - `in_progress` → `pending` on `too_big_proposal` (Phase 3).
+  - `in_progress` → `pending` on `too_big_proposal` (Phase 3) or on user **Cancel** at Phase 1.5.
   - `in_progress` stays `in_progress` on any hard halt — the user clears it manually once the underlying issue is resolved.
-- **Never amend commits.** The implementer makes one commit; feedback rounds produce additional commits stacked on top.
+- **Plan checkpoint is non-negotiable.** Phase 1.5 always runs before Phase 2. There is no toggle to skip it. The point of the checkpoint is to catch wrong assumptions before they become commits.
+- **Plan artifacts are append-only.** `02a-plan.json`, `02b-plan.json`, … are never overwritten. If the user picks Iterate, the next letter is written; the previous letter remains as audit history.
+- **Never amend commits.** The implementer makes one commit; self-heal feedback rounds inside `/003` and `/004` produce additional commits stacked on top.
 - **Never force-push.** If history needs cleanup, leave it for `/006-merge` (which may squash on PR creation per `git-workflow.md`).
 <!-- FREEZE:IF require_signed_commits -->
 - **Honour `require_signed_commits`** from the chosen preset. If true, every commit (implementer + feedback rounds) is signed.
 <!-- FREEZE:ENDIF -->
 - **Honour `branch_name_pattern`.** Do not improvise branch names; the pattern is the contract.
 - **Filesystem-only subagent comms.** Never rely on in-memory state between subagent invocations — the main thread reads artifacts from `.claude/runs/{epic_id}/{task_id}/` after each subagent returns. Ruleset content is verbatim-injected into the prompt body, never via `@`-include (per CONTEXT.md "Ruleset injection").
-- **Append-only runs history.** Never overwrite or delete prior phase artifacts within a task run. Feedback rounds get letter suffixes (`05a`, `05b`, `05c`).
-- **Single commit by default.** The implementer produces one commit per task. Feedback rounds add commits on top — they do not amend or squash. Squashing (if desired) is a `/006-merge` concern, governed by `git-workflow.md`.
-- **Zero tolerance on Findings.** Any finding from `/003` or `/004` blocks DoD. No severity tiers, no overrides. The feedback loop addresses every finding; it never argues with them.
+- **Append-only runs history.** Never overwrite or delete prior phase artifacts within a task run. Plan iterations get letter suffixes (`02a`, `02b`, `02c`). Self-heal rounds inside `/003` and `/004` get letter suffixes (`03b`, `03c`, `04b`, `04c`) and are governed by those commands.
+- **Single commit per task by default.** The implementer produces one commit per task. Self-heal rounds inside `/003`/`/004` add commits on top — they do not amend or squash. Squashing (if desired) is a `/006-merge` concern, governed by `git-workflow.md`.
+- **Zero tolerance on Findings.** Any finding from `/003` or `/004` blocks DoD. No severity tiers, no overrides. The self-heal loops inside those commands address every finding; they never argue with them.
 
 ## Vocabulary discipline
 
@@ -360,6 +493,7 @@ Mirror `CONTEXT.md` exactly. Use only these terms when communicating with the us
 - **TDD entry-point** — both planning and implementation start from a failing test. No production code without a prior red test.
 - **Domain-test** — multi-class no-infra test in the inner loop (Vertex Testing). Drives RED-GREEN-REFACTOR.
 - **ATDD spec** — executable form of a Business scenario, one per task, written during the task, executed only at epic close-out.
+- **Business scenario** — the Gherkin block in `epics.yaml`. Source of truth for what the user-visible behaviour must be.
 - **Step library** — domain-oriented abstraction shared across Domain-tests and ATDD specs; one function per scenario verb.
 - **World** — execution context injected into a Step library function (`DomainWorld` for Domain-tests, `BrowserWorld` / `DeviceWorld` for ATDD specs and Journeys).
 - **Status** — `pending | in_progress | blocked | done`. Never use `todo`, `wip`, `complete`, `partial`.
@@ -369,36 +503,70 @@ Do not introduce synonyms (no "unit test", no "acceptance criteria", no "blocker
 
 ## Subagent chain summary
 
+### Epic mode
+
+```
+/002-implement <epic-id>
+   │
+   ├─ acquire epic lock (.claude/runs/.lock-<epic_id>/)
+   ├─ FOR EACH eligible pending task in dependency order:
+   │     ├─ Phase 0     pre-flight + acquire task lock (.lock-<epic_id>-<task_id>/)
+   │     ├─ Phase 0.5   resume detection
+   │     ├─ Phase 1     branch (or skip if allow_commit_to_main)
+   │     ├─ Phase 1.5   plan-only implementer → 02a-plan.json
+   │     │              AskUserQuestion(Approve / Iterate / Cancel)
+   │     │              Iterate → re-dispatch → 02b/02c/… ; Cancel → halt
+   │     ├─ Phase 2     implementer (full TDD) → 02-impl.json
+   │     ├─ Phase 3     branch on status (ok → continue; too_big/blocked → halt)
+   │     └─ Phase 6     status=done; release task lock; loop
+   │
+   ├─ auto-invoke /003-verify-dod <epic-id>   (no user prompt)
+   │     on fail → halt epic, surface findings
+   │
+   ├─ auto-invoke /004-code-review <epic-id>  (gated by auto_invoke_review)
+   │     on fail → halt epic, surface findings
+   │
+   └─ release epic lock; print epic-complete one-liner
+```
+
+### Task mode
+
 ```
 /002-implement <task-id>
-   |
-   ├─ Phase 0  pre-flight (status flip → in_progress)
-   ├─ Phase 1  branch (or skip if allow_commit_to_main)
-   ├─ Phase 2  implementer subagent → 02-impl.json
-   ├─ Phase 3  branch on status:
-   │            ok → continue
-   │            too_big_proposal → status=pending, halt
-   │            blocked → halt
-   ├─ Phase 4  /003-verify-dod → 03-verify.json
-   │            on fail → /005-implement-feedback → 05a/05b/05c → loop
-   │            cap: 3 consecutive fails (shared with Phase 5)
-   ├─ Phase 5  /004-code-review → 04-review.json
-   │            on fail → /005-implement-feedback → loop back to /003
-   │            cap: 3 consecutive fails (shared with Phase 4)
-   └─ Phase 6  status=done; print /006-merge suggestion (user-triggered)
+   │
+   ├─ Phase 0     pre-flight + acquire task lock (.lock-<epic_id>-<task_id>/)
+   ├─ Phase 0.5   resume detection
+   ├─ Phase 1     branch (or skip if allow_commit_to_main)
+   ├─ Phase 1.5   plan-only implementer → 02a-plan.json
+   │              AskUserQuestion(Approve / Iterate / Cancel)
+   ├─ Phase 2     implementer (full TDD) → 02-impl.json
+   ├─ Phase 3     branch on status
+   ├─ Phase 4     /003-verify-dod (its own self-heal loop owned by /003)
+   ├─ Phase 5     /004-code-review (its own self-heal loop owned by /004)
+   └─ Phase 6     status=done; release task lock; print /006-merge suggestion
 ```
 
-Each subagent type lives in `.claude-plugin/agents/` (plugin-owned, not project-owned). The chain is iterative (`planner` → `implementer` → `verifier` → `reviewer` → `feedback-implementer` → back to `verifier`), not linear. This command owns one task's traversal of that chain — `/002-auto-implement` owns the epic-level batch.
+Each subagent type lives in `.claude-plugin/agents/` (plugin-owned, not project-owned). The chain is iterative (`planner` → `implementer (plan-only)` → user → `implementer (full)` → `verifier` → `reviewer` → `feedback-implementer` → back to `verifier`), not linear. This command owns one task's traversal of that chain in task mode, and the whole-epic traversal in epic mode.
 
-## Worked example
+## Worked example — epic mode
+
+Given epic `E-003` with three pending tasks `T-014`, `T-015`, `T-016` (each depending on the previous):
+
+1. **Pre-flight** — `/002-implement E-003` locates `docs/planning/epic-003-tasks.yaml`. Acquires `.claude/runs/.lock-E-003/`. Selects `T-014` as the first eligible pending task.
+2. **T-014 per-task flow** — Phase 0 → Phase 6. Plan checkpoint dispatches `implementer` in `plan-only`; writes `02a-plan.json`. User picks **Iterate** with feedback "use SwiftData over Core Data". Implementer re-plans → `02b-plan.json`. User picks **Approve**. Phase 2 implementer runs full TDD, commits, writes `02-impl.json` (`status: ok`). Phase 4/5 are skipped in epic mode. Phase 6 marks T-014 `done`, releases its task lock, returns to loop.
+3. **T-015 per-task flow** — same shape. Plan approved on first iteration.
+4. **T-016 per-task flow** — same shape. Plan approved.
+5. **Epic auto-chain** — all three tasks `done`. Auto-invoke `/003-verify-dod E-003`. The verifier runs `stack.yaml.gates` across the epic diff. One finding — `/003`'s Phase 2 self-heal dispatches a `feedback-implementer`, fixes, Phase 3 re-verifies → `ok`. Return to this command. `auto_invoke_review: true` → auto-invoke `/004-code-review E-003`. Reviewer returns `ok` on first pass.
+6. **Done** — release epic lock. Print: `Epic E-003 complete. /003 ok (1 self-heal round). /004 ok. Run /006-merge E-003 to open the MR.`
+
+## Worked example — task mode
 
 Given task `T-014` belonging to epic `E-003`:
 
-1. **Phase 0** — `/002-implement T-014` locates `docs/planning/epic-003-tasks.yaml`, finds entry `id: T-014, status: pending, slug: cancel-subscription, domain_scenarios: ["User cancels subscription"]`. Flips status to `in_progress`. Creates `.claude/runs/E-003/T-014/`.
+1. **Phase 0** — `/002-implement T-014` locates `docs/planning/epic-003-tasks.yaml`, finds entry `id: T-014, status: pending, slug: cancel-subscription, domain_scenarios: ["User cancels subscription"]`. Flips status to `in_progress`. Acquires `.claude/runs/.lock-E-003-T-014/`. Creates `.claude/runs/E-003/T-014/`.
 2. **Phase 1** — Branch pattern `task/{task_id}-{slug}` resolves to `task/T-014-cancel-subscription`. Checked out from `main`.
-3. **Phase 2** — `implementer` subagent receives task YAML, the Gherkin block for `User cancels subscription`, all 18 ruleset files verbatim, and `stack.yaml.extras`. It writes Domain-tests in `tests/domain/cancel-subscription.test.ts`, production code in `src/billing/cancel.ts`, an ATDD spec in `tests/atdd/cancel-subscription.spec.ts`, commits with message `feat(billing): cancel subscription (T-014)`, and writes `02-impl.json` with `status: ok`.
-4. **Phase 4** — `/003-verify-dod` runs `stack.yaml.gates` (lint, typecheck, domain_tests, build, security). All pass → `03-verify.json` status `ok`.
-5. **Phase 5** — `/004-code-review` reads ruleset + diff. One finding: missing `aria-label` per `accessibility.md`. `04-review.json` status `fail`. `/005-implement-feedback` fires (`05a-feedback-impl.json`), fix commits, loops back to `/003-verify-dod` (status `ok`), then `/004-code-review` (status `ok`).
-6. **Phase 6** — Task `status: done`. Print: `Task T-014 complete. Open MR? Run /006-merge T-014`.
-
-Total feedback iterations: 1 of 3 allowed.
+3. **Phase 1.5** — `implementer` (plan-only) writes `02a-plan.json` with file list, RED sketch, GREEN shape, REFACTOR notes, ATDD spec shape. User picks **Approve**.
+4. **Phase 2** — `implementer` (full) receives task YAML, the Gherkin block for `User cancels subscription`, ruleset subset verbatim, `stack.yaml.extras`, and the approved `02a-plan.json`. Writes Domain-tests in `tests/domain/cancel-subscription.test.ts`, production code in `src/billing/cancel.ts`, an ATDD spec in `tests/atdd/cancel-subscription.spec.ts`, commits with message `feat(billing): cancel subscription (T-014)`, writes `02-impl.json` with `status: ok`.
+5. **Phase 4** — `/003-verify-dod T-014` runs `stack.yaml.gates`. All pass → `03-verify.json` status `ok`.
+6. **Phase 5** — `/004-code-review T-014` reads ruleset + diff. One finding: missing `aria-label` per `accessibility.md`. `/004`'s self-heal loop fixes (`04b-fix.json`, `04c-review.json`) → final `status: ok`.
+7. **Phase 6** — Task `status: done`. Release task lock. Print: `Task T-014 complete. Open MR? Run /006-merge T-014`.

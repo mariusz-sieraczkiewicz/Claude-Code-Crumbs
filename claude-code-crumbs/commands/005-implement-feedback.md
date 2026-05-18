@@ -1,219 +1,161 @@
 ---
-description: Address findings from /003 or /004 via the feedback-implementer subagent. Loops back to verify. Caps at 3 iterations.
-argument-hint: <task-id>
+description: 'Epic-level user feedback flow: gather → plan new tasks → ATDD → verify → review → gatekeeper'
+argument-hint: '<epic-id> [feedback-text]'
 ---
 
 # /005-implement-feedback
 
-You are the orchestrator for the feedback loop of the crumbs pipeline. A prior phase — either `/003-verify-dod` or `/004-code-review` — reported `status: "fail"` with one or more **Findings** against task `$ARGUMENTS`. Your job is to dispatch the `feedback-implementer` subagent (`<plugin-root>/agents/feedback-implementer.md`) with the failing phase artifact, every prior phase artifact, and the verbatim ruleset; read its output; and either loop back to verify, escalate to resplit, or halt on the hard cap.
+Implement user feedback for epic **$1**.
 
-This command is invokable in two ways:
+This command runs **after** an epic has been implemented (typically via `/002-implement <epic-id>`). The user has now observed the assembled epic — running app, deployed feature, integration result — and has feedback on it: bugs, missing behaviour, UI issues, scope adjustments. `/005-implement-feedback` is the disciplined intake for that feedback: it gathers it, decomposes it into new tasks, drives those new tasks through the full ATDD → verify → review chain, and gates the whole round behind a strict gatekeeper subagent.
 
-- **Chained** — auto-invoked by `/002-implement` or `/002-auto-implement` when verify or review returns `status: "fail"`. The parent reads the resulting `05<letter>-feedback-impl.json` and continues the chain.
-- **Standalone** — typed directly by the user against a task whose latest phase artifact reports `status: "fail"`. Same workflow; there is simply no parent chain to advance.
+**Scope is the epic, not a single task.** Feedback is observed at the epic level — the user does not file findings against `T-014` in isolation; they say "the checkout flow feels wrong" or "import is missing the CSV path". The command translates that into new task entries appended to `epic-{id}-tasks.yaml`.
 
-Argument: `$ARGUMENTS` — the task id (e.g. `T-014`). Required.
+**This command does NOT participate in the intra-/003 or intra-/004 self-heal loop.** `/003-verify-dod` and `/004-code-review` heal their own findings internally (Phase 2/3 loops, bounded at 3 iterations). When those gates pass, control flows back to whoever invoked them. `/005` is invoked explicitly by the user after an epic settles, not auto-dispatched by a failing gate.
 
-## Inputs
+**MANDATORY: every step below runs, regardless of fix size.** A one-line CSS change still goes through: gather → clarify → plan → ATDD impl → verify → review → gatekeeper. No shortcuts. Use `TaskCreate` to track progress across the six steps.
 
-- **`<task-id>`** — passed as `$ARGUMENTS`. Required positional argument.
-- **`docs/planning/epic-{id}-tasks.yaml`** — locate the task entry by scanning every `epic-*-tasks.yaml` under `docs/planning/`. The first match wins. If not found anywhere, abort with: `Task <task-id> not found in any epic-*-tasks.yaml. Run /001-plan first.` Capture the `epic_id` from the matching file name (e.g. `epic-003-tasks.yaml` → `epic_id = E-003`).
-- **`.claude/ruleset/*.md`** — confirm all 18 canonical rule files exist on disk; if any are missing, halt with: `Ruleset incomplete: <name>.md missing. Run plugin setup.` Only the **subset** (planner's `01-plan.json.payload.rules_in_scope` ∪ mandatory core `{architecture, testing, code-style, git-workflow}`) is injected into the feedback-implementer prompt body — mirroring `/002-implement` so the same scope applies to fixes as applied to the original implementation.
-- **All prior phase files** in `.claude/runs/{epic_id}/{task_id}/`:
-  - `01-plan.json` — planner output (always present after `/001-plan`).
-  - `02-impl.json` — implementer output (always present after `/002-implement`).
-  - `03-verify.json` — verifier output (present if `/003-verify-dod` has run for the current cycle).
-  - `04-review.json` — reviewer output (present if `/004-code-review` has run for the current cycle).
-  - `05a-feedback-impl.json`, `05b-feedback-impl.json` — earlier feedback rounds in the same cycle, if any.
-- **`.claude/stack.yaml`** — read `extras` (propagated verbatim to the subagent), `paths` (SoT overrides), and `gates` (referenced by the subagent for shape-of-DoD awareness).
+Argument: `$ARGUMENTS` — `<epic-id>` (required) and optional `[feedback-text]` as `$2`. Examples:
 
-## Workflow
+```
+/005-implement-feedback E-003
+/005-implement-feedback E-003 "the import button is enabled even when no file is selected"
+```
 
-### Phase 0 — Pre-flight
+## Code rules — single source of truth
 
-- Verify the task entry exists in some `epic-{id}-tasks.yaml`. If absent → abort (see Inputs).
-- Verify the task `status` is `in_progress`. If `pending` or `blocked`, abort with: `Task <task-id> is not in_progress. /005-implement-feedback runs only on an active task.` If `done`, abort with: `Task <task-id> is already done. Nothing to feed back on.`
-- Confirm `.claude/runs/{epic_id}/{task_id}/` exists. If absent, abort with: `No runs directory for <task-id>. Run /002-implement first.`
-- Confirm `.claude/ruleset/` contains all 18 canonical rule files.
-- Confirm `.claude/stack.yaml` exists and parses. If absent, abort with: `stack.yaml missing. Run /000-prd-refine to bootstrap the project.`
-- **Determine the failing phase file to address first.** Enumerate every file in `.claude/runs/{epic_id}/{task_id}/` matching `NN-*.json` (sorted by numeric prefix ascending). Pick the **lowest-numbered** one whose top-level `status` is `"fail"`. Skip `05*` files in this search — those are feedback artifacts, not gate artifacts. The candidate set is `{03-verify.json, 04-review.json}`. If neither has `status: "fail"`, abort with: `No failing phase to address. Run /003-verify-dod or /004-code-review first.` Record the chosen path as `failing_phase_path` and its content as `failing_phase_content`. Rationale: verify findings are addressed first; review findings only after verify is clean, because review is gated on verify-ok at `/004-code-review` Phase 0 (when both `03-verify.json` and `04-review.json` show `fail`, fix verify first so the next `/004` re-run starts from a clean verify).
-- **Determine the iteration counter.** Count existing `05*-feedback-impl.json` files in the same directory. Possible values:
-  - `0` → next iteration is `05a`.
-  - `1` → next iteration is `05b`.
-  - `2` → next iteration is `05c`.
-  - `≥3` → halt with: `Loop limit reached. Iterations: 05a, 05b, 05c. Escalating to user. Last failing phase: <failing_phase_path>.` Then print the escalation route verbatim:
-    ```
-    Suggested resolution paths: (1) /001-plan --resplit <task-id> — decompose the task; (2) edit findings manually then re-run /003-verify-dod and /004-code-review; (3) inspect runs/<epic>/<task>/05c-feedback-impl.json payload.diagnosis for the agent's analysis.
-    ```
-    Leave task `status: in_progress`. Do not dispatch.
-- Compute the next artifact path: `.claude/runs/{epic_id}/{task_id}/05<letter>-feedback-impl.json` where `<letter>` is `a`, `b`, or `c`.
-- **Detect chained vs standalone invocation via env marker `CRUMBS_PARENT_COMMAND`.** This is the canonical signal — do **not** infer from filesystem state (which is racy after `/004` writes `04-review.json` and makes `02-impl.json` no longer the most-recently-written non-`05*` file). Read the variable:
+**Rules live in `.claude/ruleset/`.** This command does NOT redefine them. Implementation in Step 3 follows `/002-implement` semantics; verification in Step 4 follows `/003-verify-dod`; review in Step 5 follows `/004-code-review`. Each of those commands owns its own gate stack, ATDD discipline, and ruleset injection — `/005` only orchestrates the steps in order and scopes them to the new tasks. Do not redefine code rules, gate stacks, or the ATDD loop inline here.
 
-  ```sh
-  if [ -n "${CRUMBS_PARENT_COMMAND:-}" ]; then
-      # Chained — return to parent on success
-      MODE=chained
-  else
-      # Standalone — print "Run /006-merge when ready." on success
-      MODE=standalone
-  fi
-  ```
+## Step 0 — Gather feedback
 
-  Recognised values for `CRUMBS_PARENT_COMMAND`: `002-implement`, `002-auto-implement`. Anything else (including unset/empty) is treated as **standalone**. Record `MODE` at Phase 0 and reuse it for every print decision in Phase 2.
+If `$2` is provided, treat it as the verbatim feedback string.
 
-### Phase 1 — Dispatch feedback-implementer subagent
+Otherwise, prompt the user via `AskUserQuestion`:
 
-Use the **Task tool** with `subagent_type: "feedback-implementer"`. Inject the following into the subagent prompt body (verbatim, no `@`-includes):
+> What feedback do you have for epic **$1**? (bugs found, missing behaviour, UI issues, scope adjustments observed on the assembled epic)
 
-1. **Task id and epic id** — `T-NNN` and `E-NNN`, plus the path to `epic-{id}-tasks.yaml`.
-2. **Failing phase pointer** — the absolute path `failing_phase_path` and the parsed `failing_phase_content` pasted verbatim under a header `--- Failing phase: 03-verify.json ---` or `--- Failing phase: 04-review.json ---`. The subagent reads `payload.findings[]` and addresses each at the root cause. Include the following instruction verbatim in the prompt body:
-   ```
-   Before fixing, validate every finding's `location` field. If the file no longer exists at HEAD (e.g. it was deleted in a prior fix iteration), drop that finding and note it in `payload.dropped_findings: [{ rule, location, reason: 'file_deleted' }]`. Do NOT attempt to fix findings against non-existent files.
-   ```
-3. **Task entry (YAML)** — the entire YAML entry for the task as it appears in `epic-{id}-tasks.yaml`. Include `id`, `slug`, `title`, `status`, `domain_scenarios`, `atdd_spec`, `acceptance`, `notes`, and any other fields present.
-4. **All prior phase files** — for every `NN-*.json` in `.claude/runs/{epic_id}/{task_id}/` (including `05a`, `05b` if present), paste the content verbatim under headers `--- Prior phase: 01-plan.json ---`, `--- Prior phase: 02-impl.json ---`, `--- Prior phase: 03-verify.json ---`, `--- Prior phase: 04-review.json ---`, `--- Prior phase: 05a-feedback-impl.json ---`, etc. Order by numeric prefix ascending, then letter. The subagent must understand the full task history before fixing.
-5. **Verbatim ruleset SUBSET** — inject the per-task subset via `scripts/inject-ruleset.sh --rules <comma-separated-slugs>` where slugs = the planner's `01-plan.json.payload.rules_in_scope` for this task ∪ the mandatory core `{architecture, testing, code-style, git-workflow}`. Capture the script's stdout via the Bash tool and inline it verbatim into the feedback-implementer's prompt. The script honours the subset filter and always includes the mandatory core. Mirrors `/002-implement` exactly: feedback fixes work under the same rule scope as the original implementation. Do not summarise, do not omit any rule in the subset. The remaining rules outside the subset are the reviewer's concern.
-6. **`stack.yaml.extras`** — paste the `extras` mapping verbatim under a header `--- stack.yaml.extras ---`. Escape hatch for stack-specific quirks (e.g. `bash_buffering_warning`, `user_ping_interval_minutes`).
-7. **Output contract** — instruct the subagent to write its result to `.claude/runs/{epic_id}/{task_id}/05<letter>-feedback-impl.json`, validated against `schemas/run-phase.schema.json`. The top-level `status` field must be one of `ok`, `blocked`. Required `payload` keys vary by status:
-   - `ok` → `commit_shas` (array, one or few), `files_changed`, `findings_addressed` (array of finding ids from the failing phase artifact).
-   - `blocked` → `reason` (prose), `next` (one of `resplit`, `loop-limit`, `user-decision`), optional `suggested_follow_up`.
+Do NOT proceed without a non-empty feedback string. Record the feedback verbatim for the audit trail.
 
-The feedback-implementer is expected to:
+## Step 1 — Clarify and research
 
-- Read `payload.findings[]` from the failing phase artifact and address **each** at the root cause. **Zero tolerance** — every Finding blocks DoD; the subagent does not argue with Findings, it fixes them. Exception: if a Finding's `location` points at a file that no longer exists at `HEAD` (e.g. deleted in a prior fix iteration), drop that Finding and record it under `payload.dropped_findings: [{ rule, location, reason: 'file_deleted' }]`. Never attempt to fix Findings against non-existent files.
-- **Never silently expand scope.** If a Finding requires reverting an architectural choice from the plan (`01-plan.json`) — e.g. dropping an aggregate boundary, changing the chosen pattern, removing a contract — the subagent emits `status: "blocked"` with `next: "resplit"` and a `payload.reason` explaining why. The fix is not attempted; control returns to `/001-plan --resplit`.
-- Make **one or a few commits** on the task branch (never amend, never force-push). Commit messages follow Conventional Commits with a `fix(T-NNN):` or `refactor(T-NNN):` prefix per `.claude/ruleset/git-workflow.md`.
-<!-- FREEZE:IF require_signed_commits -->
-- Sign every commit (`git commit -S`) — `require_signed_commits: true` in the `git-workflow.md` toggle block.
-<!-- FREEZE:ELSE -->
-- Do not sign commits — `require_signed_commits: false` in the `git-workflow.md` toggle block.
-<!-- FREEZE:ENDIF -->
-- Write the final artifact `05<letter>-feedback-impl.json` with a top-level `status` field: `ok` or `blocked`.
+1. Read the epic definition: PRD epic section for `$1` (search `PRD.md` for the matching epic-id) and the task breakdown `docs/planning/epic-$1-tasks.yaml`.
+2. Read the relevant ruleset files in `.claude/ruleset/` that the feedback touches (e.g. if it is UI feedback, pull the UI-relevant rules; if it is data/contract, pull architecture/testing). Do not re-state their content — read them so the new task entries land in the right scope.
+3. Read the affected source files, test files, and any design documentation referenced by the feedback so you can describe what changes.
+4. **If the feedback is ambiguous or admits multiple reasonable interpretations, call `AskUserQuestion` to clarify before proceeding.** Do not assume. If the user said "fix import", ask what specifically is wrong with import.
+5. Summarise your understanding of the feedback and the proposed approach — which tasks you will add, which existing tasks they depend on, and what the acceptance shape will look like. Confirm with the user before moving to Step 2.
 
-### Phase 2 — Read feedback-implementer output
+IMPORTANT: Do not modify `PRD.md` without explicit user approval. If the feedback implies a PRD change (new business scenario, scope revision), ask explicitly.
 
-Parse `.claude/runs/{epic_id}/{task_id}/05<letter>-feedback-impl.json` and validate it against `schemas/run-phase.schema.json`. If validation fails, halt with the artifact path and the validator error.
+## Step 2 — Plan new tasks
 
-Branch on `status`:
+Once the feedback is understood and the user has confirmed the approach, **append** new task entries to `docs/planning/epic-$1-tasks.yaml`.
 
-- **`status: "ok"`** — the subagent claims every Finding has been addressed. **Trust nothing; re-verify.** Auto-invoke `/003-verify-dod $ARGUMENTS`. The verifier writes a fresh `03-verify.json`, **overwriting** any prior failing one (the prior is preserved in git history of the runs dir only if it was committed elsewhere — runs are gitignored, so prior failing verifies are intentionally transient). Read the new `03-verify.json` and branch:
+- **Append-only.** New tasks land after existing tasks. **Never renumber existing tasks. Never modify tasks already marked `done`.** Tasks in `pending`, `in_progress`, or `blocked` from prior cycles also remain untouched unless the user has explicitly approved a change.
+- Each new task follows the same schema as existing entries: `id`, `title`, `story` (where applicable), `status: pending`, `description`, `acceptance_criteria`, `files`, `depends_on`, `effort`.
+- Every new task that produces user-observable behaviour MUST have at least one acceptance criterion expressed as an end-to-end action → outcome → assertion (the ATDD spine — exact form depends on the stack's E2E framework; `/002-implement` injects the per-stack flavour).
+- Mark `depends_on` on existing tasks where applicable.
+- Update the summary section (`total_tasks`, `by_status`, `by_effort`).
+- **Record the IDs of every new task created in this round** — `new_task_ids`. These IDs scope Steps 3, 4, and 5. Tasks done before this feedback cycle are NOT re-implemented or re-reviewed by /005.
 
-  - **Verify pass** — continue:
-    - If the failing phase that originally triggered this command was `03-verify.json`, the chain is now complete from this command's perspective. If invoked **chained**, return control to the parent (`/002-implement` or `/002-auto-implement`); the parent reads `05<letter>-feedback-impl.json` and the fresh `03-verify.json` and decides whether to invoke `/004-code-review`. If invoked **standalone**, print: `Verify now passes for <task-id>. Run /004-code-review <task-id> to gate the diff, or /006-merge <task-id> if review is disabled by toggle.`
-    - If the failing phase was `04-review.json`, auto-invoke `/004-code-review $ARGUMENTS`. Read the new `04-review.json`:
-      - **Review pass** → the chain is complete. Print: `Task <task-id> chain complete. Suggest: /006-merge <task-id>.` Do **not** auto-invoke `/006-merge` — merge is always user-triggered.
+Emit the planning artifact:
 
-        On review-pass (no findings in `04-review.json`): branch on the `MODE` captured at Phase 0 (see "Detect chained vs standalone invocation via env marker `CRUMBS_PARENT_COMMAND`"). If `MODE=chained` (parent set `CRUMBS_PARENT_COMMAND` to `002-implement` or `002-auto-implement`), return to the calling command which proceeds to `/006-merge` proposal. If `MODE=standalone` (env var unset or empty), print `Feedback implemented. No further findings. Run /006-merge when ready.` and exit.
+- **Path:** `.claude/runs/{epic_id}/_feedback/{round_id}/05a-plan.json`
+- **`round_id`** is a monotonically-increasing identifier for the feedback round. Compute it as: list existing subdirectories under `.claude/runs/{epic_id}/_feedback/`; if none exist, `round_id = 001`; otherwise take the highest numeric prefix and increment. (Equivalent timestamp form `YYYYMMDDTHHMMSS` is acceptable when monotonicity is preserved; pick one form per project and stay consistent.) Multiple feedback rounds therefore accumulate as sibling directories `_feedback/001/`, `_feedback/002/`, ...
+- **Payload:** the verbatim feedback string, the clarified interpretation, the list of new task IDs with titles, and any cross-references to existing tasks or PRD sections touched.
 
-        **Detection method (chained vs standalone).** The env-marker check at Phase 0 is the **only** mechanism. Parent commands (`/002-implement` Phase 4/5 dispatch and `/002-auto-implement` Phase 1 Step 4/6 dispatch) MUST `export CRUMBS_PARENT_COMMAND=<their-slug>` before invoking `/005-implement-feedback` and `unset CRUMBS_PARENT_COMMAND` immediately after the invocation returns. Do not infer from filesystem state — after `/004-code-review` writes `04-review.json`, the heuristic "is `02-impl.json` the most recently written non-`05*` file" always returns false, which would falsely report standalone. The iteration counter (see "Iteration tracking") stays filesystem-derived; the chained-vs-standalone detection is env-derived.
-      - **Review fail** → recurse: invoke `/005-implement-feedback <task-id>` again. The iteration counter increments (`05a` → `05b` → `05c`). The next invocation's Phase 0 enforces the hard cap.
+## Step 3 — Implement (strict ATDD-E2E)
 
-  - **Verify fail** — recurse: invoke `/005-implement-feedback <task-id>` again. The iteration counter increments. The next invocation's Phase 0 enforces the hard cap.
+Implement **only the new tasks recorded as `new_task_ids` in Step 2**, by delegating to `/002-implement` semantics scoped to those IDs. Do NOT re-implement done tasks. Do NOT redefine the implementation protocol here — `/002-implement` owns the per-task loop.
 
-- **`status: "blocked"`** with `payload.next: "resplit"` — the subagent declared the task needs resplit because a Finding requires reverting an architectural choice. Halt. Print:
-  ```
-  feedback-implementer requests resplit for <task-id>.
-  Reason: <payload.reason>
-  Suggest: /001-plan --resplit <task-id>
-  ```
-  Leave task `status: in_progress`. The user invokes `/001-plan --resplit` to decompose the task into smaller ones. Do not advance the chain.
+For each new task, in dependency order:
 
-- **`status: "blocked"`** with `payload.next: "loop-limit"` — the subagent itself detected loop limit before this command's Phase 0 did (e.g. partial run, race). Halt and surface the message to the user verbatim. Leave task `status: in_progress`.
+1. **Phase 1.5 plan checkpoint** — the implementer subagent presents its plan first; the user approves, requests iteration, or cancels. (T-002 adds this checkpoint to `/002-implement`.)
+2. **Phase 2 TDD execution** — RED → GREEN → REFACTOR scoped to that task, with the per-stack gate stack run to exit 0.
+3. **Mark the task `status: done`** in `epic-$1-tasks.yaml` only after its acceptance criteria pass and the gates exit clean.
 
-- **`status: "blocked"`** with `payload.next: "user-decision"` — the subagent hit a blocker requiring an external decision (missing dependency, ambiguous Finding, infra not available). Print `payload.reason` and the suggested follow-up if present. Leave task `status: in_progress`.
+Tasks done before this feedback cycle are out of scope and MUST NOT be re-implemented.
 
-## Iteration tracking
+Emit the impl artifact: `.claude/runs/{epic_id}/_feedback/{round_id}/05b-impl.json` — either emitted directly by this command after Step 3 completes, or delegated to `/002-implement` to write under this path (preferred when `/002-implement` accepts a feedback-round-id parameter). The artifact summarises per-task: id, title, commit shas, final status (`done` or `blocked`).
 
-- **File naming**: the first iteration writes `05a-feedback-impl.json`, the second `05b-feedback-impl.json`, the third `05c-feedback-impl.json`. The command counts existing `05*` files at Phase 0 to determine the next letter.
-- **Cap**: 3 iterations per task. `05c` is the last attempt. After `05c` produces another verify or review fail, the **next** invocation of this command halts at Phase 0 and refuses to dispatch a 4th feedback subagent.
-- **Append-only**: feedback artifacts are never overwritten or renumbered. If `05a` already exists, the next run writes `05b`; it does not replace `05a`.
-- **Counter scope**: the counter is per-task, not per-gate. Three rounds total across verify and review combined — not three per gate. This is consistent with the cap enforced by `/002-implement` Phase 4/5.
-- **Why three?** Empirically: round 1 fixes the obvious surface Findings; round 2 catches second-order effects from the round-1 patch; round 3 is the last honest attempt before the diagnosis itself is suspect. After three rounds the bottleneck is almost certainly upstream — wrong plan, wrong scenario decomposition, or wrong rule — and the right move is `/001-plan --resplit`, not another fix.
-- **What "consecutive" means**: this command's cap counts feedback artifacts in the task's runs directory regardless of whether the most recent verify/review was triggered by chained orchestration or standalone invocation. The counter is purely filesystem-derived, so it stays accurate across parent restarts. (Chained-vs-standalone **mode** is a separate concern, detected via the `CRUMBS_PARENT_COMMAND` env marker — see Phase 0. The counter does not depend on mode; mode only affects the success-path print decision in Phase 2.)
+## Step 4 — Verify Definition of Done
 
-## Discipline
+Run `/003-verify-dod` semantics **scoped to the new task IDs from Step 2**. Do NOT redefine the audit protocol — `/003-verify-dod` owns the per-task DoD check, the gate stack, and the self-heal Phase 2/3 loop (T-003 makes `/003` self-healing internally; `/005` simply waits for it to settle).
 
-- **The feedback loop does NOT bypass gates.** Every Finding from `/003` or `/004` blocks DoD. The feedback-implementer addresses them; it never overrides, downgrades, or rationalises them away. There are no severity tiers.
-- **Never silently expand scope.** If addressing a Finding would require reverting an architectural choice from `01-plan.json`, the subagent emits `status: "blocked"` with `next: "resplit"`. Scope expansion goes through `/001-plan --resplit`, not through a feedback round.
-- **Append-only commits.** The subagent makes one or a few commits stacked on top of the implementer's commit. **Never amend.** **Never force-push.** History cleanup (squash) is a `/006-merge` concern, governed by `.claude/ruleset/git-workflow.md`.
-- **Read all prior phase files.** The subagent must understand the full task history (plan → impl → verify/review → earlier feedback rounds) before fixing. Skipping context is how regressions are introduced.
-- **Filesystem-only subagent comms.** The main thread reads `05<letter>-feedback-impl.json` after the subagent returns. Ruleset content is verbatim-injected into the prompt body, never via `@`-include (per CONTEXT.md "Ruleset injection").
-<!-- FREEZE:IF require_signed_commits -->
-- **Signed commits required.** `require_signed_commits: true` in `git-workflow.md` — every feedback commit MUST be signed (`git commit -S`).
-<!-- FREEZE:ELSE -->
-- **Signed commits not required.** `require_signed_commits: false` in `git-workflow.md` — feedback commits are unsigned by default.
-<!-- FREEZE:ENDIF -->
-- **Task `status` stays `in_progress`.** This command never flips `status` to `done` or back to `pending`. Those transitions are owned by `/002-implement` Phase 6 (`done`) and `/001-plan --resplit` (`pending`). On any hard halt, the task stays `in_progress` and the user is told what to do next.
+Zero tolerance applies: per-task verdict must be `done`; every gate exits 0. Do NOT dismiss failures as "pre-existing", "flaky", or "unrelated".
 
-## Standalone vs chained
+Emit the verify artifact: `.claude/runs/{epic_id}/_feedback/{round_id}/05c-verify.json` — either emitted by this command summarising the per-task verify outcomes, or delegated to `/003-verify-dod` to write under this path. Contents: per-new-task verdict (`done` or `fail`), aggregate verdict, references to any heal iterations inside `/003`.
 
-Detection is via the env marker `CRUMBS_PARENT_COMMAND` (see Phase 0). Parents set it before dispatch and unset it after; this command reads it once at Phase 0 and stores the result as `MODE`.
+## Step 5 — Code review
 
-- **Chained** (auto-invoked by `/002-implement` or `/002-auto-implement` on verify or review fail; `CRUMBS_PARENT_COMMAND` is set): the parent reads `05<letter>-feedback-impl.json` and continues the chain. The parent owns the overall iteration cap for the task; this command's Phase 0 cap is the safety net for standalone invocation and for parent miscounts.
-- **Standalone** (user-typed; `CRUMBS_PARENT_COMMAND` unset or empty): same workflow; just no parent chain to advance. After Phase 2 success, this command prints a one-liner suggesting the next step (`/004-code-review` if the failing phase was verify; `/006-merge` if review). It does not chain further than the auto-invoked `/003` and `/004` runs needed to confirm the fix.
+Run `/004-code-review` semantics on the **uncommitted diff** (or the branch diff, per the project's branch policy) produced by the new tasks from Step 3. Do NOT redefine the review protocol — `/004-code-review` owns the reviewer subagent, the verbatim ruleset injection, the severity policy, and the self-heal Phase 2/3 loop (T-004 makes `/004` self-healing internally).
 
-## Resplit handoff (`next: "resplit"`)
+Emit the review artifact: `.claude/runs/{epic_id}/_feedback/{round_id}/05d-review.json` — either emitted by this command, or delegated to `/004-code-review` to write under this path. Contents: per-finding outcome, aggregate verdict (`pass` or `fail`), references to any heal iterations inside `/004`.
 
-The `resplit` signal is the feedback loop's pressure-release valve. It exists because some Findings cannot be honestly fixed without violating the plan recorded in `01-plan.json`. Examples:
+## Step 6 — Gatekeeper audit (strict subagent)
 
-- A Finding from `/004-code-review` says the chosen aggregate boundary leaks domain state into infrastructure. The fix is to redraw the boundary, which would invalidate the task's `domain_scenarios` mapping.
-- A Finding from `/003-verify-dod` says the implemented contract drifts from the Business scenario. The drift is structural — the scenario itself needs to be re-decomposed.
-- A Finding requires changing the pattern (e.g. repository → event-sourced) chosen during planning. This is not a fix; it is a resplit.
+**MANDATORY** before reporting to the user. Launch a dedicated audit subagent via the `Task` tool with `subagent_type: general-purpose`. The gatekeeper does NOT re-run gates — it audits your draft completion report against the actual artifact contents to catch any rationalised-away failures, missed steps, or scope drift.
 
-In all such cases the feedback-implementer emits `status: "blocked"` with `next: "resplit"` and a precise `payload.reason` pointing at the conflicting plan element. The main thread halts and prints the resplit suggestion. The user invokes `/001-plan --resplit <task-id>` which replaces the offending task with smaller ones linked to the same Business scenarios. The old task is archived to `runs-archive/`. The new tasks each begin their own `/002-implement` cycle.
+Pass the subagent: the draft completion report you intend to send to the user, plus this prompt verbatim:
 
-This guard is the reason the feedback loop is bounded and honest. Silent scope expansion (fixing the Finding by quietly rewriting the plan) would invalidate every downstream artifact and destroy the audit trail.
+> You are a strict audit gatekeeper for an epic-level user-feedback round on epic **$1**. Review the completion report below against a zero-tolerance bar. You may read the artifacts in `.claude/runs/{epic_id}/_feedback/{round_id}/` directly (`05a-plan.json`, `05b-impl.json`, `05c-verify.json`, `05d-review.json`).
+>
+> **Audit checklist (every item must hold):**
+> 1. Was feedback gathered (Step 0) and clarified (Step 1) with user confirmation before any task was planned?
+> 2. Are the new tasks present in `epic-{id}-tasks.yaml` as appended entries (not replacements), with full schema (id, title, status, description, acceptance_criteria, files, depends_on, effort)? Were any existing `done` tasks modified? Modifying a done task is a **FAIL**.
+> 3. Were ALL new tasks implemented via `/002-implement` semantics including the Phase 1.5 plan checkpoint, then driven through the per-stack gate stack to exit 0?
+> 4. Did `/003-verify-dod` reach `done` verdict for every new task (Step 4)? Pull the raw numbers from `05c-verify.json`.
+> 5. Did `/004-code-review` reach `pass` for the uncommitted diff (Step 5)? Pull the raw numbers from `05d-review.json`.
+> 6. Does the report dismiss, rationalise, or explain away ANY failure using phrases like "pre-existing", "flaky", "timing", "unrelated", or "not caused by our changes"? If so → **FAIL**. Zero tolerance is zero tolerance.
+> 7. Are tasks marked `done` before this feedback cycle untouched in implementation and review scope?
+>
+> **VERDICT: PASS or FAIL.** If FAIL, list exactly what was missed or rationalised away, and what must be fixed before COMPLETE.
+
+If the gatekeeper returns `FAIL`, fix every identified issue (which may mean looping back into Step 3, 4, or 5) and re-launch the gatekeeper. Loop until `PASS`. Do NOT report COMPLETE to the user before the gatekeeper passes.
+
+Emit the gatekeeper artifact: `.claude/runs/{epic_id}/_feedback/{round_id}/05e-gatekeeper.json` — contents: verdict (`PASS` or `FAIL`), list of audit items with per-item pass/fail, references to the artifacts the gatekeeper consulted, and (on FAIL) the precise required fixes.
+
+## Completion
+
+Report to the user:
+
+1. **Feedback summary** — the verbatim feedback string and the clarified interpretation.
+2. **New tasks** — IDs and titles of the tasks appended in Step 2.
+3. **Implementation** — per-new-task status (`done` or `blocked`) and commit shas.
+4. **DoD result** — aggregate verdict from `/003` scoped to new tasks.
+5. **Review result** — aggregate verdict from `/004` on the uncommitted diff.
+6. **Gatekeeper verdict** — `PASS` or `FAIL` (must be `PASS` to claim COMPLETE).
+7. **Final status:** **COMPLETE** (every new task done, `/003` clean, `/004` clean, gatekeeper PASS) or **NEEDS_ATTENTION** (with the precise blocker and the artifact path that documents it).
+
+## Artifacts
+
+All artifacts for a single feedback round live under `.claude/runs/{epic_id}/_feedback/{round_id}/`:
+
+| File | Step | Owner |
+|---|---|---|
+| `05a-plan.json` | Step 2 | `/005-implement-feedback` |
+| `05b-impl.json` | Step 3 | `/005` summary, or `/002-implement` delegate |
+| `05c-verify.json` | Step 4 | `/005` summary, or `/003-verify-dod` delegate |
+| `05d-review.json` | Step 5 | `/005` summary, or `/004-code-review` delegate |
+| `05e-gatekeeper.json` | Step 6 | `/005-implement-feedback` |
+
+Multiple feedback rounds accumulate as sibling subdirectories `_feedback/001/`, `_feedback/002/`, ..., one per `/005` invocation against the same epic. No artifact is ever overwritten or renumbered across rounds — the audit trail is append-only across rounds as well as within a round.
 
 ## Failure modes
 
-- **Task not found** → abort at Phase 0 with the path and id.
-- **Task not `in_progress`** → abort at Phase 0 with the specific message.
-- **No failing phase artifact** → abort at Phase 0 with: `No failing phase to address. Run /003-verify-dod or /004-code-review first.`
-- **3 iterations exhausted** → halt at Phase 0 with the escalation message; leave task `status: in_progress`.
-- **Subagent emits `next: "resplit"`** → halt at Phase 2 with the resplit suggestion; leave task `status: in_progress`.
-- **Subagent emits `next: "loop-limit"` or `next: "user-decision"`** → halt at Phase 2; surface the message verbatim; leave task `status: in_progress`.
-- **Subagent crashes or schema validation fails** on `05<letter>-feedback-impl.json` → halt with the artifact path and the validator error. Do not retry silently.
-- **Ruleset directory missing or incomplete** → abort at Phase 0; list the missing files.
-- **`stack.yaml` missing** → abort at Phase 0 pointing at `/000-prd-refine`.
+- **Epic not found** — `docs/planning/epic-$1-tasks.yaml` is absent → abort at Step 1 with: `Epic $1 not found. Run /001-plan to plan the epic first.`
+- **Empty feedback string** — `$2` empty and the interactive prompt also returns empty → abort at Step 0; do not proceed.
+- **User does not confirm Step 1 summary** — abort at Step 1; do not write any task entries.
+- **Existing `done` task modified during Step 2** — abort with: `Step 2 must not modify done tasks. Revert and re-plan.` (The gatekeeper also catches this in Step 6 as a FAIL.)
+- **`/003-verify-dod` final verdict is `fail`** (after its own self-heal exhausted) — surface verbatim, leave new tasks `in_progress` for the offenders, final status `NEEDS_ATTENTION`.
+- **`/004-code-review` final verdict is `fail`** (after its own self-heal exhausted) — surface verbatim, final status `NEEDS_ATTENTION`.
+- **Gatekeeper returns FAIL after the loop bound is reached** — surface every audit item that failed; final status `NEEDS_ATTENTION`; never report COMPLETE.
 
 ## Vocabulary discipline
 
-Mirror `CONTEXT.md` exactly. Use only these terms when communicating with the user or writing artifacts:
+Mirror `CONTEXT.md` exactly:
 
-- **Finding** — any violation surfaced by `/003-verify-dod` or `/004-code-review`. Never use "issue", "blocker", "non-blocker", "critical/major/minor". Findings have no severity tiers.
-- **Status** — `pending | in_progress | blocked | done`. Never `todo`, `wip`, `complete`, `partial`. This command operates only on `in_progress` tasks and never transitions `status`.
-- **Zero tolerance** — every Finding blocks DoD; every gate exit code `!= 0` blocks; every rule violation blocks. The feedback loop addresses Findings; it never argues with them.
+- **Finding** — any violation surfaced by `/003-verify-dod` or `/004-code-review`. No severity tiers.
+- **Status** — `pending | in_progress | blocked | done`. Never `todo`, `wip`, `complete`, `partial`.
+- **Zero tolerance** — every Finding blocks DoD; every gate exit code `!= 0` blocks; every rule violation blocks. The feedback round addresses Findings by planning and implementing real tasks, never by arguing with them.
 
-Do not introduce synonyms. If you find yourself reaching for one, re-read the relevant CONTEXT.md entry.
-
-## Subagent chain summary
-
-```
-/005-implement-feedback <task-id>
-   |
-   ├─ Phase 0  pre-flight (locate failing phase; count 05* files; enforce cap)
-   ├─ Phase 1  feedback-implementer subagent → 05<letter>-feedback-impl.json
-   │            (reads all prior phase files; addresses every Finding at root cause)
-   └─ Phase 2  branch on status:
-                ok          → auto-invoke /003-verify-dod
-                              ├─ pass + failing was 03 → return to parent / suggest /004
-                              ├─ pass + failing was 04 → auto-invoke /004-code-review
-                              │     ├─ pass → suggest /006-merge
-                              │     └─ fail → recurse (counter +1)
-                              └─ fail → recurse (counter +1)
-                blocked resplit          → halt; suggest /001-plan --resplit
-                blocked loop-limit       → halt; surface verbatim
-                blocked user-decision    → halt; surface verbatim
-```
-
-The feedback-implementer subagent lives in `<plugin-root>/agents/feedback-implementer.md` (plugin-owned, not project-owned). The chain is iterative: `verifier` / `reviewer` → `feedback-implementer` → back to `verifier`. This command owns one feedback round's traversal of that loop; the iteration counter (`05a`, `05b`, `05c`) bounds the loop at three rounds per task.
-
-## Worked example
-
-Given task `T-014` belonging to epic `E-003`, `/004-code-review` just reported one Finding (`missing aria-label per accessibility.md`) and wrote `04-review.json` with `status: "fail"`:
-
-1. **Phase 0** — `/005-implement-feedback T-014` locates `docs/planning/epic-003-tasks.yaml`, confirms `T-014.status = in_progress`. Enumerates `.claude/runs/E-003/T-014/`: finds `01-plan.json`, `02-impl.json`, `03-verify.json` (status `ok`), `04-review.json` (status `fail`). Picks `04-review.json` as `failing_phase_path`. Counts `05*` files: 0 → next iteration is `05a`.
-2. **Phase 1** — `feedback-implementer` subagent receives task YAML, `04-review.json` content (with the one Finding), all prior phase files, all 18 ruleset files verbatim, and `stack.yaml.extras`. It adds the `aria-label` per `accessibility.md`, commits with `fix(T-014): add aria-label to cancel button`, and writes `05a-feedback-impl.json` with `status: ok`, `findings_addressed: ["F-001"]`.
-3. **Phase 2** — Main thread auto-invokes `/003-verify-dod T-014`. Verify passes. The original failing phase was `04-review.json`, so main thread auto-invokes `/004-code-review T-014`. Review passes. Print: `Task T-014 chain complete. Suggest: /006-merge T-014.`
-
-Total feedback iterations: 1 of 3 allowed. Had the subagent's fix introduced a new Finding, the counter would have advanced to `05b` on the next round.
+Do not introduce synonyms.

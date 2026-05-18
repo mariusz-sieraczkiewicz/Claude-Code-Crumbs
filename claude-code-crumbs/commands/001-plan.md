@@ -92,7 +92,7 @@ Print a tight summary:
 - Business scenario count
 - Task count
 - File paths written (`docs/planning/epics.yaml`, `docs/planning/epic-{id}-tasks.yaml`, `runs/{epic_id}/01-plan.json`, `docs/planning/SCENARIOS.md`)
-- Next-step suggestion: `/002-implement T-001` for single-task execution, or `/002-auto-implement E-NNN` for batch implementation across the whole epic.
+- Next-step suggestion: `/002-implement T-001` for single-task execution.
 
 ## Workflow (Re-split mode)
 

@@ -290,7 +290,7 @@ Base:  <base_branch>
 ```
 
 Then a next-step hint:
-- If more pending tasks remain in the epic → suggest `/002-implement T-NNN` or `/002-auto-implement E-NNN`.
+- If more pending tasks remain in the epic → suggest `/002-implement T-NNN`.
 - If this was the last task in the epic → suggest `/003-verify-dod T-LAST --epic-close` to run ATDD specs, then `/007-promote` if `stack.yaml.promote` is configured.
 <!-- FREEZE:ENDIF -->
 

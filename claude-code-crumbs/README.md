@@ -48,10 +48,9 @@ Reads the `E-001` section of `PRD.md`, dispatches the `planner` subagent, writes
 
 ```bash
 /002-implement T-001            # single task, interactive
-/002-auto-implement E-001       # whole epic, hands-off
 ```
 
-`/002-implement` is the single-task TDD orchestrator: new branch, `implementer` subagent, auto-chain to `/003-verify-dod` and `/004-code-review`, propose `/006-merge` on clean. `/002-auto-implement` is the batch counterpart: it iterates every `pending` task in the epic, runs the full chain per task, and never edits code itself.
+`/002-implement` is the single-task TDD orchestrator: new branch, `implementer` subagent, auto-chain to `/003-verify-dod` and `/004-code-review`, propose `/006-merge` on clean.
 
 ## Commands
 
@@ -60,7 +59,6 @@ Reads the `E-001` section of `PRD.md`, dispatches the `planner` subagent, writes
 | `/000-prd-refine`           | Bootstrap a project (State A) or refine PRD / add-edit epics (State B/C). Single context-aware product-level command. |
 | `/001-plan`                 | Decompose an epic into tasks and author Business scenarios. Reads PRD per-epic section as the brief.      |
 | `/002-implement`            | Single-task TDD orchestrator. New branch, implementer subagent, auto-invokes verify+review, proposes merge on clean. |
-| `/002-auto-implement`       | Epic-level batch orchestrator. Runs the full /002 → /003 → /004 → /005 chain per task in an epic. Each step is a dedicated subagent. |
 | `/003-verify-dod`           | Run every DoD gate from stack.yaml.gates via the verifier subagent. Zero tolerance. Standalone-invokable or chained from /002-implement. |
 | `/004-code-review`          | Code-review gate. Reviewer subagent reads verbatim-injected ruleset + branch diff and emits blocking findings. Zero tolerance. |
 | `/005-implement-feedback`   | Address findings from /003 or /004 via the feedback-implementer subagent. Loops back to verify. Caps at 3 iterations. |

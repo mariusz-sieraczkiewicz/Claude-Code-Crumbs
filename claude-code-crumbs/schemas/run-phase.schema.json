@@ -64,7 +64,7 @@
         "rule": { "type": "string" },
         "severity": {
           "type": "string",
-          "enum": ["blocker"]
+          "enum": ["blocker", "Critical", "High", "Medium", "Low"]
         },
         "location": { "type": "string" },
         "message": { "type": "string" },

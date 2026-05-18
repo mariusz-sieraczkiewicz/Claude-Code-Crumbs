@@ -60,7 +60,6 @@ A single, shared **Step library** maps Business scenario verbs to executable act
 | `/000-prd-refine` | Context-aware product-level definition. Bootstraps project on first invocation; adds/edits epics afterwards. Builds `CONTEXT.md` glossary inline; offers ADRs at trade-off decisions. | (interactive, no dedicated subagent) |
 | `/001-plan` | Epic decomposition + Business scenario authoring. Reads PRD per-epic section as the brief source; grills user when underspecified. Re-split mode handles "task too big" callbacks. | `planner` |
 | `/002-implement` | Single-task TDD orchestrator. New branch → Domain-test RED → code GREEN → REFACTOR → write ATDD spec → commit → auto-invoke `/003` then `/004` (toggleable via `git-workflow.md`) → propose MR/PR on clean review. | `implementer` |
-| `/002-auto-implement` | Epic-level batch orchestrator. Runs `/002 → /003 → /004 → /005` for every pending task in an epic. Each step runs as a dedicated subagent. | spawns the chain |
 | `/003-verify-dod` | DoD gate. Runs all `stack.yaml.gates`. Zero tolerance. Standalone-invokable. | `verifier` |
 | `/004-code-review` | Review gate. Reads ruleset/* verbatim-injected. Zero tolerance. Standalone-invokable. | `reviewer` |
 | `/005-implement-feedback` | Reads `/003` and `/004` findings; fixes implementation; loops back to `verifier`. | `feedback-implementer` |

@@ -475,5 +475,154 @@ if [ "$rc" -ne 4 ]; then
 fi
 grep -q "another freeze" "$WORK/lock.log" || fail "missing 'another freeze' in stderr"
 
+# -----------------------------------------------------------------------------
+# Tests 17-19: real-command FREEZE toggle pairs introduced by T-003 / T-004.
+#
+# Drive the actual /003-verify-dod.md and /004-code-review.md command files
+# (under crumbs commands/) through freeze with the new self-heal toggles set
+# both ways, and assert the frozen output picks the right branch.
+#
+# These tests cover the toggles `auto_fix_on_verify_fail` (003) and
+# `auto_fix_on_review_fail` (004) added by the epic-restore-flow rewrites.
+# -----------------------------------------------------------------------------
+
+REAL_CMD_DIR="$SCRIPT_DIR/../commands"
+[ -f "$REAL_CMD_DIR/003-verify-dod.md" ] || fail "real 003-verify-dod.md not found at $REAL_CMD_DIR"
+[ -f "$REAL_CMD_DIR/004-code-review.md" ] || fail "real 004-code-review.md not found at $REAL_CMD_DIR"
+
+# Helper: rewrite the toggle block in git-workflow.md, copy a real command
+# into the plugin tree, run freeze, and return path to the frozen file.
+#
+# $1 = real command basename (e.g. 003-verify-dod.md)
+# $2 = path to a tmp git-workflow.md body (full file, will replace ruleset copy)
+# $3 = output log path
+run_real_freeze() {
+    local cmd_base="$1" gw_body="$2" logf="$3"
+    "$FREEZE" --reset --force > /dev/null 2>&1 || true
+    rm -f "$WORK/plugin/commands"/*.md
+    cp "$REAL_CMD_DIR/$cmd_base" "$WORK/plugin/commands/$cmd_base"
+    cp "$gw_body" "$WORK/proj/.claude/ruleset/git-workflow.md"
+    "$FREEZE" --force --plugin-root="$WORK/plugin" > "$logf" 2>&1 \
+        || { cat "$logf"; fail "freeze failed for $cmd_base"; }
+}
+
+# Stash current plugin commands so we can restore at the end (rest of the
+# suite already passed; tests below rebuild from scratch).
+STASH_DIR="$WORK/stash"
+mkdir -p "$STASH_DIR"
+cp "$WORK/plugin/commands"/*.md "$STASH_DIR/" 2>/dev/null || true
+
+# Stash original git-workflow.md so we can restore.
+cp "$WORK/proj/.claude/ruleset/git-workflow.md" "$WORK/proj/.claude/ruleset/git-workflow.md.case17bak"
+
+# -----------------------------------------------------------------------------
+# Test 17: /003-verify-dod.md with auto_fix_on_verify_fail: true
+#   → frozen output MUST include the self-heal Phase 2 dispatch text.
+#   → frozen output MUST NOT include the read-only Phase 2 text.
+# -----------------------------------------------------------------------------
+cat > "$WORK/gw-fix-on.md" <<'EOF'
+# Git Workflow
+
+```yaml
+pr_required: true
+allow_commit_to_main: false
+auto_invoke_review: true
+auto_fix_on_verify_fail: true
+auto_fix_on_review_fail: true
+```
+EOF
+run_real_freeze "003-verify-dod.md" "$WORK/gw-fix-on.md" "$WORK/case17.log"
+OUT17="$WORK/proj/.claude/commands/003-verify-dod.md"
+[ -f "$OUT17" ] || fail "case 17: frozen 003-verify-dod.md not written"
+if ! grep -q 'Phase 2 — Dispatch feedback-implementer' "$OUT17"; then
+    echo "FAIL: case 17 — missing self-heal Phase 2 heading in frozen 003"
+    grep -n 'Phase 2' "$OUT17" || true
+    exit 1
+fi
+if grep -q 'Phase 2 — Read result (read-only)' "$OUT17"; then
+    echo "FAIL: case 17 — read-only Phase 2 heading leaked into self-heal-on frozen 003"
+    exit 1
+fi
+if grep -q 'FREEZE:' "$OUT17"; then
+    fail "case 17: frozen 003 still contains FREEZE markers"
+fi
+
+# -----------------------------------------------------------------------------
+# Test 18: /003-verify-dod.md with auto_fix_on_verify_fail: false
+#   → frozen output MUST include the read-only Phase 2 text.
+#   → frozen output MUST NOT include the self-heal Phase 2 dispatch text.
+# -----------------------------------------------------------------------------
+cat > "$WORK/gw-fix-off.md" <<'EOF'
+# Git Workflow
+
+```yaml
+pr_required: true
+allow_commit_to_main: false
+auto_invoke_review: true
+auto_fix_on_verify_fail: false
+auto_fix_on_review_fail: false
+```
+EOF
+run_real_freeze "003-verify-dod.md" "$WORK/gw-fix-off.md" "$WORK/case18.log"
+OUT18="$WORK/proj/.claude/commands/003-verify-dod.md"
+[ -f "$OUT18" ] || fail "case 18: frozen 003-verify-dod.md not written"
+if ! grep -q 'Phase 2 — Read result (read-only)' "$OUT18"; then
+    echo "FAIL: case 18 — missing read-only Phase 2 heading in frozen 003"
+    grep -n 'Phase 2' "$OUT18" || true
+    exit 1
+fi
+if grep -q 'Phase 2 — Dispatch feedback-implementer' "$OUT18"; then
+    echo "FAIL: case 18 — self-heal Phase 2 dispatch leaked into read-only frozen 003"
+    exit 1
+fi
+if grep -q 'FREEZE:' "$OUT18"; then
+    fail "case 18: frozen 003 still contains FREEZE markers"
+fi
+
+# -----------------------------------------------------------------------------
+# Test 19: /004-code-review.md exercising auto_fix_on_review_fail in both
+# directions in a single case-pair (parallels 17/18 for the reviewer command).
+# -----------------------------------------------------------------------------
+# 19a: auto_fix_on_review_fail: true → self-heal Phase 2 heading present.
+run_real_freeze "004-code-review.md" "$WORK/gw-fix-on.md" "$WORK/case19a.log"
+OUT19A="$WORK/proj/.claude/commands/004-code-review.md"
+[ -f "$OUT19A" ] || fail "case 19a: frozen 004-code-review.md not written"
+if ! grep -q 'Phase 2 — Apply Fixes' "$OUT19A"; then
+    echo "FAIL: case 19a — missing 'Phase 2 — Apply Fixes' heading in frozen 004"
+    grep -n 'Phase 2' "$OUT19A" || true
+    exit 1
+fi
+if grep -q 'Phase 2 — Read result (read-only mode)' "$OUT19A"; then
+    echo "FAIL: case 19a — read-only Phase 2 heading leaked into self-heal-on frozen 004"
+    exit 1
+fi
+if grep -q 'FREEZE:' "$OUT19A"; then
+    fail "case 19a: frozen 004 still contains FREEZE markers"
+fi
+
+# 19b: auto_fix_on_review_fail: false → read-only Phase 2 heading present.
+run_real_freeze "004-code-review.md" "$WORK/gw-fix-off.md" "$WORK/case19b.log"
+OUT19B="$WORK/proj/.claude/commands/004-code-review.md"
+[ -f "$OUT19B" ] || fail "case 19b: frozen 004-code-review.md not written"
+if ! grep -q 'Phase 2 — Read result (read-only mode)' "$OUT19B"; then
+    echo "FAIL: case 19b — missing read-only Phase 2 heading in frozen 004"
+    grep -n 'Phase 2' "$OUT19B" || true
+    exit 1
+fi
+if grep -q 'Phase 2 — Apply Fixes' "$OUT19B"; then
+    echo "FAIL: case 19b — self-heal 'Apply Fixes' leaked into read-only frozen 004"
+    exit 1
+fi
+if grep -q 'FREEZE:' "$OUT19B"; then
+    fail "case 19b: frozen 004 still contains FREEZE markers"
+fi
+
+# Restore stashed plugin commands + ruleset so any subsequent additions to
+# this test file start from the original baseline.
+"$FREEZE" --reset --force > /dev/null 2>&1 || true
+rm -f "$WORK/plugin/commands"/*.md
+cp "$STASH_DIR"/*.md "$WORK/plugin/commands/" 2>/dev/null || true
+mv "$WORK/proj/.claude/ruleset/git-workflow.md.case17bak" "$WORK/proj/.claude/ruleset/git-workflow.md"
+
 echo "PASS: all freeze.sh self-tests"
 exit 0

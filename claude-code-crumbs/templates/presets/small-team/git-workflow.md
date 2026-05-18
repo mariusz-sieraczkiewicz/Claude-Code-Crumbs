@@ -63,6 +63,8 @@ squash_merge: true
 delete_branch_on_merge: true
 pr_required: true
 auto_invoke_verify: true
+auto_fix_on_verify_fail: true   # when /003-verify-dod finds gaps, auto-dispatch feedback-implementer (loop max 3); false = /003 prints findings and exits read-only (user runs /005-implement-feedback manually)
+auto_fix_on_review_fail: true   # when /004-code-review finds Violations, auto-dispatch feedback-implementer (loop max 3); false = /004 prints Violations and exits read-only
 branch_name_pattern: "task/{task_id}-{slug}"
 ```
 
