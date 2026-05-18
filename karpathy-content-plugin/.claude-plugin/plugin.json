@@ -1,8 +1,0 @@
-{
-  "name": "karpathy-content",
-  "description": "Behavioral guidelines to reduce common LLM content creation mistakes, adapted from Andrej Karpathy's principles for general writing and content crafting",
-  "version": "1.0.0",
-  "author": {
-    "name": "Mariusz Sieraczkiewicz"
-  }
-}

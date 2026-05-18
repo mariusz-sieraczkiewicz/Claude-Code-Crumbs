@@ -4,54 +4,5 @@
   "owner": {
     "name": "Mariusz Sieraczkiewicz"
   },
-  "plugins": [
-    {
-      "name": "tavily",
-      "source": "./tavily-plugin",
-      "description": "Tavily AI search integration for web search, extract, crawl, and map capabilities",
-      "version": "1.1.0"
-    },
-    {
-      "name": "lsp-python",
-      "source": "./lsp-python-plugin",
-      "description": "Python LSP support using Pyright for code intelligence",
-      "version": "1.0.0"
-    },
-    {
-      "name": "lsp-java",
-      "source": "./lsp-java-plugin",
-      "description": "Java LSP support using Eclipse JDT Language Server for code intelligence",
-      "version": "1.0.0"
-    },
-    {
-      "name": "lsp-kotlin",
-      "source": "./lsp-kotlin-plugin",
-      "description": "Kotlin LSP support using Kotlin Language Server for code intelligence",
-      "version": "1.0.0"
-    },
-    {
-      "name": "lsp-typescript",
-      "source": "./lsp-typescript-plugin",
-      "description": "TypeScript/JavaScript LSP support for code intelligence",
-      "version": "1.0.0"
-    },
-    {
-      "name": "karpathy-code",
-      "source": "./karpathy-code-plugin",
-      "description": "Behavioral guidelines to reduce common LLM coding mistakes, derived from Andrej Karpathy's observations",
-      "version": "1.0.0"
-    },
-    {
-      "name": "karpathy-content",
-      "source": "./karpathy-content-plugin",
-      "description": "Behavioral guidelines to reduce common LLM content creation mistakes, adapted from Karpathy's principles",
-      "version": "1.0.0"
-    },
-    {
-      "name": "python-modern-practices",
-      "source": "./python-modern-practices-plugin",
-      "description": "Comprehensive modern Python 3.12+ programming guidelines with strict typing, clean code patterns, and current tooling best practices",
-      "version": "1.0.1"
-    }
-  ]
+  "plugins": []
 }

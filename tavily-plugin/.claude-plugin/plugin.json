@@ -1,8 +1,0 @@
-{
-  "name": "tavily",
-  "description": "Tavily AI search integration for web search, extract, crawl, and map capabilities",
-  "version": "1.1.0",
-  "author": {
-    "name": "Mariusz Sieraczkiewicz"
-  }
-}

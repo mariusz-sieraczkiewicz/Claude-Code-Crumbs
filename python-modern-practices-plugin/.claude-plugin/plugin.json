@@ -1,8 +1,0 @@
-{
-  "name": "python-modern-practices",
-  "description": "Comprehensive modern Python 3.12+ programming guidelines with strict typing, clean code patterns, and current tooling best practices",
-  "version": "1.0.1",
-  "author": {
-    "name": "Mariusz Sieraczkiewicz"
-  }
-}
