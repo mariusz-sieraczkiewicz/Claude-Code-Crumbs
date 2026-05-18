@@ -120,6 +120,8 @@ Missing key: <!-- FREEZE:VAL nonexistent_key -->fallback-text<!-- FREEZE:ENDVAL 
 <!-- FREEZE:IF ticket_prefixes -->
 HAS_TICKET_PREFIXES
 <!-- FREEZE:ENDIF -->
+
+PR body literal headers: <!-- FREEZE:VAL pr_body_template -->no-template<!-- FREEZE:ENDVAL -->
 EOF
 
 # Synthetic agent file without markers — should be copied verbatim.
@@ -177,6 +179,8 @@ Branch pattern: task/{ticket_id}/{task_id}-{slug}
 Missing key: fallback-text
 
 HAS_TICKET_PREFIXES
+
+PR body literal headers: ## Summary\n<one para>\n\n## Change-management\n- Ticket: {ticket_id}
 EOF
 
 if ! diff -u "$EXPECTED_SAMPLE" "$OUT_CMD" > "$WORK/diff.out"; then
@@ -195,6 +199,19 @@ fi
 # Verify no FREEZE markers remain in frozen output.
 if grep -q 'FREEZE:' "$OUT_CMD"; then
     fail "frozen sample.md still contains FREEZE markers"
+fi
+
+# Verify pr_body_template literal preserved markdown headers (regression: awk
+# stripped `#`-lines inside YAML literal blocks).
+if ! grep -q '## Summary' "$OUT_CMD"; then
+    echo "FAIL: pr_body_template lost '## Summary' header (literal-block # stripped)"
+    cat "$OUT_CMD"
+    exit 1
+fi
+if ! grep -q '## Change-management' "$OUT_CMD"; then
+    echo "FAIL: pr_body_template lost '## Change-management' header"
+    cat "$OUT_CMD"
+    exit 1
 fi
 
 # -----------------------------------------------------------------------------
@@ -242,6 +259,46 @@ mv "$WORK/proj/.claude/stack.yaml.bak" "$WORK/proj/.claude/stack.yaml"
 if [ "$rc" -ne 1 ]; then
     fail "expected exit 1 for missing stack.yaml, got $rc"
 fi
+
+# -----------------------------------------------------------------------------
+# Test 6: unknown team_preset -> exit 1 with clear message.
+# -----------------------------------------------------------------------------
+mv "$WORK/proj/.claude/stack.yaml" "$WORK/proj/.claude/stack.yaml.bak"
+cat > "$WORK/proj/.claude/stack.yaml" <<'EOF'
+stack:
+  name: testproj
+team_preset: weird-thing
+EOF
+set +e
+"$FREEZE" --force --plugin-root="$WORK/plugin" > "$WORK/unknown.log" 2>&1
+rc=$?
+set -e
+mv "$WORK/proj/.claude/stack.yaml.bak" "$WORK/proj/.claude/stack.yaml"
+if [ "$rc" -ne 1 ]; then
+    fail "expected exit 1 for unknown preset, got $rc"
+fi
+grep -q "unknown team_preset" "$WORK/unknown.log" || fail "missing 'unknown team_preset' in stderr"
+
+# -----------------------------------------------------------------------------
+# Test 7: unterminated yaml fence in ruleset -> exit 2.
+# -----------------------------------------------------------------------------
+mv "$WORK/proj/.claude/ruleset/git-workflow.md" "$WORK/proj/.claude/ruleset/git-workflow.md.bak"
+cat > "$WORK/proj/.claude/ruleset/git-workflow.md" <<'EOF'
+# Git Workflow
+
+```yaml
+pr_required: true
+allow_commit_to_main: false
+EOF
+set +e
+"$FREEZE" --force --plugin-root="$WORK/plugin" > "$WORK/unterm.log" 2>&1
+rc=$?
+set -e
+mv "$WORK/proj/.claude/ruleset/git-workflow.md.bak" "$WORK/proj/.claude/ruleset/git-workflow.md"
+if [ "$rc" -ne 2 ]; then
+    fail "expected exit 2 for unterminated yaml fence, got $rc"
+fi
+grep -q "unterminated" "$WORK/unterm.log" || fail "missing 'unterminated' in stderr"
 
 echo "PASS: all freeze.sh self-tests"
 exit 0

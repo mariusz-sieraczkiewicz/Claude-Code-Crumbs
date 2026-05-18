@@ -34,7 +34,6 @@ PLUGIN_ROOT=""
 DRY_RUN=0
 FORCE=0
 RESET=0
-SCOPE="preset"
 
 STACK_YAML=".claude/stack.yaml"
 GIT_RULES=".claude/ruleset/git-workflow.md"
@@ -58,19 +57,20 @@ parse_args() {
             --dry-run) DRY_RUN=1 ;;
             --force) FORCE=1 ;;
             --reset) RESET=1 ;;
-            --scope=*) SCOPE="${1#--scope=}" ;;
             --plugin-root=*) PLUGIN_ROOT="${1#--plugin-root=}" ;;
             -h|--help)
                 cat <<'EOF'
-Usage: freeze.sh [--dry-run] [--force] [--reset] [--scope=preset|full] [--plugin-root=<path>]
+Usage: freeze.sh [--dry-run] [--force] [--reset] [--plugin-root=<path>]
 
   --dry-run         Print summary without writing.
   --force           Skip confirmation prompts (re-freeze, reset).
   --reset           Remove .claude/commands/ and .claude/agents/ and exit.
-  --scope=preset    (default) Resolve preset-driven keys only.
-  --scope=full      Resolve all keys including stack-level toggles.
   --plugin-root=P   Override plugin source dir.
                     Default: ~/.claude/plugins/claude-code-crumbs
+
+Scope is preset-driven: freeze resolves keys from .claude/ruleset/git-workflow.md
+and .claude/ruleset/deployment.md (the active team_preset). Other dynamics
+(extras, stack-level toggles) remain runtime.
 EOF
                 exit 0
                 ;;
@@ -85,11 +85,6 @@ EOF
     if [ -z "$PLUGIN_ROOT" ]; then
         PLUGIN_ROOT="$DEFAULT_PLUGIN_ROOT"
     fi
-
-    case "$SCOPE" in
-        preset|full) : ;;
-        *) err "invalid --scope: $SCOPE (expected preset|full)"; exit 2 ;;
-    esac
 }
 
 # -----------------------------------------------------------------------------
@@ -137,10 +132,28 @@ parse_stack_preset() {
     ' "$f"
 }
 
+check_yaml_fence_balanced() {
+    # Returns 0 if the FIRST ```yaml fence has a matching closing ```.
+    # Returns 1 if unterminated. Caller is responsible for exiting.
+    local f="$1"
+    [ -f "$f" ] || return 0
+    local result
+    result="$(awk '
+        BEGIN { in_block = 0; closed = 0 }
+        { sub(/\r$/, "") }
+        in_block == 0 && /^[[:space:]]*```[[:space:]]*yaml[[:space:]]*$/ { in_block = 1; next }
+        in_block == 1 && /^[[:space:]]*```[[:space:]]*$/ { closed = 1; exit }
+        END { if (in_block == 1 && closed == 0) print "UNTERMINATED" }
+    ' "$f")"
+    [ "$result" != "UNTERMINATED" ]
+}
+
 parse_yaml_block() {
     # Extract the FIRST fenced ```yaml ... ``` block, then emit key=value pairs.
     # Lists are joined with commas. Multi-line literal scalars (|) are joined
     # with literal "\n" markers so the resolver can detect non-empty multilines.
+    # NOTE: fence-balance pre-check happens in build_resolver — $(...) swallows
+    # exit codes, so the check must run in the parent shell.
     local f="$1"
     [ -f "$f" ] || return 0
     awk '
@@ -160,9 +173,16 @@ parse_yaml_block() {
             exit
         }
         in_block != 1 { next }
-        /^[[:space:]]*#/ { next }
+        # Skip comments only OUTSIDE a multi-line literal block. Inside a literal,
+        # markdown headers (`## Summary`) are content, not comments.
+        pending_key == "" && /^[[:space:]]*#/ { next }
         /^[[:space:]]*$/ {
-            # Blank line: still inside multi-line literal scalar collection if pending.
+            # Blank line: inside a literal block, preserve as an empty line in
+            # pending_buf. Outside a literal, skip.
+            if (pending_key != "") {
+                if (pending_buf == "") pending_buf = ""
+                else pending_buf = pending_buf "\\n"
+            }
             next
         }
 
@@ -284,6 +304,13 @@ build_resolver() {
         err "team_preset not found in $STACK_YAML"
         exit 1
     fi
+    case "$preset" in
+        solo|small-team|oss|enterprise) : ;;
+        *)
+            err "unknown team_preset: '$preset' (expected one of: solo, small-team, oss, enterprise)"
+            exit 1
+            ;;
+    esac
     resolver_set preset "$preset"
 
     if [ ! -f "$GIT_RULES" ]; then
@@ -293,6 +320,15 @@ build_resolver() {
     if [ ! -f "$DEPLOY_RULES" ]; then
         err "missing $DEPLOY_RULES"
         exit 1
+    fi
+
+    if ! check_yaml_fence_balanced "$GIT_RULES"; then
+        err "unterminated \`\`\`yaml fence in $GIT_RULES"
+        exit 2
+    fi
+    if ! check_yaml_fence_balanced "$DEPLOY_RULES"; then
+        err "unterminated \`\`\`yaml fence in $DEPLOY_RULES"
+        exit 2
     fi
 
     # Merge YAML blocks. Later writes override earlier ones (deployment > git).
@@ -757,7 +793,7 @@ do_freeze() {
 
     build_resolver
 
-    info "preset=$(resolver_get preset) scope=$SCOPE plugin_root=$PLUGIN_ROOT"
+    info "preset=$(resolver_get preset) plugin_root=$PLUGIN_ROOT"
 
     local total_files=0
     local SKIPPED_FILES=0

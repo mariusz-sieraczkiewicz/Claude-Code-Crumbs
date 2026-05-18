@@ -56,7 +56,7 @@ Prints a per-file summary (`+taken/-pruned branches`) without writing anything. 
 - Per-task `rules_in_scope` selection — task-level, not preset-level.
 - The `extras: {}` free-form map in `stack.yaml`, propagated verbatim to subagents.
 
-Default `--scope=preset`; `--scope=full` resolves stack-level toggles too (reserved for future expansion).
+Scope is fixed to **preset-driven** keys. Stack-level toggles, gates, and runtime state remain dynamic by design.
 
 ## One-way ticket
 
