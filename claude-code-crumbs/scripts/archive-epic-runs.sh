@@ -32,9 +32,11 @@ fi
 SRC_DIR=".claude/runs/${EPIC_ID}"
 ARCHIVE_DIR=".claude/runs-archive"
 
-# If source does not exist, nothing to archive — exit silently.
+# If source does not exist, nothing to archive — surface as an error so callers
+# don't silently believe the archive succeeded.
 if [ ! -d "$SRC_DIR" ]; then
-    exit 0
+    echo "Error: nothing to archive — ${SRC_DIR}/ does not exist." >&2
+    exit 1
 fi
 
 mkdir -p "$ARCHIVE_DIR"

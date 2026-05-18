@@ -44,7 +44,12 @@
       "type": "array",
       "items": { "$ref": "#/$defs/finding" }
     },
-    "next": { "type": "string" },
+    "next": {
+      "oneOf": [
+        { "type": "null" },
+        { "enum": ["plan", "resplit", "impl", "verify", "review", "feedback-impl", "merge", "promote", "user-decision", "loop-limit"] }
+      ]
+    },
     "payload": {
       "type": "object",
       "additionalProperties": true
@@ -103,6 +108,26 @@
     {
       "if": { "properties": { "phase": { "const": "feedback-impl" } }, "required": ["phase"] },
       "then": { "properties": { "agent": { "const": "feedback-implementer" } } }
+    },
+    {
+      "if": { "properties": { "phase": { "const": "plan" } }, "required": ["phase"] },
+      "then": { "properties": { "status": { "enum": ["ok", "blocked"] } } }
+    },
+    {
+      "if": { "properties": { "phase": { "const": "impl" } }, "required": ["phase"] },
+      "then": { "properties": { "status": { "enum": ["ok", "too_big_proposal", "blocked"] } } }
+    },
+    {
+      "if": { "properties": { "phase": { "const": "verify" } }, "required": ["phase"] },
+      "then": { "properties": { "status": { "enum": ["ok", "fail"] } } }
+    },
+    {
+      "if": { "properties": { "phase": { "const": "review" } }, "required": ["phase"] },
+      "then": { "properties": { "status": { "enum": ["ok", "fail"] } } }
+    },
+    {
+      "if": { "properties": { "phase": { "const": "feedback-impl" } }, "required": ["phase"] },
+      "then": { "properties": { "status": { "enum": ["ok", "blocked"] } } }
     },
     {
       "if": {

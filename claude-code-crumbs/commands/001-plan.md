@@ -11,7 +11,7 @@ Argument: `$ARGUMENTS`.
 
 ## Modes
 
-1. **Fresh** — `/001-plan E-NNN` — author Business scenarios for the epic (Gherkin block-scalar in `epics.yaml`), decompose into tasks (`epic-{id}-tasks.yaml`).
+1. **Fresh** — `/001-plan E-NNN` — author Business scenarios for the epic (Gherkin block-scalar in `epics.yaml`), decompose into tasks (`epic-{id}-tasks.yaml`, where `{id}` is the 3-digit zero-padded epic id, e.g. `epic-001-tasks.yaml`).
 2. **Re-split** — `/001-plan --resplit T-NNN` — the implementer flagged this task as too big; decompose it into smaller tasks linked to the same Business scenarios.
 
 Detect mode by the presence of `--resplit` in `$ARGUMENTS`. If absent, treat the first token as an epic id and run **Fresh** mode. If present, treat the following token as a task id and run **Re-split** mode.

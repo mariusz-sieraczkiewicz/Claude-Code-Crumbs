@@ -58,6 +58,8 @@ Yes/no — confirm overwriting existing project?
 
 Proceed only on an explicit `yes`. Any other answer (including silence or `--mode=A` alone without an interactive confirmation) aborts with the same message above.
 
+If `PRD.md` is present but other artifacts are missing, `/000` enters State B and runs Phase B.0 repair instead of State A.
+
 ### A.1 — Team preset selection
 
 Ask the user this question verbatim and wait for an answer:
@@ -156,6 +158,26 @@ State A is **done** when `PRD.md` §1-§12 are concrete and `epics.yaml` is in p
 ## State B — add or refine epic
 
 PRD exists. `epics.yaml` is missing OR contains only `pending` epics (or is empty). No epic has yet entered `in_progress` / `blocked` / `done`.
+
+### Phase B.0 — Missing-artifacts repair (auto-detected)
+
+After State B is confirmed (PRD.md present), check for the following artifacts. For EACH missing artifact, ASK the user once: "Bootstrap missing <artifact-name>? [y/N]" and on yes, copy from templates without touching PRD.md.
+
+Artifacts to check (in this order):
+1. `CONTEXT.md` — copy from `templates/project/CONTEXT.md.tmpl` if missing.
+2. `.claude/ruleset/` — copy all 18 files from `templates/ruleset/*.md` if directory missing or empty.
+3. `.claude/stack.yaml` — copy from `templates/project/stack.yaml.example` if missing.
+4. `docs/adr/0000-template.md` — copy if missing.
+5. `.gitignore` — merge `templates/project/gitignore.snippet` (dedupe) if missing entries.
+6. `.claude/runs/` and `.claude/runs-archive/` — `mkdir -p` if missing.
+7. `docs/planning/SCENARIOS.md` — copy from template if missing.
+
+After ANY artifact is bootstrapped, if `.claude/stack.yaml` was just created, ALSO ask the user for `team_preset` (solo|small-team|oss|enterprise) and apply the preset overlay per Phase A.4 logic (overwrite `.claude/ruleset/git-workflow.md` and `.claude/ruleset/deployment.md` from `templates/presets/<preset>/`).
+
+If ALL artifacts already exist → skip this phase silently and proceed to B.1.
+If user declines ALL prompts → proceed to B.1 unchanged.
+
+This phase NEVER modifies PRD.md, CONTEXT.md content (only creates if missing), or epics.yaml.
 
 ### B.1 — Detect
 

@@ -22,7 +22,7 @@ If your project has no measured baseline yet, start by recording the current num
 - **Lighthouse CI** — assert against performance budgets on PR.
 - **Load tests in CI** — e.g. `k6`, `locust`, `vegeta`. A smoke run with assertions on p95 / error rate gates merges to main.
 - **Linters for obvious traps** — e.g. `eslint-plugin-react-hooks` (unnecessary re-renders), `ruff`/`pylint` rules against quadratic patterns, `golangci-lint` (`prealloc`, `gocritic`), `clippy` (`needless_collect`, `inefficient_to_string`).
-- **N+1 query detection** — e.g. ORM-specific plugins (Bullet for ActiveRecord, `nplusone` for SQLAlchemy), or query-count assertions in integration tests.
+- **N+1 query detection** — e.g. ORM-specific plugins (Bullet for ActiveRecord, `nplusone` for SQLAlchemy), or query-count assertions in infra-layer tests (called "integration tests" by tools like Vitest/Pytest — distinct from plugin Domain-tests).
 - **Static complexity caps** — cyclomatic complexity / function length limits in the linter (a proxy for hot-path readability under profiling).
 - **Profiler artefacts** — when an epic touches a hot path, the implementer attaches a profile (e.g. `pprof`, `py-spy`, Chrome DevTools flamegraph) to the run history.
 

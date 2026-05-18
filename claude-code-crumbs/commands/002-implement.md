@@ -10,7 +10,7 @@ This command is the single-task counterpart of `/002-auto-implement`. It dispatc
 ## Inputs
 
 - **`<task-id>`** — passed as `$ARGUMENTS` (e.g. `T-001`). Required positional argument.
-- **`docs/planning/epic-{id}-tasks.yaml`** — locate the task entry by scanning every `epic-*-tasks.yaml` under `docs/planning/`. If not found anywhere, abort with: `Task <task-id> not found in any epic-*-tasks.yaml. Run /001-plan first.`
+- **`docs/planning/epic-{id}-tasks.yaml`** — locate the task entry by scanning every `epic-*-tasks.yaml` under `docs/planning/` (where `{id}` is the 3-digit zero-padded epic id, e.g. `epic-001-tasks.yaml`). If not found anywhere, abort with: `Task <task-id> not found in any epic-*-tasks.yaml. Run /001-plan first.`
 - **`docs/planning/epics.yaml`** — locate the Business scenarios referenced by the task's `domain_scenarios` field. Read the Gherkin block-scalar verbatim from the matching epic entry. If a referenced scenario is missing, abort with the path and missing scenario name.
 - **`.claude/ruleset/*.md`** — all 18 canonical rule files, verbatim-loaded into memory for downstream subagent injection (no `@`-include — content is pasted into the subagent prompt body).
 - **`.claude/ruleset/git-workflow.md`** — parse the YAML toggle block at the top of the file for `auto_invoke_review`, `auto_invoke_verify`, `allow_commit_to_main`, `pr_required`, `branch_name_pattern`, `require_signed_commits`. Defaults below apply when a key is absent.
@@ -21,7 +21,7 @@ This command is the single-task counterpart of `/002-auto-implement`. It dispatc
 ### Phase 0 — Pre-flight
 
 - Verify the task entry exists in some `epic-{id}-tasks.yaml`. Scan every file matching that glob; the first match wins. If absent → abort (see Inputs).
-- Capture the `epic_id` from the matching file's name (e.g. `epic-01-tasks.yaml` → `epic_id = E-001`, matching the entry in `epics.yaml`). Cross-check that the same epic id appears in `epics.yaml`; if not, abort with both paths.
+- Capture the `epic_id` from the matching file's name (e.g. `epic-001-tasks.yaml` → `epic_id = E-001`, matching the entry in `epics.yaml`). Cross-check that the same epic id appears in `epics.yaml`; if not, abort with both paths.
 - **Dirty working tree check.** Run `git status --porcelain`. If the output is non-empty:
   - If `allow_commit_to_main: false` (default; non-solo presets) → abort: `Working tree has uncommitted changes. Commit or stash them before /002-implement.`
   - If `allow_commit_to_main: true` (solo preset) → proceed but print a visible warning: `Working tree dirty; proceeding under allow_commit_to_main=true (solo preset). Implementer commit will include all current staged/unstaged changes.`
@@ -60,7 +60,7 @@ Use the **Task tool** with `subagent_type: "implementer"`. Inject the following 
 
 1. **Task entry (YAML)** — the entire YAML entry for the task as it appears in `epic-{id}-tasks.yaml`. Include `id`, `slug`, `title`, `status`, `domain_scenarios`, `atdd_spec`, `acceptance`, `notes`, and any other fields present.
 2. **Business scenarios** — for each name listed in the task's `domain_scenarios`, paste the matching `## Scenario: <name>` Gherkin block verbatim from `epics.yaml`. Preface with `--- Business Scenario: <name> ---`.
-3. **Verbatim ruleset** — for each of the 18 files in `.claude/ruleset/`, paste the file content prefixed by a header line `--- <filename>.md ---`. Order alphabetically. Do not summarise, do not omit. The implementer is expected to follow every active rule.
+3. **Verbatim ruleset** — inject the ruleset by capturing `scripts/inject-ruleset.sh` output via the Bash tool and including it verbatim in the implementer's prompt. The script handles path resolution (honours `paths.ruleset` from `stack.yaml`, falls back to `.claude/ruleset/`), alphabetical ordering of `*.md` files, and the `--- <basename> ---` header per file. This mirrors `/002-auto-implement` exactly; do not re-implement the read+concatenate logic inline. Do not summarise, do not omit — the implementer is expected to follow every active rule.
 4. **`stack.yaml.extras`** — paste the `extras` mapping verbatim under a header `--- stack.yaml.extras ---`. This is the escape hatch for stack-specific quirks (e.g. `bash_buffering_warning`, `user_ping_interval_minutes`).
 5. **Output contract** — instruct the implementer to write its result to `.claude/runs/{epic_id}/{task_id}/02-impl.json`, validated against `schemas/run-phase.schema.json`. The top-level `status` field must be one of `ok`, `too_big_proposal`, `blocked`. Required `payload` keys vary by status:
    - `ok` → `commit_sha`, `files_changed`, `domain_tests_added`, `atdd_spec_path`.
@@ -112,6 +112,14 @@ If `auto_invoke_verify` is **not** `false` (default: `true`):
    - **`status: "ok"`** → continue to Phase 5.
    - **`status: "fail"`** → spawn `/005-implement-feedback` with the verifier findings. The feedback-implementer fixes implementation and the chain loops back to `/003-verify-dod`. Number the feedback artifacts `05a-feedback-impl.json`, `05b-...`, `05c-...`.
 
+     **Parent-context env marker.** Before invoking `/005-implement-feedback`, this command MUST set `CRUMBS_PARENT_COMMAND=002-implement` in the dispatch environment, then `unset CRUMBS_PARENT_COMMAND` immediately after the invocation returns. This is how `/005` distinguishes chained from standalone invocation (the filesystem heuristic is racy and unreliable after `/004` has written `04-review.json`). Example:
+
+     ```sh
+     export CRUMBS_PARENT_COMMAND=002-implement
+     # invoke /005-implement-feedback <task-id>
+     unset CRUMBS_PARENT_COMMAND
+     ```
+
 **Hard cap: 3 feedback iterations per task, SHARED across verify and review gates (matches /005-implement-feedback letter-suffix scheme 05a/05b/05c). On the 4th would-be iteration, halt the auto-loop and surface findings to the user (do not emit a synthetic phase file with a non-enum status).**
 ```
 Verify failed 3 times in a row for task <task-id>. Escalating to user.
@@ -131,6 +139,8 @@ If `auto_invoke_review` is **not** `false` (default: `true`):
 3. Branch on `status`:
    - **`status: "ok"`** → continue to Phase 6.
    - **`status: "fail"`** → spawn `/005-implement-feedback` with reviewer findings. The chain loops: feedback-impl → back to `/003-verify-dod` → back to `/004-code-review`. The feedback iteration counter is **shared** with Phase 4 (a single task has at most 3 feedback rounds total, not 3 per gate).
+
+     **Parent-context env marker.** As in Phase 4, set `CRUMBS_PARENT_COMMAND=002-implement` before invoking `/005-implement-feedback` and `unset CRUMBS_PARENT_COMMAND` after it returns.
 
 **Hard cap: 3 feedback iterations per task, SHARED across verify and review gates (matches /005-implement-feedback letter-suffix scheme 05a/05b/05c). On the 4th would-be iteration, halt the auto-loop and surface findings to the user (do not emit a synthetic phase file with a non-enum status).** Halt with the same escalation pattern as Phase 4, pointing at `04-review.json` and the latest `05X-feedback-impl.json`.
 
@@ -253,11 +263,11 @@ Each subagent type lives in `.claude-plugin/agents/` (plugin-owned, not project-
 
 Given task `T-014` belonging to epic `E-003`, with a small-team preset:
 
-1. **Phase 0** — `/002-implement T-014` locates `docs/planning/epic-03-tasks.yaml`, finds entry `id: T-014, status: pending, slug: cancel-subscription, domain_scenarios: ["User cancels subscription"]`. Flips status to `in_progress`. Creates `.claude/runs/E-003/T-014/`.
+1. **Phase 0** — `/002-implement T-014` locates `docs/planning/epic-003-tasks.yaml`, finds entry `id: T-014, status: pending, slug: cancel-subscription, domain_scenarios: ["User cancels subscription"]`. Flips status to `in_progress`. Creates `.claude/runs/E-003/T-014/`.
 2. **Phase 1** — Branch pattern `task/{task_id}-{slug}` resolves to `task/T-014-cancel-subscription`. Checked out from `main`.
 3. **Phase 2** — `implementer` subagent receives task YAML, the Gherkin block for `User cancels subscription`, all 18 ruleset files verbatim, and `stack.yaml.extras`. It writes Domain-tests in `tests/domain/cancel-subscription.test.ts`, production code in `src/billing/cancel.ts`, an ATDD spec in `tests/atdd/cancel-subscription.spec.ts`, commits with message `feat(billing): cancel subscription (T-014)`, and writes `02-impl.json` with `status: ok`.
-4. **Phase 4** — `/003-verify-dod` runs `stack.yaml.gates` (lint, typecheck, domain_tests, build, security). All pass → `03-verify.json` status `pass`.
-5. **Phase 5** — `/004-code-review` reads ruleset + diff. One finding: missing `aria-label` per `accessibility.md`. `04-review.json` status `fail`. `/005-implement-feedback` fires (`05a-feedback-impl.json`), fix commits, loops back to `/003-verify-dod` (pass), then `/004-code-review` (pass).
+4. **Phase 4** — `/003-verify-dod` runs `stack.yaml.gates` (lint, typecheck, domain_tests, build, security). All pass → `03-verify.json` status `ok`.
+5. **Phase 5** — `/004-code-review` reads ruleset + diff. One finding: missing `aria-label` per `accessibility.md`. `04-review.json` status `fail`. `/005-implement-feedback` fires (`05a-feedback-impl.json`), fix commits, loops back to `/003-verify-dod` (status `ok`), then `/004-code-review` (status `ok`).
 6. **Phase 6** — Task `status: done`. Print: `Task T-014 complete. Open MR? Run /006-merge T-014`.
 
 Total feedback iterations: 1 of 3 allowed.

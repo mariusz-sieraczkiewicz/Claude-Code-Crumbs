@@ -5,7 +5,7 @@ argument-hint: <task-id>
 
 # /005-implement-feedback
 
-You are the orchestrator for the feedback loop of the crumbs pipeline. A prior phase — either `/003-verify-dod` or `/004-code-review` — reported `status: "fail"` with one or more **Findings** against task `$ARGUMENTS`. Your job is to dispatch the `feedback-implementer` subagent (`<plugin-root>/agents/feedback-implementer.md`) with the failing phase artifact, every prior phase artifact, and the verbatim ruleset; read its output; and either loop back to verify, escalate to re-planning, or halt on the hard cap.
+You are the orchestrator for the feedback loop of the crumbs pipeline. A prior phase — either `/003-verify-dod` or `/004-code-review` — reported `status: "fail"` with one or more **Findings** against task `$ARGUMENTS`. Your job is to dispatch the `feedback-implementer` subagent (`<plugin-root>/agents/feedback-implementer.md`) with the failing phase artifact, every prior phase artifact, and the verbatim ruleset; read its output; and either loop back to verify, escalate to resplit, or halt on the hard cap.
 
 This command is invokable in two ways:
 
@@ -17,7 +17,7 @@ Argument: `$ARGUMENTS` — the task id (e.g. `T-014`). Required.
 ## Inputs
 
 - **`<task-id>`** — passed as `$ARGUMENTS`. Required positional argument.
-- **`docs/planning/epic-{id}-tasks.yaml`** — locate the task entry by scanning every `epic-*-tasks.yaml` under `docs/planning/`. The first match wins. If not found anywhere, abort with: `Task <task-id> not found in any epic-*-tasks.yaml. Run /001-plan first.` Capture the `epic_id` from the matching file name (e.g. `epic-03-tasks.yaml` → `epic_id = E-003`).
+- **`docs/planning/epic-{id}-tasks.yaml`** — locate the task entry by scanning every `epic-*-tasks.yaml` under `docs/planning/`. The first match wins. If not found anywhere, abort with: `Task <task-id> not found in any epic-*-tasks.yaml. Run /001-plan first.` Capture the `epic_id` from the matching file name (e.g. `epic-003-tasks.yaml` → `epic_id = E-003`).
 - **`.claude/ruleset/*.md`** — all 18 canonical rule files, verbatim-loaded into memory for downstream subagent injection. No `@`-include — content is pasted into the subagent prompt body. If any file is missing, halt with: `Ruleset incomplete: <name>.md missing. Run plugin setup.`
 - **All prior phase files** in `.claude/runs/{epic_id}/{task_id}/`:
   - `01-plan.json` — planner output (always present after `/001-plan`).
@@ -36,7 +36,7 @@ Argument: `$ARGUMENTS` — the task id (e.g. `T-014`). Required.
 - Confirm `.claude/runs/{epic_id}/{task_id}/` exists. If absent, abort with: `No runs directory for <task-id>. Run /002-implement first.`
 - Confirm `.claude/ruleset/` contains all 18 canonical rule files.
 - Confirm `.claude/stack.yaml` exists and parses. If absent, abort with: `stack.yaml missing. Run /000-prd-refine to bootstrap the project.`
-- **Determine the latest failing phase file.** Enumerate every file in `.claude/runs/{epic_id}/{task_id}/` matching `NN-*.json` (sorted by numeric prefix descending). Pick the highest-numbered one whose top-level `status` is `"fail"`. Skip `05*` files in this search — those are feedback artifacts, not gate artifacts. The candidate set is `{03-verify.json, 04-review.json}`. If neither has `status: "fail"`, abort with: `No failing phase to address. Run /003-verify-dod or /004-code-review first.` Record the chosen path as `failing_phase_path` and its content as `failing_phase_content`.
+- **Determine the failing phase file to address first.** Enumerate every file in `.claude/runs/{epic_id}/{task_id}/` matching `NN-*.json` (sorted by numeric prefix ascending). Pick the **lowest-numbered** one whose top-level `status` is `"fail"`. Skip `05*` files in this search — those are feedback artifacts, not gate artifacts. The candidate set is `{03-verify.json, 04-review.json}`. If neither has `status: "fail"`, abort with: `No failing phase to address. Run /003-verify-dod or /004-code-review first.` Record the chosen path as `failing_phase_path` and its content as `failing_phase_content`. Rationale: verify findings are addressed first; review findings only after verify is clean, because review is gated on verify-ok at `/004-code-review` Phase 0 (when both `03-verify.json` and `04-review.json` show `fail`, fix verify first so the next `/004` re-run starts from a clean verify).
 - **Determine the iteration counter.** Count existing `05*-feedback-impl.json` files in the same directory. Possible values:
   - `0` → next iteration is `05a`.
   - `1` → next iteration is `05b`.
@@ -47,6 +47,19 @@ Argument: `$ARGUMENTS` — the task id (e.g. `T-014`). Required.
     ```
     Leave task `status: in_progress`. Do not dispatch.
 - Compute the next artifact path: `.claude/runs/{epic_id}/{task_id}/05<letter>-feedback-impl.json` where `<letter>` is `a`, `b`, or `c`.
+- **Detect chained vs standalone invocation via env marker `CRUMBS_PARENT_COMMAND`.** This is the canonical signal — do **not** infer from filesystem state (which is racy after `/004` writes `04-review.json` and makes `02-impl.json` no longer the most-recently-written non-`05*` file). Read the variable:
+
+  ```sh
+  if [ -n "${CRUMBS_PARENT_COMMAND:-}" ]; then
+      # Chained — return to parent on success
+      MODE=chained
+  else
+      # Standalone — print "Run /006-merge when ready." on success
+      MODE=standalone
+  fi
+  ```
+
+  Recognised values for `CRUMBS_PARENT_COMMAND`: `002-implement`, `002-auto-implement`. Anything else (including unset/empty) is treated as **standalone**. Record `MODE` at Phase 0 and reuse it for every print decision in Phase 2.
 
 ### Phase 1 — Dispatch feedback-implementer subagent
 
@@ -63,12 +76,12 @@ Use the **Task tool** with `subagent_type: "feedback-implementer"`. Inject the f
 6. **`stack.yaml.extras`** — paste the `extras` mapping verbatim under a header `--- stack.yaml.extras ---`. Escape hatch for stack-specific quirks (e.g. `bash_buffering_warning`, `user_ping_interval_minutes`).
 7. **Output contract** — instruct the subagent to write its result to `.claude/runs/{epic_id}/{task_id}/05<letter>-feedback-impl.json`, validated against `schemas/run-phase.schema.json`. The top-level `status` field must be one of `ok`, `blocked`. Required `payload` keys vary by status:
    - `ok` → `commit_shas` (array, one or few), `files_changed`, `findings_addressed` (array of finding ids from the failing phase artifact).
-   - `blocked` → `reason` (prose), `next` (one of `re-plan`, `loop_limit_exceeded`, `external_decision_required`), optional `suggested_follow_up`.
+   - `blocked` → `reason` (prose), `next` (one of `resplit`, `loop-limit`, `user-decision`), optional `suggested_follow_up`.
 
 The feedback-implementer is expected to:
 
 - Read `payload.findings[]` from the failing phase artifact and address **each** at the root cause. **Zero tolerance** — every Finding blocks DoD; the subagent does not argue with Findings, it fixes them. Exception: if a Finding's `location` points at a file that no longer exists at `HEAD` (e.g. deleted in a prior fix iteration), drop that Finding and record it under `payload.dropped_findings: [{ rule, location, reason: 'file_deleted' }]`. Never attempt to fix Findings against non-existent files.
-- **Never silently expand scope.** If a Finding requires reverting an architectural choice from the plan (`01-plan.json`) — e.g. dropping an aggregate boundary, changing the chosen pattern, removing a contract — the subagent emits `status: "blocked"` with `next: "re-plan"` and a `payload.reason` explaining why. The fix is not attempted; control returns to `/001-plan --resplit`.
+- **Never silently expand scope.** If a Finding requires reverting an architectural choice from the plan (`01-plan.json`) — e.g. dropping an aggregate boundary, changing the chosen pattern, removing a contract — the subagent emits `status: "blocked"` with `next: "resplit"` and a `payload.reason` explaining why. The fix is not attempted; control returns to `/001-plan --resplit`.
 - Make **one or a few commits** on the task branch (never amend, never force-push). Commit messages follow Conventional Commits with a `fix(T-NNN):` or `refactor(T-NNN):` prefix per `.claude/ruleset/git-workflow.md`.
 - Sign commits if `require_signed_commits: true` is set in the `git-workflow.md` toggle block.
 - Write the final artifact `05<letter>-feedback-impl.json` with a top-level `status` field: `ok` or `blocked`.
@@ -86,24 +99,24 @@ Branch on `status`:
     - If the failing phase was `04-review.json`, auto-invoke `/004-code-review $ARGUMENTS`. Read the new `04-review.json`:
       - **Review pass** → the chain is complete. Print: `Task <task-id> chain complete. Suggest: /006-merge <task-id>.` Do **not** auto-invoke `/006-merge` — merge is always user-triggered.
 
-        On review-pass (no findings in `04-review.json`): if invoked as a chained step from `/002-implement` / `/002-auto-implement`, return to the calling command which proceeds to `/006-merge` proposal. If invoked standalone via `/005-implement-feedback` (no parent context detected — check by absence of `/002` environment markers), print `Feedback implemented. No further findings. Run /006-merge when ready.` and exit.
+        On review-pass (no findings in `04-review.json`): branch on the `MODE` captured at Phase 0 (see "Detect chained vs standalone invocation via env marker `CRUMBS_PARENT_COMMAND`"). If `MODE=chained` (parent set `CRUMBS_PARENT_COMMAND` to `002-implement` or `002-auto-implement`), return to the calling command which proceeds to `/006-merge` proposal. If `MODE=standalone` (env var unset or empty), print `Feedback implemented. No further findings. Run /006-merge when ready.` and exit.
 
-        **Detection method (chained vs standalone).** Consistent with the filesystem-derived approach used elsewhere in this command (see "Iteration tracking" — counter is purely filesystem-derived; no env vars are set by parents in this codebase): inspect `.claude/runs/{epic_id}/{task_id}/` and treat the invocation as **chained** if `02-impl.json` is the most recently written non-`05*` phase file at the moment `/005-implement-feedback` started (i.e. `/002-implement` produced it and immediately chained into `/003` → `/004` → here without the user typing anything between). Treat it as **standalone** otherwise (the user typed `/005-implement-feedback <task-id>` against an already-failing review artifact). Record the chosen mode at Phase 0 and reuse it for every print decision in Phase 2. This is the same filesystem-derived contract documented at "What 'consecutive' means" above — there are no `/002` environment markers; absence of a recent `/002`-authored `02-impl.json` is the absence-of-marker check.
+        **Detection method (chained vs standalone).** The env-marker check at Phase 0 is the **only** mechanism. Parent commands (`/002-implement` Phase 4/5 dispatch and `/002-auto-implement` Phase 1 Step 4/6 dispatch) MUST `export CRUMBS_PARENT_COMMAND=<their-slug>` before invoking `/005-implement-feedback` and `unset CRUMBS_PARENT_COMMAND` immediately after the invocation returns. Do not infer from filesystem state — after `/004-code-review` writes `04-review.json`, the heuristic "is `02-impl.json` the most recently written non-`05*` file" always returns false, which would falsely report standalone. The iteration counter (see "Iteration tracking") stays filesystem-derived; the chained-vs-standalone detection is env-derived.
       - **Review fail** → recurse: invoke `/005-implement-feedback <task-id>` again. The iteration counter increments (`05a` → `05b` → `05c`). The next invocation's Phase 0 enforces the hard cap.
 
   - **Verify fail** — recurse: invoke `/005-implement-feedback <task-id>` again. The iteration counter increments. The next invocation's Phase 0 enforces the hard cap.
 
-- **`status: "blocked"`** with `payload.next: "re-plan"` — the subagent declared the task needs re-planning because a Finding requires reverting an architectural choice. Halt. Print:
+- **`status: "blocked"`** with `payload.next: "resplit"` — the subagent declared the task needs resplit because a Finding requires reverting an architectural choice. Halt. Print:
   ```
-  feedback-implementer requests re-planning for <task-id>.
+  feedback-implementer requests resplit for <task-id>.
   Reason: <payload.reason>
   Suggest: /001-plan --resplit <task-id>
   ```
   Leave task `status: in_progress`. The user invokes `/001-plan --resplit` to decompose the task into smaller ones. Do not advance the chain.
 
-- **`status: "blocked"`** with `payload.next: "loop_limit_exceeded"` — the subagent itself detected loop limit before this command's Phase 0 did (e.g. partial run, race). Halt and surface the message to the user verbatim. Leave task `status: in_progress`.
+- **`status: "blocked"`** with `payload.next: "loop-limit"` — the subagent itself detected loop limit before this command's Phase 0 did (e.g. partial run, race). Halt and surface the message to the user verbatim. Leave task `status: in_progress`.
 
-- **`status: "blocked"`** with `payload.next: "external_decision_required"` — the subagent hit a blocker requiring an external decision (missing dependency, ambiguous Finding, infra not available). Print `payload.reason` and the suggested follow-up if present. Leave task `status: in_progress`.
+- **`status: "blocked"`** with `payload.next: "user-decision"` — the subagent hit a blocker requiring an external decision (missing dependency, ambiguous Finding, infra not available). Print `payload.reason` and the suggested follow-up if present. Leave task `status: in_progress`.
 
 ## Iteration tracking
 
@@ -112,12 +125,12 @@ Branch on `status`:
 - **Append-only**: feedback artifacts are never overwritten or renumbered. If `05a` already exists, the next run writes `05b`; it does not replace `05a`.
 - **Counter scope**: the counter is per-task, not per-gate. Three rounds total across verify and review combined — not three per gate. This is consistent with the cap enforced by `/002-implement` Phase 4/5.
 - **Why three?** Empirically: round 1 fixes the obvious surface Findings; round 2 catches second-order effects from the round-1 patch; round 3 is the last honest attempt before the diagnosis itself is suspect. After three rounds the bottleneck is almost certainly upstream — wrong plan, wrong scenario decomposition, or wrong rule — and the right move is `/001-plan --resplit`, not another fix.
-- **What "consecutive" means**: this command's cap counts feedback artifacts in the task's runs directory regardless of whether the most recent verify/review was triggered by chained orchestration or standalone invocation. The counter is purely filesystem-derived, so it stays accurate across parent restarts.
+- **What "consecutive" means**: this command's cap counts feedback artifacts in the task's runs directory regardless of whether the most recent verify/review was triggered by chained orchestration or standalone invocation. The counter is purely filesystem-derived, so it stays accurate across parent restarts. (Chained-vs-standalone **mode** is a separate concern, detected via the `CRUMBS_PARENT_COMMAND` env marker — see Phase 0. The counter does not depend on mode; mode only affects the success-path print decision in Phase 2.)
 
 ## Discipline
 
 - **The feedback loop does NOT bypass gates.** Every Finding from `/003` or `/004` blocks DoD. The feedback-implementer addresses them; it never overrides, downgrades, or rationalises them away. There are no severity tiers.
-- **Never silently expand scope.** If addressing a Finding would require reverting an architectural choice from `01-plan.json`, the subagent emits `status: "blocked"` with `next: "re-plan"`. Scope expansion goes through `/001-plan --resplit`, not through a feedback round.
+- **Never silently expand scope.** If addressing a Finding would require reverting an architectural choice from `01-plan.json`, the subagent emits `status: "blocked"` with `next: "resplit"`. Scope expansion goes through `/001-plan --resplit`, not through a feedback round.
 - **Append-only commits.** The subagent makes one or a few commits stacked on top of the implementer's commit. **Never amend.** **Never force-push.** History cleanup (squash) is a `/006-merge` concern, governed by `.claude/ruleset/git-workflow.md`.
 - **Read all prior phase files.** The subagent must understand the full task history (plan → impl → verify/review → earlier feedback rounds) before fixing. Skipping context is how regressions are introduced.
 - **Filesystem-only subagent comms.** The main thread reads `05<letter>-feedback-impl.json` after the subagent returns. Ruleset content is verbatim-injected into the prompt body, never via `@`-include (per CONTEXT.md "Ruleset injection").
@@ -126,18 +139,20 @@ Branch on `status`:
 
 ## Standalone vs chained
 
-- **Chained** (auto-invoked by `/002-implement` or `/002-auto-implement` on verify or review fail): the parent reads `05<letter>-feedback-impl.json` and continues the chain. The parent owns the overall iteration cap for the task; this command's Phase 0 cap is the safety net for standalone invocation and for parent miscounts.
-- **Standalone** (user-typed): same workflow; just no parent chain to advance. After Phase 2 success, this command prints a one-liner suggesting the next step (`/004-code-review` if the failing phase was verify; `/006-merge` if review). It does not chain further than the auto-invoked `/003` and `/004` runs needed to confirm the fix.
+Detection is via the env marker `CRUMBS_PARENT_COMMAND` (see Phase 0). Parents set it before dispatch and unset it after; this command reads it once at Phase 0 and stores the result as `MODE`.
 
-## Re-plan handoff (`next: "re-plan"`)
+- **Chained** (auto-invoked by `/002-implement` or `/002-auto-implement` on verify or review fail; `CRUMBS_PARENT_COMMAND` is set): the parent reads `05<letter>-feedback-impl.json` and continues the chain. The parent owns the overall iteration cap for the task; this command's Phase 0 cap is the safety net for standalone invocation and for parent miscounts.
+- **Standalone** (user-typed; `CRUMBS_PARENT_COMMAND` unset or empty): same workflow; just no parent chain to advance. After Phase 2 success, this command prints a one-liner suggesting the next step (`/004-code-review` if the failing phase was verify; `/006-merge` if review). It does not chain further than the auto-invoked `/003` and `/004` runs needed to confirm the fix.
 
-The `re-plan` signal is the feedback loop's pressure-release valve. It exists because some Findings cannot be honestly fixed without violating the plan recorded in `01-plan.json`. Examples:
+## Resplit handoff (`next: "resplit"`)
+
+The `resplit` signal is the feedback loop's pressure-release valve. It exists because some Findings cannot be honestly fixed without violating the plan recorded in `01-plan.json`. Examples:
 
 - A Finding from `/004-code-review` says the chosen aggregate boundary leaks domain state into infrastructure. The fix is to redraw the boundary, which would invalidate the task's `domain_scenarios` mapping.
 - A Finding from `/003-verify-dod` says the implemented contract drifts from the Business scenario. The drift is structural — the scenario itself needs to be re-decomposed.
-- A Finding requires changing the pattern (e.g. repository → event-sourced) chosen during planning. This is not a fix; it is a re-plan.
+- A Finding requires changing the pattern (e.g. repository → event-sourced) chosen during planning. This is not a fix; it is a resplit.
 
-In all such cases the feedback-implementer emits `status: "blocked"` with `next: "re-plan"` and a precise `payload.reason` pointing at the conflicting plan element. The main thread halts and prints the re-plan suggestion. The user invokes `/001-plan --resplit <task-id>` which replaces the offending task with smaller ones linked to the same Business scenarios. The old task is archived to `runs-archive/`. The new tasks each begin their own `/002-implement` cycle.
+In all such cases the feedback-implementer emits `status: "blocked"` with `next: "resplit"` and a precise `payload.reason` pointing at the conflicting plan element. The main thread halts and prints the resplit suggestion. The user invokes `/001-plan --resplit <task-id>` which replaces the offending task with smaller ones linked to the same Business scenarios. The old task is archived to `runs-archive/`. The new tasks each begin their own `/002-implement` cycle.
 
 This guard is the reason the feedback loop is bounded and honest. Silent scope expansion (fixing the Finding by quietly rewriting the plan) would invalidate every downstream artifact and destroy the audit trail.
 
@@ -147,8 +162,8 @@ This guard is the reason the feedback loop is bounded and honest. Silent scope e
 - **Task not `in_progress`** → abort at Phase 0 with the specific message.
 - **No failing phase artifact** → abort at Phase 0 with: `No failing phase to address. Run /003-verify-dod or /004-code-review first.`
 - **3 iterations exhausted** → halt at Phase 0 with the escalation message; leave task `status: in_progress`.
-- **Subagent emits `next: "re-plan"`** → halt at Phase 2 with the re-plan suggestion; leave task `status: in_progress`.
-- **Subagent emits `next: "loop_limit_exceeded"` or `next: "external_decision_required"`** → halt at Phase 2; surface the message verbatim; leave task `status: in_progress`.
+- **Subagent emits `next: "resplit"`** → halt at Phase 2 with the resplit suggestion; leave task `status: in_progress`.
+- **Subagent emits `next: "loop-limit"` or `next: "user-decision"`** → halt at Phase 2; surface the message verbatim; leave task `status: in_progress`.
 - **Subagent crashes or schema validation fails** on `05<letter>-feedback-impl.json` → halt with the artifact path and the validator error. Do not retry silently.
 - **Ruleset directory missing or incomplete** → abort at Phase 0; list the missing files.
 - **`stack.yaml` missing** → abort at Phase 0 pointing at `/000-prd-refine`.
@@ -178,9 +193,9 @@ Do not introduce synonyms. If you find yourself reaching for one, re-read the re
                               │     ├─ pass → suggest /006-merge
                               │     └─ fail → recurse (counter +1)
                               └─ fail → recurse (counter +1)
-                blocked re-plan          → halt; suggest /001-plan --resplit
-                blocked loop_limit_*     → halt; surface verbatim
-                blocked external_*       → halt; surface verbatim
+                blocked resplit          → halt; suggest /001-plan --resplit
+                blocked loop-limit       → halt; surface verbatim
+                blocked user-decision    → halt; surface verbatim
 ```
 
 The feedback-implementer subagent lives in `<plugin-root>/agents/feedback-implementer.md` (plugin-owned, not project-owned). The chain is iterative: `verifier` / `reviewer` → `feedback-implementer` → back to `verifier`. This command owns one feedback round's traversal of that loop; the iteration counter (`05a`, `05b`, `05c`) bounds the loop at three rounds per task.
@@ -189,7 +204,7 @@ The feedback-implementer subagent lives in `<plugin-root>/agents/feedback-implem
 
 Given task `T-014` belonging to epic `E-003`, `/004-code-review` just reported one Finding (`missing aria-label per accessibility.md`) and wrote `04-review.json` with `status: "fail"`:
 
-1. **Phase 0** — `/005-implement-feedback T-014` locates `docs/planning/epic-03-tasks.yaml`, confirms `T-014.status = in_progress`. Enumerates `.claude/runs/E-003/T-014/`: finds `01-plan.json`, `02-impl.json`, `03-verify.json` (status `pass`), `04-review.json` (status `fail`). Picks `04-review.json` as `failing_phase_path`. Counts `05*` files: 0 → next iteration is `05a`.
+1. **Phase 0** — `/005-implement-feedback T-014` locates `docs/planning/epic-003-tasks.yaml`, confirms `T-014.status = in_progress`. Enumerates `.claude/runs/E-003/T-014/`: finds `01-plan.json`, `02-impl.json`, `03-verify.json` (status `ok`), `04-review.json` (status `fail`). Picks `04-review.json` as `failing_phase_path`. Counts `05*` files: 0 → next iteration is `05a`.
 2. **Phase 1** — `feedback-implementer` subagent receives task YAML, `04-review.json` content (with the one Finding), all prior phase files, all 18 ruleset files verbatim, and `stack.yaml.extras`. It adds the `aria-label` per `accessibility.md`, commits with `fix(T-014): add aria-label to cancel button`, and writes `05a-feedback-impl.json` with `status: ok`, `findings_addressed: ["F-001"]`.
 3. **Phase 2** — Main thread auto-invokes `/003-verify-dod T-014`. Verify passes. The original failing phase was `04-review.json`, so main thread auto-invokes `/004-code-review T-014`. Review passes. Print: `Task T-014 chain complete. Suggest: /006-merge T-014.`
 

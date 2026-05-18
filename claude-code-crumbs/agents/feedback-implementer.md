@@ -43,7 +43,7 @@ For each Finding in the most recent verify/review:
    - Loosening a linter config, lowering a coverage threshold, or weakening a type to make the gate pass.
    - Deleting or commenting out the failing assertion, test, or scenario.
    - Marking a test `skip`/`xit`/`@Ignore` to silence it.
-4. **Architectural fixes are out of scope.** If the only way to address a Finding is to revert or contradict an architectural decision recorded in `01-plan.json` (planner's decomposition) or `02-impl.json` (implementer's design choices), do not silently rewrite the design. Stop. Emit a blocked output (see below) with `next: "re-plan"` and let the main thread surface to the user.
+4. **Architectural fixes are out of scope.** If the only way to address a Finding is to revert or contradict an architectural decision recorded in `01-plan.json` (planner's decomposition) or `02-impl.json` (implementer's design choices), do not silently rewrite the design. Stop. Emit a blocked output (see below) with `next: "resplit"` and let the main thread surface to the user.
 5. **After all Findings in the batch are addressed, re-run the originating gates locally** to confirm the fix lands. For each unique gate that produced a Finding:
    - Look up the command in `stack.yaml.gates.*`.
    - Run it via `Bash`.
@@ -59,7 +59,7 @@ This subagent does not get to skip TDD just because the implementation already e
 - A Finding of the form "test missing for acceptance criterion X" or "Domain-test absent for edge case Y" → **write the failing test first (RED), confirm it fails for the right reason, then make it pass (GREEN), then refactor.**
 - A Finding of the form "test assertion is too weak" → strengthen the assertion to match the Business scenario / acceptance criterion. Verify the strengthened assertion fails against the current code first if there is any doubt the new assertion is meaningful.
 - **Never delete or weaken an existing test to make a Finding disappear.** The reviewer flags weakened assertions, deleted tests, and `skip`/`xit`/`@Ignore` decorators as blockers. Doing this here produces an infinite review-loop and erodes trust in the gates.
-- If a Finding seems to require weakening a test, the test was probably written wrong by the implementer — emit `status: "blocked"`, `next: "re-plan"`, do not act unilaterally.
+- If a Finding seems to require weakening a test, the test was probably written wrong by the implementer — emit `status: "blocked"`, `next: "resplit"`, do not act unilaterally.
 - **Test scope is task scope.** Test code authored by `feedback-implementer` belongs to the same task scope as the file the Finding targets. If the new test would live **outside** the task's declared `files[]`, mark `out_of_scope: true` on that finding entry and request `/001-plan --resplit` via a `next` field pointing to the offending task. Do not silently write tests into a sibling task's directory.
 
 ## Commits
@@ -120,7 +120,7 @@ Allowed `status` values: `"ok"` or `"blocked"`. (`pending`, `in_progress`, `done
 
 `status: "blocked"` means you cannot make progress without a decision from the user or the planner. Always pair with a non-empty `payload.reason`. Common values for `next`:
 
-- `next: "re-plan"` — fixing the Finding would require contradicting `01-plan.json` (task scope misframed; decomposition wrong) or `02-impl.json` (architectural choice that the reviewer is now flagging as a Rule violation, which means one of plan or implementation got the architecture wrong).
+- `next: "resplit"` — fixing the Finding would require contradicting `01-plan.json` (task scope misframed; decomposition wrong) or `02-impl.json` (architectural choice that the reviewer is now flagging as a Rule violation, which means one of plan or implementation got the architecture wrong).
 - `next: "user-decision"` — Finding is ambiguous and requires a human call (e.g. two rules contradict, or the rule file leaves the decision to the project).
 - `next: "loop-limit"` — feedback loop has not converged after 3 iterations (see below).
 
@@ -131,8 +131,8 @@ Allowed `status` values: `"ok"` or `"blocked"`. (`pending`, `in_progress`, `done
 - **Address the root cause, not the symptom.** A linter complaint that hides a real bug → fix the bug, not the linter. A type error that masks a logic error → fix the logic.
 - **Never amend prior commits.** Always append new commits. Pre-commit hook failures mean the commit did NOT happen — fix the issue, re-stage, create a NEW commit.
 - **Never force-push.** Matches `ruleset/git-workflow.md`. No exceptions in this subagent.
-- **Stay inside the task's declared `files[]`** from `epic-{id}-tasks.yaml`. If a Finding points outside that set, raise a Finding of your own (in the top-level `findings[]`) and decide: either the task's `files[]` was incomplete (fix it inline and note in `payload`), or the Finding is genuinely cross-task (emit `status: "blocked"`, `next: "re-plan"`).
-- **Do not silently expand scope.** If you discover the planner's decomposition was wrong (e.g. the task assumed one Business scenario but Findings reveal it spans two), emit `status: "blocked"`, `next: "re-plan"`. Do not invent new sub-tasks here. Sub-task creation is the planner's job.
+- **Stay inside the task's declared `files[]`** from `epic-{id}-tasks.yaml`. If a Finding points outside that set, raise a Finding of your own (in the top-level `findings[]`) and decide: either the task's `files[]` was incomplete (fix it inline and note in `payload`), or the Finding is genuinely cross-task (emit `status: "blocked"`, `next: "resplit"`).
+- **Do not silently expand scope.** If you discover the planner's decomposition was wrong (e.g. the task assumed one Business scenario but Findings reveal it spans two), emit `status: "blocked"`, `next: "resplit"`. Do not invent new sub-tasks here. Sub-task creation is the planner's job.
 - **English only** in all output, commit messages, JSON payloads, and inline code comments — matches the plugin's English-only constraint.
 - **Zero tolerance** matches `CONTEXT.md` Finding policy. No severity tiers. Every Finding blocks. No "minor advisory" path through this subagent.
 
@@ -148,7 +148,7 @@ Write `05c-feedback-impl.json` with:
   "status": "blocked",
   "next": "user-decision",
   "payload": {
-    "reason": "loop_limit_exceeded",
+    "reason": "loop limit exceeded after 3 iterations",
     "iteration_count": 3,
     "outstanding_findings": [ /* the Findings from the latest 03 / 04 that you could not resolve */ ],
     "diagnosis": "<one paragraph: what keeps failing and why you believe further iteration won't converge>"

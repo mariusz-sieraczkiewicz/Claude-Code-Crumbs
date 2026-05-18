@@ -12,7 +12,7 @@ Output language for all artifacts and user-facing messages is **English**, regar
 ## Inputs
 
 - **`<epic-id>`** — passed as `$ARGUMENTS` (e.g. `E-007`). Required positional argument. Format: `E-NNN` (uppercase, zero-padded to three digits). If the argument is missing or malformed → abort with: `Usage: /002-auto-implement <epic-id> (e.g. /002-auto-implement E-007).`
-- **`docs/planning/epic-{id}-tasks.yaml`** — task list for the epic. Iterate only entries with `status: pending`. Skip `done`, `in_progress`, `blocked` silently (they are reported in the pre-flight count, not processed).
+- **`docs/planning/epic-{id}-tasks.yaml`** — task list for the epic, where `{id}` is the 3-digit zero-padded epic id (e.g. `epic-001-tasks.yaml`). Iterate only entries with `status: pending`. Skip `done`, `in_progress`, `blocked` silently (they are reported in the pre-flight count, not processed).
 - **`docs/planning/epics.yaml`** — Business scenarios for the epic, referenced by each task's `domain_scenarios` field. Loaded once and reused across every per-task subagent dispatch.
 - **`.claude/ruleset/*.md`** — all 18 canonical rule files, verbatim-loaded into memory once at the start of the batch. The same content block is injected into every subagent dispatch (`implementer`, `verifier`, `reviewer`, `feedback-implementer`).
 - **`.claude/ruleset/git-workflow.md`** — parse the YAML toggle block (same keys as `/002-implement`: `auto_invoke_review`, `auto_invoke_verify`, `allow_commit_to_main`, `pr_required`, `branch_name_pattern`, `require_signed_commits`). Toggles apply uniformly to every task in the batch.
@@ -22,29 +22,33 @@ Output language for all artifacts and user-facing messages is **English**, regar
 
 ### Phase 0 — Pre-flight
 
-- **Acquire epic lock (atomic).** Before any other pre-flight step, take an exclusive lock on the epic id via `mkdir` (atomic on POSIX). This prevents two terminals from racing on the same `epic-{id}-tasks.yaml` and `.claude/runs/{epic_id}/` tree. Run, verbatim, in the conductor's shell context:
+- **Step 0: resolve epic id from `$ARGUMENTS`.** Parse the epic id (e.g. `E-007`) out of `$ARGUMENTS` and validate it matches `^E-[0-9]{3}$`. On mismatch, emit the usage error from the Inputs section and exit. The orchestrator MUST hold this resolved id as a string and substitute the LITERAL value into the lock path below before invoking the Bash tool — environment variables do not persist across separate Bash tool calls in this harness, so `${EPIC_ID}` in a snippet authored once would be unset on the next invocation.
+- **Acquire epic lock (atomic, explicit cleanup).** Before any other pre-flight step, take an exclusive lock on the epic id via `mkdir` (atomic on POSIX). This prevents two terminals from racing on the same `epic-{id}-tasks.yaml` and `.claude/runs/{epic_id}/` tree. The orchestrator substitutes the resolved epic id (from Step 0) into the path string BEFORE invoking the Bash tool. Example, with the literal id `E-007` already substituted:
 
   ```sh
-  LOCK_DIR=".claude/runs/.lock-${EPIC_ID}"
-  if ! mkdir "$LOCK_DIR" 2>/dev/null; then
-      # Read PID/timestamp from existing lock for diagnostics
+  # NOTE: the orchestrator writes "E-007" verbatim here — there is no shell variable.
+  if ! mkdir ".claude/runs/.lock-E-007" 2>/dev/null; then
       LOCK_INFO=""
-      if [ -f "$LOCK_DIR/info" ]; then
-          LOCK_INFO=" (held by: $(cat "$LOCK_DIR/info"))"
+      if [ -f ".claude/runs/.lock-E-007/info" ]; then
+          LOCK_INFO=" (held by: $(cat ".claude/runs/.lock-E-007/info"))"
       fi
-      echo "Error: epic $EPIC_ID is already being processed${LOCK_INFO}." >&2
-      echo "If you are sure no other process is running, remove $LOCK_DIR and retry." >&2
+      echo "Error: epic E-007 is already being processed${LOCK_INFO}." >&2
+      echo "If you are sure no other process is running, remove .claude/runs/.lock-E-007 and retry." >&2
       exit 5
   fi
-  echo "$$@$(hostname) $(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$LOCK_DIR/info"
-
-  # Ensure lock is released on exit (success OR failure).
-  trap 'rm -rf "$LOCK_DIR"' EXIT INT TERM
+  echo "$$@$(hostname) $(date -u +%Y-%m-%dT%H:%M:%SZ)" > ".claude/runs/.lock-E-007/info"
   ```
 
-  Exit code `5` is reserved for the "already running" case so callers can distinguish concurrency from other pre-flight failures. The `trap` releases the lock on any exit path — success, halt-on-block, dispatch error, or signal. Stale locks (process killed `-9`, host crashed) require manual cleanup of `.claude/runs/.lock-<epic_id>/`.
+  Exit code `5` is reserved for the "already running" case so callers can distinguish concurrency from other pre-flight failures.
+
+  **No `trap`-based cleanup.** A `trap` set inside a Bash tool call only lives for the duration of that single invocation; the orchestrator returns to the Claude harness immediately after, and the trap exits — releasing the lock prematurely if it were trap-based. Instead, the lock is held across the entire command run by simply leaving the directory in place, and is removed at the very end:
+
+  - **Successful Phase 2 close-out** — after the final archive step, the orchestrator invokes a final Bash call that runs `rm -rf .claude/runs/.lock-E-007` (literal id substituted again).
+  - **Halt paths** (`too_big_proposal`, `blocked`, `loop-limit`, dispatch error, schema validation failure) — the same `rm -rf .claude/runs/.lock-E-007` is invoked from the halt-handling Bash call, in the same step that prints the halt diagnostic. Every halt path MUST explicitly release the lock; do not assume any wrapper does it.
+
+  **Trade-off:** if the orchestrator itself crashes mid-run (host crash, harness terminated), the lock directory is left behind as a stale lock and must be removed manually. The error message at acquisition points the user at the exact path, so manual cleanup is one `rm -rf` away. This is the same trade-off documented under "Concurrent run" in Failure modes; the explicit-cleanup pattern is preferred over `trap` because it correctly holds the lock across the conductor's many Bash tool calls, where a `trap` would silently release after the first one.
 - Verify `<epic-id>` exists as an entry in `docs/planning/epics.yaml`. If not → abort with: `Epic <epic-id> not found in docs/planning/epics.yaml. Run /000-prd-refine or /001-plan first.`
-- Verify `docs/planning/epic-{id}-tasks.yaml` exists (filename derived from the epic id, e.g. `E-007` → `epic-07-tasks.yaml`). If not → abort with the expected path and: `Run /001-plan E-NNN first.`
+- Verify `docs/planning/epic-{id}-tasks.yaml` exists (filename derived from the epic id, e.g. `E-007` → `epic-007-tasks.yaml`; the `{id}` placeholder always expands to the 3-digit zero-padded epic id). If not → abort with the expected path and: `Run /001-plan E-NNN first.`
 - Load the tasks list. Group entries by `status`. Compute:
   - `pending_ids` — ordered list of task ids with `status: pending`.
   - Counts for `pending | in_progress | blocked | done`.
@@ -111,11 +115,18 @@ Read `03-verify.json.status`:
 
 - **`status: "ok"`** → proceed to Step 5.
 - **`fail`** → enter the feedback loop. Iterations are numbered with letter suffix `a`, `b`, `c` (matching the runs-directory convention in `CONTEXT.md`):
+  - **Parent-context env marker.** This command MUST set `CRUMBS_PARENT_COMMAND=002-auto-implement` in the dispatch environment before any feedback-implementer dispatch (and, if the conductor ever falls back to invoking `/005-implement-feedback` directly, before that too), and `unset CRUMBS_PARENT_COMMAND` after the dispatch returns. This is how `/005-implement-feedback` distinguishes chained from standalone invocation when it is invoked from within this batch. Example:
+
+    ```sh
+    export CRUMBS_PARENT_COMMAND=002-auto-implement
+    # dispatch feedback-implementer (or /005-implement-feedback fallback)
+    unset CRUMBS_PARENT_COMMAND
+    ```
   1. Invoke `Task` tool with `subagent_type: "feedback-implementer"`. Prompt includes the ruleset block, prior `02-impl.json`, prior `03-verify.json`, `stack.yaml.extras`, the iteration suffix, and explicit instruction to fix only the gate findings — not to refactor unrelated code.
   2. Subagent writes `.claude/runs/{epic_id}/{task_id}/05a-feedback-impl.json` (then `05b-…`, `05c-…` on subsequent iterations). Each file is a fresh artifact, not an overwrite.
   3. Re-dispatch `verifier` subagent. It overwrites `03-verify.json` (latest result wins). Prior verify outputs are not preserved by this command — if the user needs the history, they inspect the runs directory before the next iteration overwrites it. The `05{a|b|c}-feedback-impl.json` files retain the per-iteration fix record.
-  4. Read the refreshed `03-verify.json`. If `pass` → exit the loop and continue to Step 5.
-- After 3 full iterations (`a`, `b`, `c`) still failing → **HALT the batch** with `loop_limit_exceeded`:
+  4. Read the refreshed `03-verify.json`. If `ok` → exit the loop and continue to Step 5.
+- After 3 full iterations (`a`, `b`, `c`) still failing → **HALT the batch** with `loop-limit`:
   - Print: `Verify loop exceeded 3 iterations for <task-id>. Halting batch. Review .claude/runs/<epic_id>/<task_id>/ and rerun /005-implement-feedback manually.`
   - Leave task `status: in_progress` (it is partially done; user must intervene).
   - Exit.
@@ -133,10 +144,11 @@ Same shape as Step 4, but driven by `04-review.json.status`:
 
 - **`status: "ok"`** → proceed to Step 7.
 - **`fail`** → loop:
+  - **Parent-context env marker.** As in Step 4: set `CRUMBS_PARENT_COMMAND=002-auto-implement` before the feedback-implementer dispatch and `unset CRUMBS_PARENT_COMMAND` after it returns. The marker must be set for every iteration of the loop.
   1. `feedback-implementer` subagent → writes next `05{a|b|c}-feedback-impl.json` (continuing the same letter sequence — do not reset; if Step 4 used `a` and `b`, this loop starts at `c`, and the cap is per-task not per-gate).
   2. `verifier` subagent → overwrites `03-verify.json`.
   3. `reviewer` subagent → overwrites `04-review.json`.
-- After 3 full iterations total per task still failing → **HALT** as in Step 4 with `loop_limit_exceeded`. The 3-iteration cap is shared across verify and review feedback for a single task. Once spent, the batch halts even if review feedback was the only failing gate.
+- After 3 full iterations total per task still failing → **HALT** as in Step 4 with `loop-limit`. The 3-iteration cap is shared across verify and review feedback for a single task. Once spent, the batch halts even if review feedback was the only failing gate.
 
 #### Step 7 — Mark task done
 
@@ -156,7 +168,8 @@ Order is MANDATORY:
 1. Write `status: done` to epic entry in `docs/planning/epics.yaml` AND mark all tasks `status: done` in `docs/planning/epic-{id}-tasks.yaml`.
 2. `git add docs/planning/epics.yaml docs/planning/epic-{id}-tasks.yaml` and `git commit -m "chore(planning): close epic {id}"`.
 3. ONLY AFTER successful commit: invoke `scripts/archive-epic-runs.sh {epic_id}`.
-4. If commit fails: abort, do NOT archive. Surface error to user.
+4. If commit fails: abort, do NOT archive. Surface error to user. Then release the Phase 0 lock (step 5) before exiting.
+5. **Release the Phase 0 lock** — `rm -rf .claude/runs/.lock-<epic_id>` (with the literal epic id substituted by the orchestrator). This is the final Bash call of the command on the success path. On every halt path (Phase 1 `too_big_proposal`, `blocked`, `loop-limit`, dispatch error, schema validation failure), the same `rm -rf` MUST execute in the halt-handling Bash call before the orchestrator returns.
 
 Print summary after step 2 (or step 3 on success): tasks completed, suggest `/006-merge T-LAST` and `/003-verify-dod T-LAST --epic-close` (ATDD specs).
 
@@ -189,8 +202,8 @@ A user could in principle write `for t in T-001 T-002 …; do /002-implement "$t
 - **Halt-on-block** is non-negotiable. Any of the three halt conditions stops the batch:
   - `too_big_proposal` from an `implementer`,
   - `blocked` from an `implementer`,
-  - `loop_limit_exceeded` (3 feedback iterations per task without a clean pass).
-- After a halt, the user intervenes (re-splits, unblocks, manually re-runs `/005-implement-feedback`). They then **re-run `/002-auto-implement <epic-id>`**, which picks up from the next `pending` task. Tasks already marked `done` stay `done` (the command skips them in Phase 0). Tasks left `in_progress` after `loop_limit_exceeded` require manual resolution before re-running, otherwise pre-flight will treat them as already-in-progress and skip them silently.
+  - `loop-limit` (3 feedback iterations per task without a clean pass).
+- After a halt, the user intervenes (re-splits, unblocks, manually re-runs `/005-implement-feedback`). They then **re-run `/002-auto-implement <epic-id>`**, which picks up from the next `pending` task. Tasks already marked `done` stay `done` (the command skips them in Phase 0). Tasks left `in_progress` after `loop-limit` require manual resolution before re-running, otherwise pre-flight will treat them as already-in-progress and skip them silently.
 - **No auto-merge, no auto-promote.** Even after a clean Phase 2 summary, `/006-merge` and `/007-promote` are user-triggered. This command surfaces the suggested invocations; the user runs them.
 
 ## Failure modes
@@ -202,7 +215,7 @@ A user could in principle write `for t in T-001 T-002 …; do /002-implement "$t
 - **Missing inputs** (epic not in `epics.yaml`, tasks file absent, ruleset incomplete, stack.yaml missing `gates`) → abort with the exact path(s) and the remediation command (`/000-prd-refine`, `/001-plan`, or a manual fix).
 - **Subagent dispatch error** (Task tool returns non-zero or no artifact written at the expected path) → print the subagent type and task id, halt the batch. Do not retry automatically — the user resumes after diagnosis.
 - **Schema validation failure on a subagent artifact** (JSON does not match the plugin-shipped schema for that phase) → halt the batch; print the validation error and the offending path. The task stays at whatever status it had before dispatch (typically `in_progress`).
-- **Concurrent run of `/002-auto-implement` for the same epic** is rejected by the Phase 0 atomic lock (`mkdir .claude/runs/.lock-<epic_id>`). The second invocation exits with code `5` and prints the holder's `pid@host` plus timestamp. Stale locks (process died without unwinding the `trap` — e.g. `kill -9`, host crash) require manual cleanup of `.claude/runs/.lock-<epic_id>/`; the error message points the user at the exact path. Different epic ids do not contend, so two terminals can drive two different epics in parallel without interference.
+- **Concurrent run of `/002-auto-implement` for the same epic** is rejected by the Phase 0 atomic lock (`mkdir .claude/runs/.lock-<epic_id>`). The second invocation exits with code `5` and prints the holder's `pid@host` plus timestamp. Stale locks (orchestrator crashed mid-run, host died) require manual cleanup of `.claude/runs/.lock-<epic_id>/`; the error message points the user at the exact path. The lock is released by an explicit `rm -rf` in the orchestrator's final Phase 2 step on success, or in the halt-handling Bash call on any failure path — there is no `trap`-based cleanup because traps do not survive across the orchestrator's separate Bash tool invocations. Different epic ids do not contend, so two terminals can drive two different epics in parallel without interference.
 
 ## Idempotency and resumability
 
@@ -211,9 +224,9 @@ This command is **resumable by design**. The state of the batch lives entirely i
 - `epic-{id}-tasks.yaml` — the authoritative `status` field per task.
 - `.claude/runs/{epic_id}/{task_id}/*.json` — the per-task subagent artifacts.
 
-Re-running `/002-auto-implement <epic-id>` after any halt picks up the next `pending` task and continues. There is no in-memory batch state and no resume token; the Phase 0 lock directory (`.claude/runs/.lock-<epic_id>/`) is held only for the lifetime of a single invocation and is removed by the `EXIT` trap before the process returns. The Phase 0 pre-flight rebuilds `pending_ids` fresh on every invocation, so any tasks marked `done` mid-batch are correctly skipped on the next run, and any tasks the user manually re-opened (set back to `pending`) are correctly re-processed.
+Re-running `/002-auto-implement <epic-id>` after any halt picks up the next `pending` task and continues. There is no in-memory batch state and no resume token; the Phase 0 lock directory (`.claude/runs/.lock-<epic_id>/`) is held for the lifetime of a single invocation and is removed by the orchestrator's explicit `rm -rf` call in the final close-out step (or the halt-handling step on any failure path). The Phase 0 pre-flight rebuilds `pending_ids` fresh on every invocation, so any tasks marked `done` mid-batch are correctly skipped on the next run, and any tasks the user manually re-opened (set back to `pending`) are correctly re-processed.
 
-If a task halted with `loop_limit_exceeded` and was left `in_progress`, the next run will **skip it** (because `pending_ids` only includes `pending`). The user must either:
+If a task halted with `loop-limit` and was left `in_progress`, the next run will **skip it** (because `pending_ids` only includes `pending`). The user must either:
 - Manually re-run `/005-implement-feedback <task-id>` until verify/review pass, then set the task to `done` themselves, **or**
 - Reset the task to `pending` and accept that `/002-auto-implement` will re-dispatch the full chain from scratch (the prior `02-impl.json` is still readable by the implementer subagent as historical context).
 
@@ -253,7 +266,7 @@ The four subagent types this command dispatches map 1:1 to the entries in `.clau
 
 Mirror `CONTEXT.md` exactly. Only these status tokens may appear in artifacts and user-facing output for tasks and epics: `pending | in_progress | blocked | done`. Do not invent batch-specific words like "running", "wip", "todo", "complete", "partial" — every such word maps to one of the four canonical statuses. The `02-impl.json` `status` field uses its own enum (`ok | too_big_proposal | blocked`) which is **subagent-result vocabulary**, not task-status vocabulary; the conductor translates `blocked` (impl result) into `status: blocked` (task status) when writing back to the tasks file. Keep the two enums distinct in user-facing language: say "the implementer signalled blocked" vs "the task is now blocked".
 
-The verify and review gate results use a third enum: `pass | fail`. This is **gate vocabulary**, distinct from both task status and impl result. A `fail` gate result never directly becomes a task status — it triggers the feedback loop, and only after the 3-iteration cap is exceeded does the task transition to a halt state (left at `in_progress` per the `loop_limit_exceeded` rule). The three enums are kept separate by design: conflating them would let a transient gate `fail` look like a permanent task `blocked`, which it is not.
+The verify and review gate results use a third enum: `pass | fail`. This is **gate vocabulary**, distinct from both task status and impl result. A `fail` gate result never directly becomes a task status — it triggers the feedback loop, and only after the 3-iteration cap is exceeded does the task transition to a halt state (left at `in_progress` per the `loop-limit` rule). The three enums are kept separate by design: conflating them would let a transient gate `fail` look like a permanent task `blocked`, which it is not.
 
 Domain tests are called **"Domain-tests"** in user-facing output (per `CONTEXT.md`), not "unit tests" or "integration tests". ATDD specs are called **"ATDD specs"** (also per `CONTEXT.md`), not "acceptance tests" or "BDD tests" or "Cucumber tests". The conductor mirrors the implementer/verifier/reviewer subagents in this terminology; do not translate.
 
@@ -263,8 +276,8 @@ For an epic `E-007` with five tasks (`T-001` done, `T-002 T-003 T-004` pending, 
 
 1. **Phase 0** prints: `Batch run for E-007 — 3 pending tasks: T-002, T-003, T-004. (skipping 1 done, 0 in_progress, 1 blocked) Proceed? (y/N)`.
 2. User types `y`.
-3. **T-002**: implementer returns `ok` → verifier returns `pass` → reviewer returns `pass` → status set to `done` → `T-002 ✅`.
-4. **T-003**: implementer returns `ok` → verifier returns `fail` → feedback iteration `a` → verifier `pass` → reviewer `pass` → `T-003 ✅`.
+3. **T-002**: implementer returns `ok` → verifier returns `ok` → reviewer returns `ok` → status set to `done` → `T-002 ✅`.
+4. **T-003**: implementer returns `ok` → verifier returns `fail` → feedback iteration `a` → verifier `ok` → reviewer `ok` → `T-003 ✅`.
 5. **T-004**: implementer returns `too_big_proposal` → conductor prints the proposal, suggests `/001-plan --resplit T-004`, halts. `T-004` stays `pending`. `T-005` stays `blocked` and is never touched.
 6. User runs `/001-plan --resplit T-004`, which replaces `T-004` with `T-004a` and `T-004b` (both `pending`).
 7. User re-runs `/002-auto-implement E-007`. Pre-flight rebuilds `pending_ids = [T-004a, T-004b]`. The two new tasks proceed through the chain.
@@ -274,7 +287,7 @@ For an epic `E-007` with five tasks (`T-001` done, `T-002 T-003 T-004` pending, 
 
 - `/002-implement` — single-task counterpart. Same per-task chain, no batching, no halt-on-block across tasks (because there is only one task).
 - `/001-plan --resplit <task-id>` — the user's escape hatch when an implementer signals `too_big_proposal`. Re-decomposes the offending task into smaller ones, then the user re-runs `/002-auto-implement <epic-id>` to resume.
-- `/005-implement-feedback <task-id>` — invokable standalone to manually drive the feedback loop on a single task that this command halted with `loop_limit_exceeded`.
+- `/005-implement-feedback <task-id>` — invokable standalone to manually drive the feedback loop on a single task that this command halted with `loop-limit`.
 - `/003-verify-dod <task-id>` and `/004-code-review <task-id>` — standalone gate invocations, useful for inspecting a halted task without re-running the implementer.
 - `/006-merge <epic-id>` — invoked by the user after Phase 2 prints its merge suggestion. Honours `git-workflow.md` for one-MR-per-task vs solo-no-MR behaviour.
 - `scripts/archive-epic-runs.sh` (Wave 8) — helper script invoked from Phase 2 to tar+remove the runs directory.

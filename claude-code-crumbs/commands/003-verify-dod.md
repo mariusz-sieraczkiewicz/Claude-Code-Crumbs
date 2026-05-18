@@ -57,7 +57,7 @@ Use the Task tool with `subagent_type: "verifier"`. The dispatch payload contain
 The verifier's contract (defined in its subagent prompt) is:
 
 1. Run every gate in the effective set. Capture exit code, stdout, stderr.
-2. For each non-zero exit, emit one or more `findings[]` entries, each with: `rule` (the gate name or the rule it enforces), `location` (file:line where available), `message` (condensed error), `evidence` (relevant stderr/stdout excerpt).
+2. For each non-zero exit, emit one or more `findings[]` entries, each with: `rule` (the gate name or the rule it enforces), `location` (file:line where available), `message` (condensed error), `details` (relevant stderr/stdout excerpt — per the Finding object in `schemas/run-phase.schema.json`).
 3. If `stack.yaml.design_verify.type == "prompt"`, emit a single `design_verify_prompt` finding pointing at the prompt file (this command handles it — see below).
 4. Write `runs/{epic_id}/{task_id}/03-verify.json` with `status: "ok"` (zero findings) or `status: "fail"` (≥1 finding). Schema: `schemas/run-phase.schema.json`.
 5. Never edit source code. Never run `/005-implement-feedback`. The verifier is **read-only**.
@@ -120,11 +120,25 @@ A schema-failing verifier output is a bug in the subagent prompt, not in the pro
   2. Computes the diff for the task (compare working tree against the branch base recorded in `02-impl.json`).
   3. Spawns a **separate general-purpose subagent** via the Task tool, with `subagent_type: "general-purpose"`. The prompt content is the subagent's instructions; the diff is the input. Inject `stack.yaml.extras` verbatim (same channel as the verifier).
   4. Collects the general-purpose subagent's findings (it returns the same `findings[]` shape).
-  5. Appends them to `03-verify.json.findings`.
-  6. Re-evaluates `status`: if any new findings landed, flip to `"fail"`; if not, keep `"ok"`.
-  7. Re-writes the JSON.
+  5. **Does not mutate `03-verify.json`.** Phase artifacts are append-only history; the verifier's output stays untouched. Instead, write a NEW sibling file `runs/{epic_id}/{task_id}/03b-design-verify.json` with shape:
 
-This indirection exists because `verifier` is a small, gate-focused subagent and design checks frequently need a broader LLM with general code-reading capability. The split keeps `verifier` deterministic and the design check tunable per-project via a markdown file.
+     ```json
+     {
+       "phase": "verify",
+       "agent": "design-verifier",
+       "task_id": "T-NNN",
+       "epic_id": "E-NNN",
+       "status": "ok|fail",
+       "findings": [...],
+       "started_at": "<ISO8601>",
+       "payload": { "design_verify_type": "prompt", "prompt_path": "<path>" }
+     }
+     ```
+
+     `status: "ok"` when the general-purpose subagent returned an empty findings list; `status: "fail"` otherwise.
+  6. Downstream consumers (notably `/004-code-review` Phase 0) gate on **both** files: review aborts if `03-verify.json.status != "ok"` OR `03b-design-verify.json` exists AND `03b-design-verify.json.status != "ok"`.
+
+This indirection exists because `verifier` is a small, gate-focused subagent and design checks frequently need a broader LLM with general code-reading capability. The split keeps `verifier` deterministic, the design check tunable per-project via a markdown file, and the runs history append-only.
 
 ## Standalone vs chained
 

@@ -10,7 +10,7 @@ This command is standalone-invokable. It is also auto-chained by `/002-implement
 ## Inputs
 
 - **`<task-id>`** — passed as `$ARGUMENTS` (e.g. `T-014`). Required positional argument.
-- **`docs/planning/epic-{id}-tasks.yaml`** — locate the task entry by scanning every `epic-*-tasks.yaml` under `docs/planning/`. The matching file's name yields the `epic_id` (e.g. `epic-03-tasks.yaml` → `E-003`). If the task is not found, abort with: `Task <task-id> not found in any epic-*-tasks.yaml. Run /001-plan first.`
+- **`docs/planning/epic-{id}-tasks.yaml`** — locate the task entry by scanning every `epic-*-tasks.yaml` under `docs/planning/`. The matching file's name yields the `epic_id` (e.g. `epic-003-tasks.yaml` → `E-003`). If the task is not found, abort with: `Task <task-id> not found in any epic-*-tasks.yaml. Run /001-plan first.`
 - **`.claude/ruleset/*.md`** — all 18 canonical Rule files, **verbatim-loaded** into memory for subagent injection. The Ruleset is the single source of truth for review checks. Per CONTEXT.md "Ruleset injection", content is pasted into the subagent prompt body — never via `@`-include, which does not always propagate to subagents.
 - **Prior phase files** under `.claude/runs/{epic_id}/{task_id}/`:
   - `01-plan.json` — planner's task decomposition.
@@ -32,7 +32,7 @@ This command is standalone-invokable. It is also auto-chained by `/002-implement
 - **Branch check.**
   - If `allow_commit_to_main: false` (typical for `small-team`, `oss`, `enterprise`): confirm the current branch is the task branch (commonly `task/<task-id>-<slug>`). If the current branch is the default branch, abort with: `On <default_branch>; expected task branch. Did /002-implement run?`
   - If `allow_commit_to_main: true` (typical for the `solo` preset): there is no task branch. Review against the prior commit's parent — set `<base>` to the parent of the implementer's commit (`02-impl.json.payload.commit_sha^`). Warn the user once: `Solo preset: reviewing commit <sha> against its parent.`
-- **Verify gate check.** Read `.claude/runs/{epic_id}/{task_id}/03-verify.json`. If the file is missing or `status != "ok"`, abort with: `Run /003-verify-dod first.` Rationale: review only runs after DoD passes — otherwise Findings would compound with infrastructure noise (failing gates leak through as spurious reviewer Findings).
+- **Verify gate check.** Read `.claude/runs/{epic_id}/{task_id}/03-verify.json`. If the file is missing or `status != "ok"`, abort with: `Run /003-verify-dod first.` Additionally, if `.claude/runs/{epic_id}/{task_id}/03b-design-verify.json` exists AND its `status != "ok"`, abort with the same message: `Run /003-verify-dod first.` The design-verify sibling artifact is produced by `/003-verify-dod` when `stack.yaml.design_verify.type == "prompt"`; it is append-only and lives alongside `03-verify.json` rather than mutating it. Rationale: review only runs after DoD passes — otherwise Findings would compound with infrastructure noise (failing gates leak through as spurious reviewer Findings).
 - Ensure `.claude/runs/{epic_id}/{task_id}/artifacts/` exists for transient subagent outputs.
 
 ### Phase 1 — Dispatch reviewer subagent
@@ -45,7 +45,7 @@ Use the **Task tool** with `subagent_type: "reviewer"`. Inject the following int
 4. **`stack.yaml.extras`** — paste the `extras` mapping verbatim under a header `--- stack.yaml.extras ---`. Stack-specific quirks (e.g. `bash_buffering_warning`, `user_ping_interval_minutes`) propagate via this channel.
 5. **Prior phase artifact paths** — list the absolute paths to `01-plan.json`, `02-impl.json`, `03-verify.json`, and every `05X-feedback-impl.json` present. The reviewer reads them directly (filesystem-only subagent comms per CONTEXT.md "Subagent chain"); do not paste their contents.
 6. **Output contract** — instruct the reviewer to write its result to `.claude/runs/{epic_id}/{task_id}/04-review.json`, validated against `schemas/run-phase.schema.json`. Top-level `status` ∈ `{ "ok", "fail" }`. Payload shape:
-   - `status: "ok"` → `payload.rules_checked` (integer, count of Rule files applied), `payload.files_reviewed` (array of paths).
+   - `status: "ok"` → `payload.rules_checked` (array of rule slug strings, e.g. `["accessibility", "api-design", "architecture", "code-style", ...]` — each entry is a Rule filename without the `.md` suffix or a cross-cutting check name), `payload.files_reviewed` (array of paths).
    - `status: "fail"` → `payload.findings` (non-empty array). Each finding object: `{ rule: "<filename>.md", location: "<path>:<line>", message: "<one-line description>" }`.
 
 The reviewer is **read-only**. It does not edit files, does not run `git`, does not stage anything. Fixes happen exclusively via `/005-implement-feedback`.
@@ -159,7 +159,7 @@ Re-running after `/005-implement-feedback` is the normal chained case — the fe
 
 Given task `T-014` in epic `E-003` under the `small-team` preset:
 
-1. **Phase 0** — locate `docs/planning/epic-03-tasks.yaml`; find `id: T-014`. Confirm 18 files in `.claude/ruleset/`. Read `.claude/runs/E-003/T-014/03-verify.json` — `status: "ok"`. Current branch is `task/T-014-cancel-subscription` (matches the configured pattern). `default_branch: main`. Proceed.
+1. **Phase 0** — locate `docs/planning/epic-003-tasks.yaml`; find `id: T-014`. Confirm 18 files in `.claude/ruleset/`. Read `.claude/runs/E-003/T-014/03-verify.json` — `status: "ok"`. Current branch is `task/T-014-cancel-subscription` (matches the configured pattern). `default_branch: main`. Proceed.
 2. **Phase 1** — Task tool with `subagent_type: "reviewer"`. Inject task YAML, `git diff main...HEAD` base, 18 Ruleset files verbatim, `stack.yaml.extras`, and prior-artifact paths (`01-plan.json`, `02-impl.json`, `03-verify.json`). The reviewer reads the diff, applies every Rule's checklist, and writes `.claude/runs/E-003/T-014/04-review.json`.
 3. **Phase 2** — `04-review.json` returns `status: "fail"`, `payload.findings: [{ rule: "accessibility.md", location: "src/billing/CancelButton.svelte:18", message: "Missing aria-label on confirm action." }, { rule: "observability.md", location: "src/billing/cancel.ts:42", message: "Log line includes user email — strip per security.md." }]`. The command renders:
    ```

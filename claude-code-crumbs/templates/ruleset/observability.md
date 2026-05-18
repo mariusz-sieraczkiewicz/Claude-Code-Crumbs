@@ -54,7 +54,7 @@ Use opaque identifiers instead: `user_id=<uuid>` or `user_id=<short-hash>` for c
 - **Schema for log events** — optional but powerful: a registry / typed wrapper that rejects unknown fields, enforces required fields (`trace_id`, `event`, `level`).
 - **Secret scanners** — `gitleaks`, `trufflehog` on commits and in CI to catch secrets that slipped into log strings or fixtures.
 - **PII detectors / redaction middleware** — pre-emission redaction of known field names (`email`, `password`, `token`, `authorization`) at the logger / HTTP-log layer.
-- **Trace propagation tests** — integration tests that assert a `trace_id` arrives at the downstream service unchanged.
+- **Trace propagation tests** — infra-layer tests (called "integration tests" by tools like Vitest/Pytest — distinct from plugin Domain-tests) that assert a `trace_id` arrives at the downstream service unchanged.
 - **Cardinality budgets** — alert (or fail CI) when a metric label set exceeds a declared cardinality ceiling. Most metrics backends offer this.
 - **OpenTelemetry / equivalent SDK** in use across services for a single propagation contract.
 

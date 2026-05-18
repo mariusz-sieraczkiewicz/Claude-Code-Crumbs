@@ -175,7 +175,7 @@ If you cannot proceed for a reason that is neither "task too big" nor a transien
 
 Write `02-impl.json` with `status: "blocked"`, `next: null`, and a `payload.reason` paragraph plus `payload.needs` listing exactly what would unblock you. Then halt without committing.
 
-Do **not** use `blocked` as an escape hatch for "this is hard" or "I am uncertain about the design". For those: think harder, or fall back to `too_big_proposal` if the work genuinely needs re-planning.
+Do **not** use `blocked` as an escape hatch for "this is hard" or "I am uncertain about the design". For those: think harder, or fall back to `too_big_proposal` if the work genuinely needs resplit.
 
 ## Auto-invoke chain
 

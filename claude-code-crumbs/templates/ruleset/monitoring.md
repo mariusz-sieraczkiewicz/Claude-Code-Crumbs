@@ -6,7 +6,7 @@ Monitoring is the **operations plane**: the active watch over a running system. 
 
 Two failures dominate practice:
 1. **Alert noise** — pagers that fire on non-actionable conditions; on-call burnout; real signals lost in the noise.
-2. **Blind spots** — critical user journeys with no SLO and no alert; outages discovered via support tickets.
+2. **Blind spots** — critical Journeys with no SLO and no alert; outages discovered via support tickets.
 
 This file aims at both.
 
@@ -18,7 +18,7 @@ This file aims at both.
   - **Target** — the number (e.g. 99.9% over 30 days).
   - **Window** — rolling period (typically 7, 28, or 30 days).
 - **Error budget** — the inverse (1 − SLO). Track burn rate; when burn is fast, slow change and prioritise reliability.
-- One SLO per critical user journey. Not one per microservice. The user does not care about your microservices.
+- One SLO per critical Journey. Not one per microservice. The user does not care about your microservices.
 
 ## Alerts — page only on action
 
@@ -44,7 +44,7 @@ Alert hygiene:
 ## Dashboards — one per audience
 
 - **Service health** (per service): RED metrics (Rate / Errors / Duration), saturation, error budget remaining.
-- **User journey** (per critical flow): end-to-end success rate, latency, drop-off.
+- **Journey** (per critical flow): end-to-end success rate, latency, drop-off.
 - **Incident dashboard**: pre-built views referenced from runbooks — the on-call should not be building queries during an outage.
 
 Dashboard hygiene:
@@ -126,7 +126,7 @@ What `reviewer` and `verifier` look for that tools cannot:
 - **Unowned alerts.** Routed to a channel nobody watches.
 - **Dashboards with no question.** Panels added "because we had the data"; nobody knows what to do with the curve.
 - **Silenced for "the foreseeable future".** Either fix it or delete it.
-- **Monitoring the monitor only.** Synthetic checks against `/healthz` that return 200 while the actual user journey is broken.
+- **Monitoring the monitor only.** Synthetic checks against `/healthz` that return 200 while the actual Journey is broken.
 - **No post-incident review.** Recurring incidents indicate the alert worked but the system did not learn.
 
 ## Cross-refs
