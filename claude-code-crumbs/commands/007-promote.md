@@ -84,12 +84,23 @@ Validate inputs before doing any work. Each check below is **abort-on-fail** unl
    `No workflow configured for <env>. Plugin does not orchestrate deploys — set <env>_workflow in stack.yaml or run promotion manually.`
    Then verify the workflow file actually exists at HEAD: `test -f .github/workflows/<workflow>` (or the GitLab-equivalent path). If missing, abort: `Workflow file .github/workflows/<workflow> not found at HEAD. Check stack.yaml.promote.<env>_workflow points to an existing file.`
 4. **Team-preset discipline.** Read `team_preset` from `stack.yaml`. Apply the matching policy:
+<!-- FREEZE:IF preset == "solo" -->
+   - Allow direct Promotion to any Environment. No staging precondition. No further checks.
+<!-- FREEZE:ELIF preset == "small-team" -->
+   - Promotion to `prod` requires staging to have been promoted within the **last 24h**. Read recent deploys via `gh run list --workflow=<staging_workflow> --limit 5 --json conclusion,updatedAt` (GitHub) or equivalent `glab` call. If no successful staging run in the window: **warn** and ask the user to confirm explicitly (`Proceed without recent staging? [y/N]`). Allow override on `y`; abort otherwise.
+<!-- FREEZE:ELIF preset == "oss" -->
+   - Promotion to `prod` requires the current commit to carry a release tag. Run `git describe --tags --exact-match HEAD`. If it fails, abort: `prod promote requires a tagged release on HEAD. Tag the commit first (git tag vX.Y.Z && git push --tags).`
+<!-- FREEZE:ELIF preset == "enterprise" -->
+   - Promotion to `prod` requires staging to have been promoted within the **last 24h**. Read recent deploys via `gh run list --workflow=<staging_workflow> --limit 5 --json conclusion,updatedAt` (GitHub) or equivalent `glab` call. If no successful staging run in the window, abort with `Enterprise preset requires staging promotion within the last 24h before prod. Run /007-promote staging first.` (No interactive override — enterprise discipline is non-negotiable.)
+   - In addition to the staging-within-24h precondition, Promotion to `prod` requires execution **inside the `change_window`**. Read the structured change-window config from `stack.yaml.extras.change_window` (preferred) — keys: `days` (e.g. `[Mon, Tue, Wed, Thu, Fri]`), `hours` (e.g. `"09:00-17:00"`), `timezone` (IANA, e.g. `"Europe/Warsaw"`). If `stack.yaml.extras.change_window` is absent, fall back to parsing the toggle block in `ruleset/deployment.md`. Compute current local time in the specified `timezone`. If outside the window AND the CM ticket id is NOT listed in `stack.yaml.extras.change_window.allow_outside_window_for`, abort: `Outside change window (<days> <hours> <timezone>). Override only with explicit user confirmation and CM approval reference, or add the ticket to allow_outside_window_for.` Permit override only on explicit `y` plus a non-empty CM reference typed by the user.
+<!-- FREEZE:ELSE -->
    - **`solo`** — allow direct Promotion to any Environment. No staging precondition. No further checks.
    - **`small-team` and `enterprise`** — Promotion to `prod` requires staging to have been promoted within the **last 24h**. Read recent deploys via `gh run list --workflow=<staging_workflow> --limit 5 --json conclusion,updatedAt` (GitHub) or equivalent `glab` call. If no successful staging run in the window:
      - For `small-team`: **warn** and ask the user to confirm explicitly (`Proceed without recent staging? [y/N]`). Allow override on `y`; abort otherwise.
      - For `enterprise`: abort with `Enterprise preset requires staging promotion within the last 24h before prod. Run /007-promote staging first.` (No interactive override — enterprise discipline is non-negotiable.)
    - **`oss`** — Promotion to `prod` requires the current commit to carry a release tag. Run `git describe --tags --exact-match HEAD`. If it fails, abort: `prod promote requires a tagged release on HEAD. Tag the commit first (git tag vX.Y.Z && git push --tags).`
    - **`enterprise`** — In addition to the staging-within-24h precondition above, Promotion to `prod` requires execution **inside the `change_window`**. Read the structured change-window config from `stack.yaml.extras.change_window` (preferred) — keys: `days` (e.g. `[Mon, Tue, Wed, Thu, Fri]`), `hours` (e.g. `"09:00-17:00"`), `timezone` (IANA, e.g. `"Europe/Warsaw"`). If `stack.yaml.extras.change_window` is absent, fall back to parsing the toggle block in `ruleset/deployment.md`. Compute current local time in the specified `timezone`. If outside the window AND the CM ticket id is NOT listed in `stack.yaml.extras.change_window.allow_outside_window_for`, abort: `Outside change window (<days> <hours> <timezone>). Override only with explicit user confirmation and CM approval reference, or add the ticket to allow_outside_window_for.` Permit override only on explicit `y` plus a non-empty CM reference typed by the user.
+<!-- FREEZE:ENDIF -->
 5. **Concurrent promotion check.** Use the `PLATFORM` / `HOST` resolved in step 2 (no re-detection from `git remote`):
    - **`PLATFORM=github`**: run `GH_HOST="$HOST" gh run list --workflow=<stack.yaml.promote.<environment>_workflow> --status=in_progress --limit=5 --json status,createdAt`. If the result is a non-empty array, abort: `A promotion workflow is already in progress for <workflow>. Wait for it to finish or cancel it manually before re-invoking /007-promote.`
    - **`PLATFORM=gitlab`**: run `GLAB_HOST="$HOST" glab pipeline list --status=running --limit=5` and filter to entries whose pipeline file matches `<stack.yaml.promote.<environment>_workflow>`. If any match, abort with the same message (substituting the workflow name).
@@ -99,6 +110,7 @@ Phase 0 produces no artifact; on success it prints a one-line summary of the che
 
 ### Phase 1 — Optional pre-flight script
 
+<!-- FREEZE:IF require_pre_flight -->
 If `stack.yaml.promote.pre_flight` is set (a shell command), run it via Bash:
 
 - Stream stdout/stderr to the terminal so the user sees progress.
@@ -111,6 +123,9 @@ If `--pre-flight` is passed **and** `stack.yaml.promote.pre_flight` is empty, do
 The pre-flight script is **project-defined**. Typical contents: smoke test against the **source** Environment, lint config files, validate secrets are wired, sanity-check a config bundle, confirm migration scripts apply cleanly to a snapshot. The plugin does not prescribe its shape. Treat it as opaque: run it, check exit code, surface output. If the project wants a more sophisticated pre-flight (parallel checks, structured reports), put it in the script — the plugin will not grow features here.
 
 Phase 1 runs **after** Phase 0 passes and **before** the Journey gate. This ordering is deliberate: pre-flight is the cheap project-specific sanity check; Journey is the expensive cross-feature smoke gate. Fail cheap first.
+<!-- FREEZE:ELSE -->
+Pre-flight is disabled (`require_pre_flight: false`). Skip Phase 1 entirely and proceed directly to the Journey gate. The `--pre-flight` flag, if passed, is a no-op with warning.
+<!-- FREEZE:ENDIF -->
 
 ### Phase 2 — Journey gate
 
@@ -165,8 +180,14 @@ The summary block is the **only** output the user keeps after a successful trigg
 
 - The plugin **does not** orchestrate deploy steps, container builds, migrations, or smoke tests post-trigger. The workflow file in `.github/workflows/` or `.gitlab-ci.yml` owns that logic end-to-end. If the user wants the plugin to do more, the answer is: edit the workflow file.
 - **Zero tolerance** on the Journey gate when configured. There is no `--skip-journeys`. To bypass, the user must edit `stack.yaml.gates.journeys` to `null` and accept the recorded warning.
+<!-- FREEZE:IF preset == "enterprise" -->
+- Enforce the `change_window` from `ruleset/deployment.md`. Outside the window, abort unless the user provides explicit override **and** a change-management reference.
+<!-- FREEZE:ELIF preset == "oss" -->
+- Never trigger `prod` without a tag on `HEAD`. Untagged Promotions defeat the release provenance contract.
+<!-- FREEZE:ELSE -->
 - For **enterprise** preset: enforce the `change_window` from `ruleset/deployment.md`. Outside the window, abort unless the user provides explicit override **and** a change-management reference.
 - For **oss** preset: never trigger `prod` without a tag on `HEAD`. Untagged Promotions defeat the release provenance contract.
+<!-- FREEZE:ENDIF -->
 - `/007-promote` does **not** verify that a prior `/003-verify-dod --epic-close` passed. That linkage belongs in `ruleset/deployment.md` (project policy) and in the platform workflow's own gates. The plugin keeps this command lightweight on purpose — project rules carry the load.
 - No subagent dispatch. No `.claude/runs/` write. Promotion is a product-level operation; task-level artifacts do not apply.
 - No retry loop. Triggering twice is the user's call, not the plugin's. If a trigger fails (network, auth, rate-limit), the plugin reports and exits — it does not back-off and retry.
@@ -178,11 +199,21 @@ The summary block is the **only** output the user keeps after a successful trigg
 - **Environment not in whitelist** → abort. Print the allowed list.
 - **Workflow not configured for chosen environment** → abort. Direct user to set `<env>_workflow` or run the Promotion manually on the platform.
 - **Unsupported platform / no CLI on `$PATH`** → abort with manual fallback message naming the workflow.
+<!-- FREEZE:IF require_pre_flight -->
 - **Pre-flight script non-zero exit** → abort with captured stderr.
+<!-- FREEZE:ENDIF -->
 - **Journey gate non-zero exit** → abort with full output. Never auto-retry.
+<!-- FREEZE:IF preset == "enterprise" -->
+- **Change-window violation** → abort with window text and current time. Override only on explicit confirmation plus CM reference.
+<!-- FREEZE:ELIF preset == "small-team" -->
+- **prod without recent staging** → warn, prompt, allow override on explicit `y`.
+<!-- FREEZE:ELIF preset == "oss" -->
+- **prod without tag on HEAD** → abort. Instruct user to tag and push.
+<!-- FREEZE:ELSE -->
 - **Enterprise change-window violation** → abort with window text and current time. Override only on explicit confirmation plus CM reference.
 - **`small-team` prod without recent staging** → warn, prompt, allow override on explicit `y`.
 - **`oss` prod without tag on HEAD** → abort. Instruct user to tag and push.
+<!-- FREEZE:ENDIF -->
 
 In every failure case, exit non-zero so the user's shell history reflects the abort. Print one clear remediation line.
 

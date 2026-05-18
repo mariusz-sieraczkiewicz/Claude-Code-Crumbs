@@ -30,7 +30,11 @@ You have **two entry modes**. Auto-detect from the input payload the main thread
 1. Read the per-epic section in `PRD.md` (the `## Epic E-NNN: <title>` heading and its body).
 2. Read the existing entry in `docs/planning/epics.yaml` if one exists.
 3. Decide whether the PRD section is **sufficient** for scenario authoring (see "Source-of-truth precedence" below).
-4. **CM ticket check.** Inspect the project's `.claude/ruleset/git-workflow.md` (falling back to `templates/presets/<team_preset>/git-workflow.md` when the ruleset file is not yet materialised). If it declares `require_ticket_reference: true`, the planner MUST prompt the user (via a `00-plan-questions.json` finding with `rule: "missing_cm_ticket"`) for the epic-level change-management ticket id **before** writing the epic entry. Validate the supplied id against the union of `ticket_prefixes` declared in the same `git-workflow.md` (e.g. `CHG|CM|JIRA|INC`); the full regex is `^(<prefix1>|<prefix2>|...)-[0-9]+$`. Store the accepted value as `cm_ticket: <ID>` on the epic entry in `epics.yaml`. If the ruleset has `require_ticket_reference: false` (or the key is absent), the field is optional — do not prompt.
+<!-- FREEZE:IF require_ticket_reference -->
+4. **CM ticket check.** `require_ticket_reference: true` in `.claude/ruleset/git-workflow.md` — the planner MUST prompt the user (via a `00-plan-questions.json` finding with `rule: "missing_cm_ticket"`) for the epic-level change-management ticket id **before** writing the epic entry. Validate the supplied id against the union of `ticket_prefixes` declared in the same `git-workflow.md` (e.g. <!-- FREEZE:VAL ticket_prefixes -->`CHG|CM|JIRA|INC`<!-- FREEZE:ENDVAL -->); the full regex is `^(<prefix1>|<prefix2>|...)-[0-9]+$`. Store the accepted value as `cm_ticket: <ID>` on the epic entry in `epics.yaml`.
+<!-- FREEZE:ELSE -->
+4. **CM ticket check.** `require_ticket_reference: false` — the `cm_ticket` field is optional. Do not prompt the user for a ticket id. If the user supplies one voluntarily, validate against the allowlist regex and store it; otherwise omit the field.
+<!-- FREEZE:ENDIF -->
 5. If sufficient: author **Business scenarios** (Gherkin block-scalar) and write them inline on the epic entry in `epics.yaml`.
 6. Decompose the epic into **Tasks**. Each task gets a `domain_scenarios: [...]` list (which drives RED Domain-tests) and exactly one `atdd_spec: <path>` field (the file the implementer will create during the task, executed only at epic close-out). Tasks MAY also carry an optional `cm_ticket:` field if the team tracks change-management per task; when absent, downstream commands (`/002`, `/006`) substitute `{ticket_id}` from the parent epic's `cm_ticket`. The per-task field follows the same pattern (`^[A-Z]{2,}-[0-9]+$`) and the same `ticket_prefixes` allowlist.
 7. Write the task list to `docs/planning/epic-{id}-tasks.yaml`.
@@ -223,7 +227,11 @@ Field semantics:
   Example: with `stack.language: python` and slug `subscription-cancel`, the field becomes `atdd_spec: tests/atdd/subscription-cancel_spec.py`. With `paths.atdd_spec_extension: ".feature"`, the same slug becomes `atdd_spec: tests/atdd/subscription-cancel.feature` regardless of language.
 - `rules_in_scope` — bare ruleset names (no `.md`); the implementer reads these and injects them into its own working context.
 - `depends_on` — task ids that must reach `done` first. Use sparingly; favour independently mergeable tasks.
-- `cm_ticket` — optional change-management ticket id matching `^[A-Z]{2,}-[0-9]+$`. Only emit when the project's `git-workflow.md` declares `require_ticket_reference: true` AND the team tracks tickets per task. Must use one of the prefixes listed in `git-workflow.md` `ticket_prefixes:`. When absent, downstream `/002`/`/006` substitute `{ticket_id}` from the parent epic's `cm_ticket`.
+<!-- FREEZE:IF require_ticket_reference -->
+- `cm_ticket` — optional change-management ticket id matching `^[A-Z]{2,}-[0-9]+$`. Emit when the team tracks tickets per task. Must use one of the prefixes listed in `git-workflow.md` `ticket_prefixes:` (<!-- FREEZE:VAL ticket_prefixes -->`CHG|CM|JIRA|INC`<!-- FREEZE:ENDVAL -->). When absent, downstream `/002`/`/006` substitute `{ticket_id}` from the parent epic's `cm_ticket`.
+<!-- FREEZE:ELSE -->
+- `cm_ticket` — not used. `require_ticket_reference: false` in `git-workflow.md`; the field SHOULD be omitted from task entries.
+<!-- FREEZE:ENDIF -->
 
 ## Quality bar
 

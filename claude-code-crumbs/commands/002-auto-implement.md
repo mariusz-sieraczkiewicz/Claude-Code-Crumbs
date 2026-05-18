@@ -72,6 +72,7 @@ Output language for all artifacts and user-facing messages is **English**, regar
   1. `git config --get user.email` must return non-empty.
   2. `git config --get user.name` must return non-empty.
   3. If either is empty → ABORT (release the Phase 0 lock first per the close-out cleanup contract) with: `Git identity not configured. Run \`git config --global user.email "<you@example>"\` and \`git config --global user.name "<Your Name>"\` then re-run.`
+<!-- FREEZE:IF require_signed_commits -->
 - **Signed-commits preflight.** If `git-workflow.md.require_signed_commits: true`:
   1. Run `git config --get user.signingkey` — must return non-empty.
   2. Run `git config --get commit.gpgsign` — must return `true` (or `gpg.format=ssh` plus `user.signingkey` set).
@@ -79,7 +80,10 @@ Output language for all artifacts and user-facing messages is **English**, regar
      - For GPG: `gpg --list-secret-keys "$(git config --get user.signingkey)" >/dev/null`
      - For SSH: `ssh-add -L | grep -q "$(git config --get user.signingkey)"` or accept if `gpg.format=ssh` and the key file exists on disk.
   4. If any check fails → ABORT (release the Phase 0 lock first per the close-out cleanup contract) with: `require_signed_commits=true but signing not configured. Set git config user.signingkey and ensure your agent (gpg-agent / ssh-agent) is running. Re-run after fixing.`
+<!-- FREEZE:ENDIF -->
+<!-- FREEZE:IF require_dco_signoff -->
 - **DCO sign-off flag.** Read `require_dco_signoff` from the `git-workflow.md` YAML toggle block (default: `false`; the `oss` preset ships it as `true`). If true, set the in-memory flag `REQUIRE_DCO_SIGNOFF=true` and pass it into every per-task `implementer` dispatch payload (Step 1 commit-policy header below). The implementer agent uses `git commit -s` (which appends a `Signed-off-by:` trailer) when this flag is set. The plugin does NOT validate the DCO trailer at this stage — that is `/006-merge`'s Phase 0 pre-flight job (BEFORE `git push`).
+<!-- FREEZE:ENDIF -->
 - Print the plan to the user (single block):
 
   ```
@@ -106,6 +110,7 @@ For each task id in `pending_ids`, **in declared order** (sequential, never para
 
 - **Pre-dispatch: resolve branch name and commit-msg context.** Mirrors `/002-implement` Phase 1 substitution rules. Recognised substitution keys for `branch_name_pattern`: `{task_id}`, `{slug}`, `{ticket_id}`.
   1. Substitute `{task_id}` with the current task id and `{slug}` with the task's `slug` (or kebab-cased `title` fallback).
+<!-- FREEZE:IF require_ticket_reference -->
   2. **Resolve `{ticket_id}`** (only required when the pattern contains the placeholder; enterprise default `task/{ticket_id}/{task_id}-{slug}`):
      a. Read `task.cm_ticket` from the current task entry in `epic-{id}-tasks.yaml`.
      b. If absent, fall back to `epic.cm_ticket` from the matching epic entry in `epics.yaml`.
@@ -113,6 +118,7 @@ For each task id in `pending_ids`, **in declared order** (sequential, never para
         - If `git-workflow.md.require_ticket_reference: true` → HALT the batch (release the Phase 0 lock first) with: `Task T-NNN has no cm_ticket and parent epic has none either. Add one via /001-plan or edit epic-NNN-tasks.yaml. (Enterprise preset requires CM ticket per task or epic.)`
         - Else → substitute `{ticket_id}` with the empty string and emit a visible warning (non-enterprise edge case).
      d. **Validate against `ticket_prefixes`** from `git-workflow.md` (if present): the resolved `<id>` must start with one of the configured prefixes (e.g. `CHG-`, `CM-`, `JIRA-`, `INC-`). Reject anything starting with `T-` — the plugin's own task-id namespace is reserved. On mismatch → HALT the batch with the resolved id, the allowed prefixes, and the source (task vs epic).
+<!-- FREEZE:ENDIF -->
   3. **Branch collision / resume check.** Before any sync, run `git show-ref --verify --quiet refs/heads/<computed-branch-name>`. If the branch exists:
      - If `HEAD` already points at that branch AND any commit on that branch carries the current task id OR the resolved ticket id in its subject (`git log --oneline --grep="$TASK_ID\|$TICKET_ID" <branch>`) — treat as **resume**: skip base checkout, skip branch creation.
      - Otherwise → HALT the batch: `Branch <computed-branch-name> exists but does not appear to be a resume from a prior /002-auto-implement run. Inspect manually before retrying.`

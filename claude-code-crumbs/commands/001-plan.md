@@ -27,13 +27,21 @@ Use the Read tool for every file below. Do not rely on `@`-includes — `@`-refe
 - `.claude/ruleset/*.md` — all 18 files. **Verbatim-inject** the contents into the planner subagent's prompt. Use the Read tool to load each file, then concatenate the bodies into the Task tool prompt, each preceded by a `--- <filename>.md ---` separator.
 - `.claude/stack.yaml` — read `paths.*` overrides (used by the planner to compute ATDD spec paths) and the `extras` block, which is propagated verbatim into the planner brief.
 
+<!-- FREEZE:IF require_ticket_reference -->
 **CM ticket awareness.** When the project's `.claude/ruleset/git-workflow.md` declares `require_ticket_reference: true` (the default for `team_preset: enterprise`), `/001-plan` will prompt for a change-management ticket id during epic creation and store it as `cm_ticket:` on the epic entry in `epics.yaml`. The id must match one of the `ticket_prefixes:` declared in the same `git-workflow.md` (e.g. `CHG`, `CM`, `JIRA`, `INC`). Downstream `/002-implement` and `/006-merge` substitute `{ticket_id}` from this field; if a task carries its own `cm_ticket:` override, that takes precedence over the epic-level value.
+<!-- FREEZE:ENDIF -->
 
 Example invocations:
 
 ```
 /001-plan E-007              # solo / oss preset: no ticket prompt
+```
+<!-- FREEZE:IF require_ticket_reference -->
+```
 /001-plan E-007              # enterprise preset: planner halts with `Ticket id for epic E-007?` and waits for a CHG-/CM-/JIRA-/INC- prefixed id
+```
+<!-- FREEZE:ENDIF -->
+```
 /001-plan --resplit T-014    # re-split mode (no ticket prompt; cm_ticket is inherited from the epic)
 ```
 

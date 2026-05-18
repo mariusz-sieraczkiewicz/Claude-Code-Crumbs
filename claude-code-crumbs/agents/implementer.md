@@ -85,13 +85,19 @@ You operate on a fresh branch dedicated to this task.
 - **Do NOT force-push.** You never push at all in this phase — pushing is `/006-merge`'s job.
 - **Never skip hooks** (`--no-verify`, `--no-gpg-sign`). If a pre-commit hook fails, fix the underlying issue and create a new commit. Hook failure means the commit did not happen — `--amend` after a hook failure would modify the **previous** task's commit.
 
-**DCO sign-off (conditional).** The orchestrator (`/002-implement` or `/002-auto-implement`) passes a `--- commit policy ---` block in your dispatch prompt. When that block contains `require_dco_signoff: true` (typical for the `oss` preset), you MUST commit with `git commit -s` — the `-s` flag appends a `Signed-off-by: Name <email>` trailer derived from `git config user.email` / `user.name`. This trailer is the Developer Certificate of Origin attestation.
+<!-- FREEZE:IF require_dco_signoff -->
+**DCO sign-off required.** `require_dco_signoff: true` in `git-workflow.md` — you MUST commit with `git commit -s`. The `-s` flag appends a `Signed-off-by: Name <email>` trailer derived from `git config user.email` / `user.name`. This trailer is the Developer Certificate of Origin attestation.
 
 - The sign-off MUST be on the ORIGINAL commit. Amending later to add `-s` is forbidden by the no-amend rule (and `/006-merge` runs its DCO check in Phase 0 pre-flight, BEFORE `git push` — so a missing trailer halts the user before the fork branch is advanced).
-- If `require_signed_commits: true` is ALSO set, the two flags compose: `git commit -S -s` (GPG/SSH-sign AND DCO sign-off). They are independent concerns — cryptographic signature vs textual trailer.
-- If the orchestrator's dispatch payload omits the `--- commit policy ---` block, default both flags to `false` (no sign-off, no `-S`).
-
-If the project's `git-workflow.md` overrides any of the above (e.g. team-model preset `enterprise` mandates signed commits, or `oss` mandates DCO sign-off), the project setting wins. Read the ruleset and the dispatch payload, do not assume.
+<!-- FREEZE:IF require_signed_commits -->
+- `require_signed_commits: true` is ALSO set — compose the two flags: `git commit -S -s` (GPG/SSH-sign AND DCO sign-off). They are independent concerns — cryptographic signature vs textual trailer.
+<!-- FREEZE:ENDIF -->
+<!-- FREEZE:ELSE -->
+**DCO sign-off not required.** `require_dco_signoff: false` in `git-workflow.md` — do NOT pass `-s` to `git commit`.
+<!-- FREEZE:IF require_signed_commits -->
+**Signed commits required.** `require_signed_commits: true` in `git-workflow.md` — every commit MUST be GPG/SSH-signed (`git commit -S`).
+<!-- FREEZE:ENDIF -->
+<!-- FREEZE:ENDIF -->
 
 ## Subagent inputs
 

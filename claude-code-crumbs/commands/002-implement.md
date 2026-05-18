@@ -24,8 +24,11 @@ This command is the single-task counterpart of `/002-auto-implement`. It dispatc
 - Capture the `epic_id` from the matching file's name (e.g. `epic-001-tasks.yaml` → `epic_id = E-001`, matching the entry in `epics.yaml`). Cross-check that the same epic id appears in `epics.yaml`; if not, abort with both paths.
 - **Detached HEAD check.** Run `git rev-parse --abbrev-ref HEAD`. If it returns the literal string `HEAD`, the working tree is in a detached-HEAD state and branch logic downstream will misbehave. ABORT with: `HEAD is detached. Check out a branch first: \`git checkout <branch-name>\` (e.g. main).`
 - **Dirty working tree check.** Run `git status --porcelain`. If the output is non-empty:
-  - If `allow_commit_to_main: false` (default; non-solo presets) → abort: `Working tree has uncommitted changes. Commit or stash them before /002-implement.`
-  - If `allow_commit_to_main: true` (solo preset) → proceed but print a visible warning: `Working tree dirty; proceeding under allow_commit_to_main=true (solo preset). Implementer commit will include all current staged/unstaged changes.`
+<!-- FREEZE:IF allow_commit_to_main -->
+  - `allow_commit_to_main: true` (solo preset) → proceed but print a visible warning: `Working tree dirty; proceeding under allow_commit_to_main=true (solo preset). Implementer commit will include all current staged/unstaged changes.`
+<!-- FREEZE:ELSE -->
+  - `allow_commit_to_main: false` (default; non-solo presets) → abort: `Working tree has uncommitted changes. Commit or stash them before /002-implement.`
+<!-- FREEZE:ENDIF -->
 - **Domain-scenario name validation.** Before dispatching the implementer, verify every entry in the task's `domain_scenarios: [name1, name2, ...]` array matches a scenario header in the epic's `business_scenarios` Gherkin block-scalar:
   1. Open `docs/planning/epics.yaml` and locate the matching epic by `epic_id`.
   2. Extract the `business_scenarios` block-scalar verbatim.
@@ -44,6 +47,7 @@ This command is the single-task counterpart of `/002-auto-implement`. It dispatc
   1. `git config --get user.email` must return non-empty.
   2. `git config --get user.name` must return non-empty.
   3. If either is empty → ABORT with: `Git identity not configured. Run \`git config --global user.email "<you@example>"\` and \`git config --global user.name "<Your Name>"\` then re-run.`
+<!-- FREEZE:IF require_signed_commits -->
 - **Signed-commits preflight.** If `git-workflow.md.require_signed_commits: true`:
   1. Run `git config --get user.signingkey` — must return non-empty.
   2. Run `git config --get commit.gpgsign` — must return `true` (or `gpg.format=ssh` plus `user.signingkey` set).
@@ -51,7 +55,10 @@ This command is the single-task counterpart of `/002-auto-implement`. It dispatc
      - For GPG: `gpg --list-secret-keys "$(git config --get user.signingkey)" >/dev/null`
      - For SSH: `ssh-add -L | grep -q "$(git config --get user.signingkey)"` or accept if `gpg.format=ssh` and the key file exists on disk.
   4. If any check fails → ABORT with: `require_signed_commits=true but signing not configured. Set git config user.signingkey and ensure your agent (gpg-agent / ssh-agent) is running. Re-run after fixing.`
+<!-- FREEZE:ENDIF -->
+<!-- FREEZE:IF require_dco_signoff -->
 - **DCO sign-off flag.** Read `require_dco_signoff` from the `git-workflow.md` YAML toggle block (default: `false`; the `oss` preset ships it as `true`). If true, set the in-memory flag `REQUIRE_DCO_SIGNOFF=true` and pass it into the implementer dispatch context (Phase 2, step 8 below). The implementer agent uses `git commit -s` (which appends a `Signed-off-by:` trailer) when this flag is set. The plugin does NOT validate the DCO trailer here — that is `/006-merge`'s Phase 0 pre-flight job (and it runs before `git push` so the user can rebase the fork branch without a force-push from origin).
+<!-- FREEZE:ENDIF -->
 - **Task lock.** Per-task lock prevents concurrent invocations of `/002-implement` against the same task id (two terminals racing on the branch, commit, or `02-impl.json`). The orchestrator substitutes the resolved epic id and task id into the path string BEFORE invoking the Bash tool (environment variables do not persist across separate Bash tool calls in this harness):
 
   ```sh
@@ -91,8 +98,9 @@ In all "resume" paths above, the task status in `epic-{id}-tasks.yaml` is set to
 
 ### Phase 1 — Branch
 
-- Read `branch_name_pattern` from the YAML toggle block in `.claude/ruleset/git-workflow.md`. Default: `task/{task_id}-{slug}`. Recognised substitution keys: `{task_id}`, `{slug}`, `{ticket_id}`.
+- Read `branch_name_pattern` from the YAML toggle block in `.claude/ruleset/git-workflow.md`. Default: <!-- FREEZE:VAL branch_name_pattern -->`task/{task_id}-{slug}`<!-- FREEZE:ENDVAL -->. Recognised substitution keys: `{task_id}`, `{slug}`, `{ticket_id}`.
   1. Substitute `{task_id}` with the actual id and `{slug}` with the task's `slug` field (or a kebab-cased `title` fallback).
+<!-- FREEZE:IF require_ticket_reference -->
   2. **Resolve `{ticket_id}`** (only required when the pattern contains the placeholder; enterprise default `task/{ticket_id}/{task_id}-{slug}`):
      a. Read `task.cm_ticket` from the current task entry in `epic-{id}-tasks.yaml`.
      b. If absent, fall back to `epic.cm_ticket` from the matching epic entry in `epics.yaml`.
@@ -100,9 +108,12 @@ In all "resume" paths above, the task status in `epic-{id}-tasks.yaml` is set to
         - If `git-workflow.md.require_ticket_reference: true` → ABORT with: `Task T-NNN has no cm_ticket and parent epic has none either. Add one via /001-plan or edit epic-NNN-tasks.yaml. (Enterprise preset requires CM ticket per task or epic.)`
         - Else → substitute `{ticket_id}` with the empty string and emit a visible warning (non-enterprise edge case where the pattern references the placeholder but no ticket is mandated).
      d. **Validate against `ticket_prefixes`** from `git-workflow.md` (if the key is present): the resolved `<id>` must start with one of the configured prefixes (e.g. `CHG-`, `CM-`, `JIRA-`, `INC-`). Reject anything starting with `T-` — the plugin's own task-id namespace is reserved and must never be reused as a ticket id. On mismatch → ABORT with the resolved id, the allowed prefixes, and the source (task vs epic) from which the id was read.
+<!-- FREEZE:ENDIF -->
+<!-- FREEZE:IF allow_commit_to_main -->
 - If `allow_commit_to_main: true` (typical for the **solo** preset):
   - Skip branch creation entirely.
   - The implementer will commit directly to `main` (or the configured default branch).
+<!-- FREEZE:ELSE -->
 - Otherwise:
   - Determine the default base branch (`main` unless `stack.yaml.paths.default_branch` overrides).
   - **Branch collision check.** Before syncing, run `git show-ref --verify --quiet refs/heads/<computed-branch-name>`. If the branch exists:
@@ -110,6 +121,7 @@ In all "resume" paths above, the task status in `epic-{id}-tasks.yaml` is set to
     - Otherwise → abort: `Branch <computed-branch-name> exists but does not appear to be a resume from a prior /002-implement run. Inspect manually before retrying.`
   - Run `git checkout <base>` then `git pull --ff-only` to sync.
   - Create and check out the new branch: `git checkout -b <computed-branch-name>`.
+<!-- FREEZE:ENDIF -->
 
 ### Phase 2 — Dispatch implementer subagent
 
@@ -216,16 +228,18 @@ If `auto_invoke_review: false`, skip Phase 5 and inform the user: `Auto-review d
 Reached only when both `03-verify.json` and `04-review.json` show `status: "ok"` (or the corresponding toggle disabled them).
 
 - Set task `status: done` in `epic-{id}-tasks.yaml`. Update any `summary.by_status` counter if the file maintains one.
+<!-- FREEZE:IF pr_required -->
 - Print a one-liner to the user:
   ```
   Task <task-id> complete. Open MR? Run /006-merge <task-id>
   ```
 - **Do NOT auto-invoke `/006-merge`.** Merging is always user-triggered to preserve a human checkpoint before the PR/MR lands.
-
-If `pr_required: false` (typical for the **solo** preset where commits go straight to main), substitute:
-```
-Task <task-id> complete and on main. /006-merge is a no-op for the solo preset.
-```
+<!-- FREEZE:ELSE -->
+- Print a one-liner to the user:
+  ```
+  Task <task-id> complete and on main. /006-merge is a no-op for the solo preset.
+  ```
+<!-- FREEZE:ENDIF -->
 
 ## Toggle precedence
 

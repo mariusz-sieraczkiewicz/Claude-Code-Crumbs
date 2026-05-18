@@ -44,11 +44,16 @@ The active preset is determined by which `git-workflow.md` is present in `.claud
 > **Step ordering is load-bearing.** The `pr_required: false` short-circuit (step 2) MUST run BEFORE any host/remote/network operation (steps 3+). Solo + no-remote setups have no `origin`; running host detection first surfaces a confusing `Cannot resolve host` error instead of the clean `Solo preset — no MR required` exit. Do not reorder.
 
 1. **Task exists and done.** Load the task entry from `epic-{id}-tasks.yaml` (the `{id}` comes from the task's epic linkage). If the task is missing → abort: `Task <id> not found in any epic-*-tasks.yaml.` If `status != done` → abort: `Task must be /002-implement-complete (status: done) before merging.`
+<!-- FREEZE:IF !pr_required -->
 2. **`pr_required` toggle short-circuit (runs BEFORE any remote/host/network operation).** Read the `pr_required` toggle from `.claude/ruleset/git-workflow.md`. If `pr_required: false`:
+<!-- FREEZE:IF tag_task_commits -->
    - If the toggle block also has `tag_task_commits: true` (solo preset default): run `git tag "${EPIC_ID}/${TASK_ID}" HEAD` (substitute the literal epic id and task id resolved in step 1, e.g. `git tag E-007/T-014 HEAD`). If the tag already exists (`git rev-parse --verify "${EPIC_ID}/${TASK_ID}" >/dev/null 2>&1`), skip the tag creation silently. Print: `Solo preset — tagged HEAD as <epic_id>/<task_id>. No MR required.` Exit 0.
-   - Else: print `Solo preset — /006-merge is a no-op for this task. Task complete on main.` Exit 0.
+<!-- FREEZE:ELSE -->
+   - Print `Solo preset — /006-merge is a no-op for this task. Task complete on main.` Exit 0.
+<!-- FREEZE:ENDIF -->
 
    This short-circuit ensures solo + no-remote runs never reach host detection. Do NOT push, do NOT call `gh`/`glab`, do NOT touch the network on the solo path.
+<!-- FREEZE:ENDIF -->
 3. **Branch matches pattern.** Compare `git rev-parse --abbrev-ref HEAD` against `branch_name_pattern`. Mismatch → warn (`Branch <name> does not match pattern <pattern>; proceeding.`) but do not abort.
 4. **Detect remote and platform.** Use the 3-step host-aware detection algorithm (works for GitHub Enterprise and self-hosted GitLab — host is **not** matched against `github.com` / `gitlab.com` literals). Host resolution order: `stack.yaml.extras.git_host` (override; useful when `origin` is a fork) → `git remote get-url origin`. Once resolved, the same `gh|glab auth status --hostname` probe determines the platform.
 
@@ -96,7 +101,10 @@ The active preset is determined by which `git-workflow.md` is present in `.claud
 6. **Auth check.** Already folded into step 4 — the `gh auth status --hostname "$HOST"` / `glab auth status --hostname "$HOST"` probe doubles as platform detection AND auth verification. If neither CLI is authenticated for `$HOST`, the abort message from step 4 names the exact `--hostname` flag the user needs.
 
    **Plugin cannot verify external CM-system state.** Whether the referenced CM ticket is in `Approved for Deployment` state is enforced server-side by the platform (workflow `required_reviewers`, branch protection, or a `ticket-link-check` CI job). The plugin does not contact your CM/Jira/ServiceNow API.
+<!-- FREEZE:IF require_signed_commits -->
 7. **Signed commits (conditional).** If `require_signed_commits: true`, run `git log --pretty='%G?' <base_branch>..HEAD` and confirm every line is `G`. Any other value (`N`, `B`, `U`, `X`, `Y`, `R`, `E`) → abort: `Unsigned or invalid signature on commit <sha>. Sign commits before opening the MR.`
+<!-- FREEZE:ENDIF -->
+<!-- FREEZE:IF require_dco_signoff -->
 8. **DCO sign-off (conditional, pre-push).** If `require_dco_signoff: true` (typical for the `oss` preset), iterate every commit in `<base>..HEAD` and verify each commit message body contains a `Signed-off-by:` trailer:
 
    ```sh
@@ -117,6 +125,8 @@ The active preset is determined by which `git-workflow.md` is present in `.claud
    ```
 
    This check runs in Phase 0 (BEFORE any `git push`) so the fork's remote branch is not advanced with sign-off-less commits.
+<!-- FREEZE:ENDIF -->
+<!-- FREEZE:IF preset == "oss" -->
 9. **Upstream remote resolution (OSS).** If the active preset is `oss`, resolve fork→upstream topology now (Phase 3 needs it for `--repo` and `--head`):
 
    - Read `extras.upstream_remote` from `.claude/stack.yaml` (default: `upstream`).
@@ -137,6 +147,7 @@ The active preset is determined by which `git-workflow.md` is present in `.claud
        ```
 
        Leave `UPSTREAM_REPO`/`FORK_OWNER` unset; Phase 3 falls back to the default `gh pr create` behaviour (PR opens against origin's own default branch).
+<!-- FREEZE:ENDIF -->
 
 ### Phase 1 — Push branch
 
@@ -173,6 +184,7 @@ If push fails (non-fast-forward, rejected, network) → abort and surface the ra
 <optional — from task.notes if present; omit section if empty>
 ```
 
+<!-- FREEZE:IF preset == "enterprise" -->
 **Enterprise preset addendum.** When the active preset is `enterprise`, append:
 
 ```
@@ -183,7 +195,9 @@ If push fails (non-fast-forward, rejected, network) → abort and surface the ra
 ```
 
 Parse `<ticket-id>` from the branch name (e.g. `task/T-001-CM-12345-something` → `CM-12345`) or from any commit message body. The pattern is preset-defined (default: `[A-Z]+-\d+`). If no match → abort: `Enterprise preset requires a change-management ticket id (pattern: <pattern>) in branch name or commit messages.`
+<!-- FREEZE:ENDIF -->
 
+<!-- FREEZE:IF preset == "oss" -->
 **OSS preset addendum.** When the active preset is `oss`, append:
 
 ```
@@ -193,14 +207,19 @@ Parse `<ticket-id>` from the branch name (e.g. `task/T-001-CM-12345-something` �
 ```
 
 DCO sign-off is enforced in Phase 0 step 8 — BEFORE `git push`. Phase 2 only renders the body section; it does not re-check. If Phase 0 passed, every commit in `<base>..HEAD` carries a `Signed-off-by:` trailer by construction.
+<!-- FREEZE:ENDIF -->
 
 ### Phase 3 — Open MR/PR
 
 **Network timeout posture.** This command invokes GitHub/GitLab CLI commands that perform network I/O. The CLI tools (`gh`, `glab`) use their own default timeouts; this command does NOT wrap them in an external timeout. If a CLI call hangs >120s, halt the command (Ctrl-C) and re-run after checking network connectivity. Do not auto-retry — duplicate PRs/MRs/workflow triggers may result.
 
+<!-- FREEZE:IF require_codeowners_review -->
 **CODEOWNERS-driven review.** When any preset has `require_codeowners_review: true` (both **enterprise** and **oss** typically set this), required reviewers, CODEOWNERS, and merge-block-until-checks-pass are enforced server-side by GitHub/GitLab branch protection. The plugin does NOT pass `--reviewer` flags in that case — CODEOWNERS auto-assigns server-side. For other presets, `--reviewer <default_reviewers>` applies as normal.
+<!-- FREEZE:ENDIF -->
 
+<!-- FREEZE:IF preset == "oss" -->
 **Fork→upstream topology (OSS).** When the active preset is `oss` AND Phase 0 step 9 resolved an `UPSTREAM_REPO` + `FORK_OWNER`, the GitHub PR MUST target the upstream repo with `--repo "$UPSTREAM_REPO"` and the cross-fork head `--head "$FORK_OWNER:$BRANCH"`. Without these flags, `gh` defaults to opening the PR on the fork's own default branch, which violates the OSS contract (fork→upstream:main).
+<!-- FREEZE:ENDIF -->
 
 GitHub (prepend `GH_HOST="$HOST"` so GHE hosts route correctly):
 

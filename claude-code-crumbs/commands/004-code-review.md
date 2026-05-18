@@ -29,9 +29,11 @@ This command is standalone-invokable. It is also auto-chained by `/002-implement
 - Verify `.claude/ruleset/` contains all 18 canonical Rule files. If any are missing, list them and abort — the reviewer cannot be dispatched without the full Ruleset.
 - Confirm `.claude/stack.yaml` exists and parses. If absent, abort with: `stack.yaml missing. Run /000-prd-refine to bootstrap the project.`
 - Parse the YAML toggle block in `.claude/ruleset/git-workflow.md`. Read `default_branch` (fallback `main`) and `allow_commit_to_main` (fallback `false`).
-- **Branch check.**
-  - If `allow_commit_to_main: false` (typical for `small-team`, `oss`, `enterprise`): confirm the current branch is the task branch (commonly `task/<task-id>-<slug>`). If the current branch is the default branch, abort with: `On <default_branch>; expected task branch. Did /002-implement run?`
-  - If `allow_commit_to_main: true` (typical for the `solo` preset): there is no task branch. Review against the prior commit's parent — set `<base>` to the parent of the implementer's commit (`02-impl.json.payload.commit_sha^`). Warn the user once: `Solo preset: reviewing commit <sha> against its parent.`
+<!-- FREEZE:IF allow_commit_to_main -->
+- **Branch check.** `allow_commit_to_main: true` — there is no task branch. Review against the prior commit's parent — set `<base>` to the parent of the implementer's commit (`02-impl.json.payload.commit_sha^`). Warn the user once: `Reviewing commit <sha> against its parent.`
+<!-- FREEZE:ELSE -->
+- **Branch check.** `allow_commit_to_main: false` — confirm the current branch is the task branch (commonly `task/<task-id>-<slug>`). If the current branch is the default branch, abort with: `On <default_branch>; expected task branch. Did /002-implement run?`
+<!-- FREEZE:ENDIF -->
 - **Verify gate check.** Read `.claude/runs/{epic_id}/{task_id}/03-verify.json`. If the file is missing or `status != "ok"`, abort with: `Run /003-verify-dod first.` Additionally, if `.claude/runs/{epic_id}/{task_id}/03b-design-verify.json` exists AND its `status != "ok"`, abort with the same message: `Run /003-verify-dod first.` The design-verify sibling artifact is produced by `/003-verify-dod` when `stack.yaml.design_verify.type == "prompt"`; it is append-only and lives alongside `03-verify.json` rather than mutating it. Rationale: review only runs after DoD passes — otherwise Findings would compound with infrastructure noise (failing gates leak through as spurious reviewer Findings).
 - Ensure `.claude/runs/{epic_id}/{task_id}/artifacts/` exists for transient subagent outputs.
 
@@ -172,7 +174,9 @@ Given task `T-014` in epic `E-003` under the `small-team` preset:
    ```
 4. If invoked standalone, the command exits here. If chained from `/002-implement`, the parent reads the same artifact and spawns `/005-implement-feedback T-014` itself.
 
-Under the `solo` preset the only differences are: no branch check, `<base>` is the implementer commit's parent, and the suggested merge step is replaced with `Task T-014 already on main; /006-merge is a no-op.` after a clean review.
+<!-- FREEZE:IF allow_commit_to_main -->
+With `allow_commit_to_main: true` the only differences are: no branch check, `<base>` is the implementer commit's parent, and the suggested merge step is replaced with `Task T-014 already on main; /006-merge is a no-op.` after a clean review.
+<!-- FREEZE:ENDIF -->
 
 ## Why review runs after verify, not before
 

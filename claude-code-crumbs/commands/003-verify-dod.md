@@ -76,8 +76,13 @@ DoD ok — <N> gates run, <N> passed, 0 findings.
 
 Suggest the next step depending on invocation context:
 
-- **Chained from `/002-implement`** (parent will detect `status: "ok"` itself): no suggestion needed; control returns to the parent which auto-advances to `/004-code-review` (or to merge proposal if `auto_invoke_review: false` in `git-workflow.md`).
-- **Standalone**: suggest `/004-code-review <task-id>` next, or `/006-merge <task-id>` if `git-workflow.md` has `auto_invoke_review: false`.
+<!-- FREEZE:IF auto_invoke_review -->
+- **Chained from `/002-implement`** (parent will detect `status: "ok"` itself): no suggestion needed; control returns to the parent which auto-advances to `/004-code-review`.
+- **Standalone**: suggest `/004-code-review <task-id>` next.
+<!-- FREEZE:ELSE -->
+- **Chained from `/002-implement`** (parent will detect `status: "ok"` itself): no suggestion needed; control returns to the parent which advances to the merge proposal (auto_invoke_review is off in `git-workflow.md`).
+- **Standalone**: suggest `/006-merge <task-id>` next (auto_invoke_review is off; review is opt-in via explicit `/004-code-review`).
+<!-- FREEZE:ENDIF -->
 
 #### `status: "fail"`
 

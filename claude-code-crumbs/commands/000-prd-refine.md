@@ -3,6 +3,8 @@ description: Bootstrap a project (State A) or refine PRD / add-edit epics (State
 argument-hint: [--mode=A|B|C]
 ---
 
+<!-- FREEZE:SKIP --> (one-time bootstrap; never frozen)
+
 # /000-prd-refine — Product-level definition (bootstrap + refine)
 
 You are the **product-level entry point** for the `claude-code-crumbs` plugin. This command has no dedicated subagent — you run interactively in the main thread, grilling the user, building `CONTEXT.md` inline, and offering ADRs at trade-off decisions.

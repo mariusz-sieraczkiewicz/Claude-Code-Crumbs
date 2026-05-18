@@ -83,7 +83,11 @@ The feedback-implementer is expected to:
 - Read `payload.findings[]` from the failing phase artifact and address **each** at the root cause. **Zero tolerance** — every Finding blocks DoD; the subagent does not argue with Findings, it fixes them. Exception: if a Finding's `location` points at a file that no longer exists at `HEAD` (e.g. deleted in a prior fix iteration), drop that Finding and record it under `payload.dropped_findings: [{ rule, location, reason: 'file_deleted' }]`. Never attempt to fix Findings against non-existent files.
 - **Never silently expand scope.** If a Finding requires reverting an architectural choice from the plan (`01-plan.json`) — e.g. dropping an aggregate boundary, changing the chosen pattern, removing a contract — the subagent emits `status: "blocked"` with `next: "resplit"` and a `payload.reason` explaining why. The fix is not attempted; control returns to `/001-plan --resplit`.
 - Make **one or a few commits** on the task branch (never amend, never force-push). Commit messages follow Conventional Commits with a `fix(T-NNN):` or `refactor(T-NNN):` prefix per `.claude/ruleset/git-workflow.md`.
-- Sign commits if `require_signed_commits: true` is set in the `git-workflow.md` toggle block.
+<!-- FREEZE:IF require_signed_commits -->
+- Sign every commit (`git commit -S`) — `require_signed_commits: true` in the `git-workflow.md` toggle block.
+<!-- FREEZE:ELSE -->
+- Do not sign commits — `require_signed_commits: false` in the `git-workflow.md` toggle block.
+<!-- FREEZE:ENDIF -->
 - Write the final artifact `05<letter>-feedback-impl.json` with a top-level `status` field: `ok` or `blocked`.
 
 ### Phase 2 — Read feedback-implementer output
@@ -134,7 +138,11 @@ Branch on `status`:
 - **Append-only commits.** The subagent makes one or a few commits stacked on top of the implementer's commit. **Never amend.** **Never force-push.** History cleanup (squash) is a `/006-merge` concern, governed by `.claude/ruleset/git-workflow.md`.
 - **Read all prior phase files.** The subagent must understand the full task history (plan → impl → verify/review → earlier feedback rounds) before fixing. Skipping context is how regressions are introduced.
 - **Filesystem-only subagent comms.** The main thread reads `05<letter>-feedback-impl.json` after the subagent returns. Ruleset content is verbatim-injected into the prompt body, never via `@`-include (per CONTEXT.md "Ruleset injection").
-- **Honour `require_signed_commits`.** If the toggle block in `git-workflow.md` sets it to `true`, every feedback commit is signed.
+<!-- FREEZE:IF require_signed_commits -->
+- **Signed commits required.** `require_signed_commits: true` in `git-workflow.md` — every feedback commit MUST be signed (`git commit -S`).
+<!-- FREEZE:ELSE -->
+- **Signed commits not required.** `require_signed_commits: false` in `git-workflow.md` — feedback commits are unsigned by default.
+<!-- FREEZE:ENDIF -->
 - **Task `status` stays `in_progress`.** This command never flips `status` to `done` or back to `pending`. Those transitions are owned by `/002-implement` Phase 6 (`done`) and `/001-plan --resplit` (`pending`). On any hard halt, the task stays `in_progress` and the user is told what to do next.
 
 ## Standalone vs chained
