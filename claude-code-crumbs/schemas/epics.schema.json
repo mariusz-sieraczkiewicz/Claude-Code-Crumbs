@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://claude-code-crumbs/schemas/epics.schema.json",
+  "title": "Epics",
+  "description": "Schema for docs/planning/epics.yaml — the SoT list of epics with verbatim Gherkin business scenarios.",
+  "type": "object",
+  "required": ["epics"],
+  "additionalProperties": false,
+  "properties": {
+    "epics": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/epic" }
+    }
+  },
+  "$defs": {
+    "epic": {
+      "type": "object",
+      "required": ["id", "title", "status", "goal", "business_scenarios"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^E-\\d{3}$"
+        },
+        "title": { "type": "string" },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "in_progress", "blocked", "done"]
+        },
+        "goal": { "type": "string" },
+        "business_scenarios": { "type": "string" },
+        "adrs": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "modules": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date"
+        },
+        "closed_at": {
+          "type": "string",
+          "format": "date"
+        }
+      }
+    }
+  }
+}

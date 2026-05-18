@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://claude-code-crumbs/schemas/stack.schema.json",
+  "title": "Stack",
+  "description": "Schema for .claude/stack.yaml — project stack, gates, paths and promotion config.",
+  "type": "object",
+  "required": ["stack", "team_preset", "gates"],
+  "additionalProperties": false,
+  "properties": {
+    "stack": {
+      "type": "object",
+      "required": ["name", "language"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "language": { "type": "string" },
+        "runtime": { "type": "string" }
+      }
+    },
+    "team_preset": {
+      "type": "string",
+      "enum": ["solo", "small-team", "oss", "enterprise"]
+    },
+    "paths": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "prd": { "type": "string", "default": "PRD.md" },
+        "context": { "type": "string", "default": "CONTEXT.md" },
+        "epics": { "type": "string", "default": "docs/planning/epics.yaml" },
+        "epic_tasks_glob": { "type": "string", "default": "docs/planning/epic-*-tasks.yaml" },
+        "scenarios_index": { "type": "string", "default": "docs/planning/SCENARIOS.md" },
+        "ruleset": { "type": "string", "default": ".claude/ruleset/" },
+        "runs": { "type": "string", "default": ".claude/runs/" },
+        "runs_archive": { "type": "string", "default": ".claude/runs-archive/" },
+        "adr": { "type": "string", "default": "docs/adr/" }
+      }
+    },
+    "gates": {
+      "type": "object",
+      "properties": {
+        "_timeout_seconds": { "type": "integer", "minimum": 1, "default": 600 },
+        "lint": { "type": ["string", "null"] },
+        "typecheck": { "type": ["string", "null"] },
+        "domain_tests": { "type": ["string", "null"] },
+        "atdd_specs": { "type": ["string", "null"] },
+        "journeys": { "type": ["string", "null"] },
+        "build": { "type": ["string", "null"] },
+        "security": { "type": ["string", "null"] },
+        "a11y": { "type": ["string", "null"] },
+        "perf": { "type": ["string", "null"] }
+      },
+      "additionalProperties": { "type": ["string", "null"] }
+    },
+    "design_verify": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string", "enum": ["script", "prompt"] },
+        "path": { "type": "string" }
+      }
+    },
+    "promote": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "environments": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "staging_workflow": { "type": ["string", "null"] },
+        "prod_workflow": { "type": ["string", "null"] },
+        "pre_flight": { "type": ["string", "null"] }
+      }
+    },
+    "extras": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  }
+}

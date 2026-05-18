@@ -1,0 +1,46 @@
+# stack.yaml — stack-adaptation config. Project-owned. Validated against plugin's stack.schema.json.
+
+stack:
+  name: "<project-name>"          # e.g. "acme-web"
+  language: "<language>"           # e.g. "typescript", "swift", "python", "go"
+  runtime: "<runtime>"             # optional, e.g. "bun", "node", "iOS 17", "python 3.12"
+
+team_preset: small-team             # one of: solo | small-team | oss | enterprise. Set by /000-prd-refine. Informational after bootstrap.
+
+paths:                              # optional path overrides. Defaults shown.
+  prd: PRD.md
+  context: CONTEXT.md
+  epics: docs/planning/epics.yaml
+  epic_tasks_glob: "docs/planning/epic-*-tasks.yaml"
+  scenarios_index: docs/planning/SCENARIOS.md
+  ruleset: .claude/ruleset/
+  runs: .claude/runs/
+  runs_archive: .claude/runs-archive/
+  adr: docs/adr/
+
+gates:                              # shell commands. null = skip. Zero tolerance — any exit != 0 blocks DoD.
+  _timeout_seconds: 600                 # optional. Per-gate timeout in seconds. Default 600. Verifier emits a blocker if a gate exceeds.
+  lint: "<your lint command>"          # e.g. "bun run lint"
+  typecheck: "<your typecheck>"        # e.g. "bun run typecheck", "swift build"
+  domain_tests: "<your domain test runner>"   # Vertex-style, no-infra
+  atdd_specs: null                      # null per-task; populated for epic close-out, e.g. "bun run test:atdd"
+  journeys: null                        # populated for promotion only, e.g. "bun run test:journeys"
+  build: "<your build command>"
+  security: null                        # e.g. "gitleaks detect", "trivy fs ."
+  a11y: null                            # e.g. "bun run test:a11y"
+  perf: null                            # e.g. "bun run test:perf"
+
+design_verify:                      # optional
+  type: prompt                         # "script" | "prompt"
+  path: docs/design-verify-prompt.md   # path to script or prompt file
+
+promote:                            # optional. Empty/missing = /007-promote skipped.
+  environments: [staging, prod]
+  staging_workflow: "promote-staging.yml"  # .github/workflows file or null
+  prod_workflow: "promote-prod.yml"
+  pre_flight: null                       # optional shell command
+
+extras: {}                          # free-form. Propagated verbatim to all subagents.
+# extras:
+#   bash_buffering_warning: true
+#   user_ping_interval_minutes: 5

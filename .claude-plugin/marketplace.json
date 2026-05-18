@@ -4,5 +4,12 @@
   "owner": {
     "name": "Mariusz Sieraczkiewicz"
   },
-  "plugins": []
+  "plugins": [
+    {
+      "name": "claude-code-crumbs",
+      "source": "./claude-code-crumbs",
+      "description": "Universal product-driven delivery workflow: TDD entry-point, subagent chain, zero-tolerance gates. Stack-, SoT-, and team-agnostic.",
+      "version": "0.1.0"
+    }
+  ]
 }

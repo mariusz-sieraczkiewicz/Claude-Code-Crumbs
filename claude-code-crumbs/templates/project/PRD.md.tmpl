@@ -1,0 +1,164 @@
+<!-- PRD template. Populated by /000-prd-refine. Sielappkowo-style §1..§13 structure. -->
+<!-- Sections §4-§7 are prefilled (plugin-prescribed) and rarely need editing. -->
+<!-- Sections §1-§3, §8-§13 are skeletons — grill them into shape inline. -->
+
+# <project-name> — Product Requirements Document
+
+## §1. Vision
+
+<vision-sentence: one sentence stating what this project is and the single discipline it delivers.>
+
+<optional second paragraph: what makes the vision durable across time / change of stack / change of team.>
+
+## §2. Users
+
+- **<user-segment-1>** — <one-line description of who they are and what they want from this project>.
+- **<user-segment-2>** — <…>
+- **<user-segment-3>** — <…>
+
+<optional closing line: which axes the project is opinionated about and which it stays flexible on.>
+
+## §3. Goals and non-goals
+
+### Goals
+
+- **<goal-1-name>** — <one-line elaboration>
+- **<goal-2-name>** — <…>
+- **<goal-3-name>** — <…>
+
+### Non-goals
+
+- <explicit non-goal 1>
+- <explicit non-goal 2>
+- <explicit non-goal 3>
+
+## §4. Test taxonomy and Step library architecture
+
+Four distinct test/spec artifacts, sharing one execution layer:
+
+| Artifact | Level | Cadence | World |
+|---|---|---|---|
+| **Business scenario** | Epic | Authored upfront (Gherkin, domain-oriented, UI-ignorant) | N/A — prose |
+| **Domain-test** | Task | Frequent (inner loop, every RED-GREEN-REFACTOR) | `DomainWorld` (in-memory aggregates, no infra) |
+| **ATDD spec** | Task | Written during task; **executed only at epic close-out** | `BrowserWorld` / `DeviceWorld` (real browser/device, near-real infra) |
+| **Journey** | Product | Promotion smoke gate; real production-like environment | `BrowserWorld` / `DeviceWorld` (real env) |
+
+### Step library + World pattern (ADR-0001)
+
+A single, shared **Step library** maps Business scenario verbs to executable actions. Steps are written world-agnostic; the same `cancelSubscription()` step runs against `DomainWorld` for Domain-tests and `BrowserWorld` for ATDD specs and Journeys. Test bodies become near-identical sequences of step calls — only World wiring differs.
+
+### Coverage policy
+
+- Every Business scenario gets **one ATDD spec** (happy path only) and **one or more Domain-tests** (happy + edge cases).
+- Edge cases live **exclusively** in Domain-tests. ATDD spec never carries edge variants.
+- Journeys are composed at the **product** level, typically 3-7 per product.
+
+## §5. Command set
+
+| Command | Role | Subagent |
+|---|---|---|
+| `/000-prd-refine` | Context-aware product-level definition. Bootstraps project on first invocation; adds/edits epics afterwards. Builds `CONTEXT.md` glossary inline; offers ADRs at trade-off decisions. | (interactive, no dedicated subagent) |
+| `/001-plan` | Epic decomposition + Business scenario authoring. Reads PRD per-epic section as the brief source; grills user when underspecified. Re-split mode handles "task too big" callbacks. | `planner` |
+| `/002-implement` | Single-task TDD orchestrator. New branch → Domain-test RED → code GREEN → REFACTOR → write ATDD spec → commit → auto-invoke `/003` then `/004` (toggleable via `git-workflow.md`) → propose MR/PR on clean review. | `implementer` |
+| `/002-auto-implement` | Epic-level batch orchestrator. Runs `/002 → /003 → /004 → /005` for every pending task in an epic. Each step runs as a dedicated subagent. | spawns the chain |
+| `/003-verify-dod` | DoD gate. Runs all `stack.yaml.gates`. Zero tolerance. Standalone-invokable. | `verifier` |
+| `/004-code-review` | Review gate. Reads ruleset/* verbatim-injected. Zero tolerance. Standalone-invokable. | `reviewer` |
+| `/005-implement-feedback` | Reads `/003` and `/004` findings; fixes implementation; loops back to `verifier`. | `feedback-implementer` |
+| `/006-merge` | Opens MR/PR using conventions from `ruleset/git-workflow.md`. Invokes `gh pr create` / `glab mr create`. | (no subagent — direct CLI) |
+| `/007-promote` | Triggers a pre-existing platform workflow (`gh workflow run …`). Plugin does not orchestrate deploy logic. Optional — skipped if `stack.yaml.promote` empty. | (no subagent — direct CLI) |
+
+### Subagent communication
+
+Subagents communicate via **filesystem** under `.claude/runs/{epic-id}/{task-id}/NN-<phase>.json`. Each phase reads all prior phase files (append-only history). Ruleset content is **verbatim-injected** into subagent prompts (not via `@`-include). `stack.yaml.extras` propagates verbatim to all subagents. On epic close-out, `runs/{epic-id}/` is auto-archived to `runs-archive/`.
+
+## §6. Ruleset taxonomy
+
+Plugin ships **18 canonical rule categories** in `templates/ruleset/`, each with a baseline principle. At bootstrap, `/000-prd-refine` copies all 18 into the project's `.claude/ruleset/`. Project edits freely; plugin upgrades do **not** touch project-side ruleset.
+
+`accessibility`, `api-design`, `architecture`, `code-style`, `copy-and-i18n`, `data-access`, `data-modeling`, `deployment`, `documentation`, `error-handling`, `git-workflow`, `language-patterns`, `monitoring`, `observability`, `performance`, `security`, `testing`, `ui-components`.
+
+`git-workflow.md` and `deployment.md` are seeded from one of four **team-model presets** chosen at bootstrap:
+
+- **solo** — commit-to-main; no review; direct deploy.
+- **small-team** — feature branches; 1-2 reviewers; staging gate.
+- **oss** — fork-based PRs; multiple maintainers; no auto-deploy.
+- **enterprise** — compliance gates; 2+ approvers; change-management window.
+
+Chosen preset is recorded in `.claude/stack.yaml.team_preset` for forensics. Plugin does not auto-migrate between presets.
+
+## §7. File layout and ownership
+
+### Canonical SoT layout
+
+```
+PRD.md                              # product-level + per-epic sections (## Epic E-NNN)
+CONTEXT.md                          # project glossary
+docs/
+  planning/
+    epics.yaml                      # epic registry + business_scenarios (Gherkin block-scalars)
+    epic-{id}-tasks.yaml            # per-epic task list (PR-friendly)
+    SCENARIOS.md                    # generated flat scenario index
+  adr/
+    NNNN-slug.md                    # ADRs (Matt Pocock minimal format)
+.claude/
+  ruleset/*.md                      # 18 rules, snapshotted at bootstrap, project-owned
+  stack.yaml                        # stack-adaptation config
+  runs/                             # gitignored — subagent comms
+  runs-archive/                     # gitignored — closed-out archives
+```
+
+`stack.yaml.paths.*` may override the canonical paths.
+
+### Ownership split
+
+- **Plugin-owned** (`~/.claude/plugins/claude-code-crumbs/`, upgraded as a unit): `agents/`, `commands/`, `schemas/`, `templates/`, `scripts/`. Plugin ships **no skills** — `grill-with-docs` and any other skills are external/optional.
+- **Project-owned** (committed per-project): `PRD.md`, `CONTEXT.md`, `docs/planning/`, `docs/adr/`, `.claude/ruleset/`, `.claude/stack.yaml`.
+- **Project-owned but gitignored**: `.claude/runs/`, `.claude/runs-archive/`.
+
+## §8. Distribution and install
+
+<delete this section if N/A for the project. Otherwise describe how the product is distributed and installed.>
+
+- **Distribution channel**: <e.g. npm package / App Store / docker image / internal artifact repo>
+- **Install flow**: <step-by-step user-facing install / onboarding sequence>
+
+## §9. Decisions
+
+<!-- ADR references go here once recorded. -->
+
+### Vocabulary
+
+- <key term 1>: <one-line decision about how it is used in this project>
+- <key term 2>: <…>
+
+### Architectural ADRs
+
+- <e.g. [ADR-0001 — <title>](docs/adr/0001-<slug>.md)>
+
+### Flagged ambiguities resolved during grilling
+
+- <ambiguity → resolution>
+
+## §10. V1 scope (binding)
+
+<binding list of what v1 must deliver. Treat this as a contract — moving items out is a scope change, not a refinement.>
+
+- <v1 deliverable 1>
+- <v1 deliverable 2>
+- <v1 deliverable 3>
+
+## §11. Out-of-scope for v1
+
+- <explicit non-deliverable 1>
+- <explicit non-deliverable 2>
+
+## §12. Open questions deferred past v1
+
+- <question 1 — why deferred>
+- <question 2 — why deferred>
+
+## §13. Per-epic sections
+
+> Populated by `/000-prd-refine` in State B/C as epics are added. Each section begins `## Epic E-NNN: <title>` with subsections `### Goal`, `### Decisions`, `### V1 Scope`, `### Out-of-scope`. Business scenarios for each epic live in `docs/planning/epics.yaml`, not here.
+
+*(none yet)*
