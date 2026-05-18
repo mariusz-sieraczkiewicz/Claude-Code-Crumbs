@@ -78,10 +78,10 @@ Suggest the next step depending on invocation context:
 
 <!-- FREEZE:IF auto_invoke_review -->
 - **Chained from `/002-implement`** (parent will detect `status: "ok"` itself): no suggestion needed; control returns to the parent which auto-advances to `/004-code-review`.
-- **Standalone**: suggest `/004-code-review <task-id>` next.
+- **Standalone**: invoke `/004-code-review <task-id>` immediately via the SlashCommand tool (`auto_invoke_review` is on for this preset). Do not wait for the user — the toggle says auto, so go.
 <!-- FREEZE:ELSE -->
-- **Chained from `/002-implement`** (parent will detect `status: "ok"` itself): no suggestion needed; control returns to the parent which advances to the merge proposal (auto_invoke_review is off in `git-workflow.md`).
-- **Standalone**: suggest `/006-merge <task-id>` next (auto_invoke_review is off; review is opt-in via explicit `/004-code-review`).
+- **Chained from `/002-implement`** (parent will detect `status: "ok"` itself): no suggestion needed; control returns to the parent which advances to the merge proposal (`auto_invoke_review` is off in `git-workflow.md`).
+- **Standalone**: suggest `/006-merge <task-id>` next (`auto_invoke_review` is off for this preset; review is opt-in via explicit `/004-code-review`).
 <!-- FREEZE:ENDIF -->
 
 #### `status: "fail"`

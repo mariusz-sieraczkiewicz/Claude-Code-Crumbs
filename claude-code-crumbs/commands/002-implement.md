@@ -13,7 +13,15 @@ This command is the single-task counterpart of `/002-auto-implement`. It dispatc
 - **`docs/planning/epic-{id}-tasks.yaml`** — locate the task entry by scanning every `epic-*-tasks.yaml` under `docs/planning/` (where `{id}` is the 3-digit zero-padded epic id, e.g. `epic-001-tasks.yaml`). If not found anywhere, abort with: `Task <task-id> not found in any epic-*-tasks.yaml. Run /001-plan first.`
 - **`docs/planning/epics.yaml`** — locate the Business scenarios referenced by the task's `domain_scenarios` field. Read the Gherkin block-scalar verbatim from the matching epic entry. If a referenced scenario is missing, abort with the path and missing scenario name.
 - **`.claude/ruleset/*.md`** — all 18 canonical rule files, verbatim-loaded into memory for downstream subagent injection (no `@`-include — content is pasted into the subagent prompt body).
-- **`.claude/ruleset/git-workflow.md`** — parse the YAML toggle block at the top of the file for `auto_invoke_review`, `auto_invoke_verify`, `allow_commit_to_main`, `pr_required`, `branch_name_pattern`, `require_signed_commits`, `require_dco_signoff`. Defaults below apply when a key is absent.
+- **`.claude/ruleset/git-workflow.md`** — parse the YAML toggle block at the top of the file. Toggle keys consulted:
+  - `auto_invoke_review`, `auto_invoke_verify`, `allow_commit_to_main`, `pr_required`, `branch_name_pattern`
+<!-- FREEZE:IF require_signed_commits -->
+  - `require_signed_commits`
+<!-- FREEZE:ENDIF -->
+<!-- FREEZE:IF require_dco_signoff -->
+  - `require_dco_signoff`
+<!-- FREEZE:ENDIF -->
+  Defaults below apply when a key is absent.
 - **`.claude/stack.yaml`** — read `extras` (propagated verbatim to all subagents), `paths` (SoT overrides used by downstream gates), and `gates` (referenced by `/003-verify-dod`).
 
 ## Workflow
@@ -136,13 +144,19 @@ Use the **Task tool** with `subagent_type: "implementer"`. Inject the following 
    - `too_big_proposal` → `reason` (prose), `suggested_split` (array of draft task titles, 2..n entries).
    - `blocked` → `reason` (prose), optional `suggested_follow_up`.
 6. **Prior history** — paste any pre-existing artifacts under `.claude/runs/{epic_id}/{task_id}/` (e.g. `01-plan.json` from `/001-plan`) verbatim under a header `--- Prior phase: 01-plan.json ---`. Subagents are append-only readers of the runs history.
+<!-- FREEZE:IF require_ticket_reference -->
 7. **Commit-msg context** — under a header `--- commit-msg context ---`, pass the values needed for the implementer to compose a compliant commit subject (per enterprise `^... \[TICKET-ID\]$` pattern from `git-workflow.md`):
    - `cm_ticket: <resolved-ticket-id-or-null>` — the value resolved in Phase 1 (task `cm_ticket`, falling back to epic `cm_ticket`, or `null` if neither was set and the pattern did not require one).
    - `commit_subject_pattern: <from git-workflow.md commit-msg toggle>` — verbatim regex/string from the toggle block (e.g. `^(feat|fix|chore|refactor|test|docs)(\([a-z0-9-]+\))?: .+ \[[A-Z]+-[0-9]+\]$`).
    The implementer is responsible for including the ticket id in the commit subject when one is present; the main thread is responsible for surfacing it.
+<!-- FREEZE:ENDIF -->
 8. **Commit policy flags** — under a header `--- commit policy ---`, pass the resolved git-workflow.md toggles that govern the implementer's `git commit` invocation:
+<!-- FREEZE:IF require_signed_commits -->
    - `require_signed_commits: <true|false>` — when true, the implementer commits with `-S` (GPG/SSH signing).
+<!-- FREEZE:ENDIF -->
+<!-- FREEZE:IF require_dco_signoff -->
    - `require_dco_signoff: <true|false>` — when true, the implementer commits with `-s` (appends a `Signed-off-by: Name <email>` trailer to the commit message). MUST be applied on the ORIGINAL commit — amending later to add `-s` is forbidden by the no-amend rule, and `/006-merge` enforces the trailer in its Phase 0 pre-flight BEFORE `git push`.
+<!-- FREEZE:ENDIF -->
 
 The implementer is expected to:
 
@@ -150,8 +164,12 @@ The implementer is expected to:
 - Produce **one ATDD spec** at `tests/atdd/<slug>.spec.ts` (path may differ per `stack.yaml.paths.atdd_dir`). The spec is **authored only** during the task — it is **not executed per-task**. It will be executed at epic close-out.
 - Produce **one or more Domain-tests** covering happy path + edge cases.
 - Make **one commit** on the task branch (or on `main` if the solo preset is active). Commit message follows `.claude/ruleset/git-workflow.md` conventions (Conventional Commits by default). Never amend.
+<!-- FREEZE:IF require_signed_commits -->
 - Sign the commit if `require_signed_commits: true` is set in the toggle block.
+<!-- FREEZE:ENDIF -->
+<!-- FREEZE:IF require_dco_signoff -->
 - Sign-off the commit (`git commit -s`) if `require_dco_signoff: true` is set. The sign-off MUST be applied on the original commit; amending to add it later is forbidden.
+<!-- FREEZE:ENDIF -->
 - Write the final artifact `02-impl.json` with a top-level `status` field: `ok`, `too_big_proposal`, or `blocked`.
 
 ### Phase 3 — Read implementer output
@@ -250,8 +268,12 @@ auto_invoke_verify: true | false       # default true
 auto_invoke_review: true | false       # default true
 allow_commit_to_main: true | false     # default false
 pr_required: true | false              # default true
+<!-- FREEZE:IF require_signed_commits -->
 require_signed_commits: true | false   # default false
+<!-- FREEZE:ENDIF -->
+<!-- FREEZE:IF require_dco_signoff -->
 require_dco_signoff: true | false      # default false (true for oss preset)
+<!-- FREEZE:ENDIF -->
 branch_name_pattern: "task/{task_id}-{slug}"
 ```
 
@@ -262,16 +284,42 @@ Notes:
 
 ### Preset → toggle mapping (informational)
 
-The four shipped presets populate the toggle block at bootstrap as follows. After bootstrap the project owns the file and may edit freely; the mapping below is a reference for the defaults, not a runtime contract.
+The active preset populates the toggle block at bootstrap as follows. After bootstrap the project owns the file and may edit freely; the mapping below is a reference for the defaults of THIS preset, not a runtime contract.
 
-| Toggle                    | solo  | small-team | oss   | enterprise |
-|---------------------------|-------|------------|-------|------------|
-| `auto_invoke_verify`      | true  | true       | true  | true       |
-| `auto_invoke_review`      | false | true       | true  | true       |
-| `allow_commit_to_main`    | true  | false      | false | false      |
-| `pr_required`             | false | true       | true  | true       |
-| `require_signed_commits`  | false | false      | false | true       |
-| `require_dco_signoff`     | false | false      | true  | false      |
+<!-- FREEZE:IF preset == "solo" -->
+| Toggle                    | solo  |
+|---------------------------|-------|
+| `auto_invoke_verify`      | true  |
+| `auto_invoke_review`      | false |
+| `allow_commit_to_main`    | true  |
+| `pr_required`             | false |
+<!-- FREEZE:ENDIF -->
+<!-- FREEZE:IF preset == "small-team" -->
+| Toggle                    | small-team |
+|---------------------------|------------|
+| `auto_invoke_verify`      | true       |
+| `auto_invoke_review`      | true       |
+| `allow_commit_to_main`    | false      |
+| `pr_required`             | true       |
+<!-- FREEZE:ENDIF -->
+<!-- FREEZE:IF preset == "oss" -->
+| Toggle                    | oss   |
+|---------------------------|-------|
+| `auto_invoke_verify`      | true  |
+| `auto_invoke_review`      | true  |
+| `allow_commit_to_main`    | false |
+| `pr_required`             | true  |
+| `require_dco_signoff`     | true  |
+<!-- FREEZE:ENDIF -->
+<!-- FREEZE:IF preset == "enterprise" -->
+| Toggle                    | enterprise |
+|---------------------------|------------|
+| `auto_invoke_verify`      | true       |
+| `auto_invoke_review`      | true       |
+| `allow_commit_to_main`    | false      |
+| `pr_required`             | true       |
+| `require_signed_commits`  | true       |
+<!-- FREEZE:ENDIF -->
 
 The `branch_name_pattern` is `task/{task_id}-{slug}` across all presets unless the project overrides.
 
@@ -296,7 +344,9 @@ The `branch_name_pattern` is `task/{task_id}-{slug}` across all presets unless t
   - `in_progress` stays `in_progress` on any hard halt — the user clears it manually once the underlying issue is resolved.
 - **Never amend commits.** The implementer makes one commit; feedback rounds produce additional commits stacked on top.
 - **Never force-push.** If history needs cleanup, leave it for `/006-merge` (which may squash on PR creation per `git-workflow.md`).
+<!-- FREEZE:IF require_signed_commits -->
 - **Honour `require_signed_commits`** from the chosen preset. If true, every commit (implementer + feedback rounds) is signed.
+<!-- FREEZE:ENDIF -->
 - **Honour `branch_name_pattern`.** Do not improvise branch names; the pattern is the contract.
 - **Filesystem-only subagent comms.** Never rely on in-memory state between subagent invocations — the main thread reads artifacts from `.claude/runs/{epic_id}/{task_id}/` after each subagent returns. Ruleset content is verbatim-injected into the prompt body, never via `@`-include (per CONTEXT.md "Ruleset injection").
 - **Append-only runs history.** Never overwrite or delete prior phase artifacts within a task run. Feedback rounds get letter suffixes (`05a`, `05b`, `05c`).
@@ -342,7 +392,7 @@ Each subagent type lives in `.claude-plugin/agents/` (plugin-owned, not project-
 
 ## Worked example
 
-Given task `T-014` belonging to epic `E-003`, with a small-team preset:
+Given task `T-014` belonging to epic `E-003`:
 
 1. **Phase 0** — `/002-implement T-014` locates `docs/planning/epic-003-tasks.yaml`, finds entry `id: T-014, status: pending, slug: cancel-subscription, domain_scenarios: ["User cancels subscription"]`. Flips status to `in_progress`. Creates `.claude/runs/E-003/T-014/`.
 2. **Phase 1** — Branch pattern `task/{task_id}-{slug}` resolves to `task/T-014-cancel-subscription`. Checked out from `main`.

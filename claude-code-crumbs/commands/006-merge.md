@@ -21,21 +21,37 @@ This command **only opens** the MR/PR. It never auto-merges, never `--force` pus
   - `base_branch` (string) — default `main`.
   - `default_reviewers` (list) — comma-joined for `--reviewer`.
   - `pr_labels` (list) — comma-joined for `--label`.
+<!-- FREEZE:IF require_signed_commits -->
   - `require_signed_commits` (bool) — if `true`, verify `%G?` is `G` for all commits on the branch.
+<!-- FREEZE:ENDIF -->
+<!-- FREEZE:IF require_dco_signoff -->
   - `require_dco_signoff` (bool) — if `true` (typical for `oss`), verify every commit in `<base>..HEAD` has a `Signed-off-by:` trailer. Enforced in Phase 0, BEFORE `git push`.
+<!-- FREEZE:ENDIF -->
+<!-- FREEZE:IF require_codeowners_review -->
   - `require_codeowners_review` (bool) — if `true` (typical for `enterprise` and `oss`), skip `--reviewer` because CODEOWNERS auto-assigns server-side.
+<!-- FREEZE:ENDIF -->
   - `branch_name_pattern` (string) — for the pre-flight branch check.
+<!-- FREEZE:IF preset == "oss" -->
 - `.claude/stack.yaml` — `extras.upstream_remote` (default `upstream`) and `extras.upstream_repo` (optional `owner/repo`) for OSS fork→upstream PR routing.
+<!-- FREEZE:ENDIF -->
 - `runs/{epic_id}/{task_id}/` — context for body composition (final findings, commit summary, gate results).
 - Local git state: `git rev-parse --abbrev-ref HEAD`, `git remote get-url origin`, `git log <base>..HEAD`.
 
-Four preset variants of `git-workflow.md` ship under `templates/presets/<preset>/git-workflow.md`:
+The active preset variant of `git-workflow.md` is in `.claude/ruleset/`:
+<!-- FREEZE:IF preset == "solo" -->
 - `solo` — `pr_required: false`. Command exits early.
-- `team` — standard PR with reviewers + labels.
+<!-- FREEZE:ENDIF -->
+<!-- FREEZE:IF preset == "small-team" -->
+- `small-team` — standard PR with reviewers + labels.
+<!-- FREEZE:ENDIF -->
+<!-- FREEZE:IF preset == "enterprise" -->
 - `enterprise` — adds Change-management section; ticket id REQUIRED.
+<!-- FREEZE:ENDIF -->
+<!-- FREEZE:IF preset == "oss" -->
 - `oss` — adds DCO sign-off section; CLA reference.
+<!-- FREEZE:ENDIF -->
 
-The active preset is determined by which `git-workflow.md` is present in `.claude/ruleset/`. Honour whatever toggles the user has customised.
+Honour whatever toggles the user has customised.
 
 ## Workflow
 
@@ -54,6 +70,7 @@ The active preset is determined by which `git-workflow.md` is present in `.claud
 
    This short-circuit ensures solo + no-remote runs never reach host detection. Do NOT push, do NOT call `gh`/`glab`, do NOT touch the network on the solo path.
 <!-- FREEZE:ENDIF -->
+<!-- FREEZE:IF pr_required -->
 3. **Branch matches pattern.** Compare `git rev-parse --abbrev-ref HEAD` against `branch_name_pattern`. Mismatch → warn (`Branch <name> does not match pattern <pattern>; proceeding.`) but do not abort.
 4. **Detect remote and platform.** Use the 3-step host-aware detection algorithm (works for GitHub Enterprise and self-hosted GitLab — host is **not** matched against `github.com` / `gitlab.com` literals). Host resolution order: `stack.yaml.extras.git_host` (override; useful when `origin` is a fork) → `git remote get-url origin`. Once resolved, the same `gh|glab auth status --hostname` probe determines the platform.
 
@@ -101,6 +118,7 @@ The active preset is determined by which `git-workflow.md` is present in `.claud
 6. **Auth check.** Already folded into step 4 — the `gh auth status --hostname "$HOST"` / `glab auth status --hostname "$HOST"` probe doubles as platform detection AND auth verification. If neither CLI is authenticated for `$HOST`, the abort message from step 4 names the exact `--hostname` flag the user needs.
 
    **Plugin cannot verify external CM-system state.** Whether the referenced CM ticket is in `Approved for Deployment` state is enforced server-side by the platform (workflow `required_reviewers`, branch protection, or a `ticket-link-check` CI job). The plugin does not contact your CM/Jira/ServiceNow API.
+<!-- FREEZE:ENDIF -->
 <!-- FREEZE:IF require_signed_commits -->
 7. **Signed commits (conditional).** If `require_signed_commits: true`, run `git log --pretty='%G?' <base_branch>..HEAD` and confirm every line is `G`. Any other value (`N`, `B`, `U`, `X`, `Y`, `R`, `E`) → abort: `Unsigned or invalid signature on commit <sha>. Sign commits before opening the MR.`
 <!-- FREEZE:ENDIF -->
@@ -149,6 +167,7 @@ The active preset is determined by which `git-workflow.md` is present in `.claud
        Leave `UPSTREAM_REPO`/`FORK_OWNER` unset; Phase 3 falls back to the default `gh pr create` behaviour (PR opens against origin's own default branch).
 <!-- FREEZE:ENDIF -->
 
+<!-- FREEZE:IF pr_required -->
 ### Phase 1 — Push branch
 
 ```bash
@@ -191,7 +210,14 @@ If push fails (non-fast-forward, rejected, network) → abort and surface the ra
 ## Change-management
 - Ticket: <ticket-id>  (REQUIRED — abort if missing in branch name or commit messages)
 - Risk: <low|medium|high>
-- Approvers required: 2+
+- Affected systems: <list>
+- Rollback procedure: <steps or link>
+- Test evidence: <links to /003+/004 outputs>
+- Security impact: <none | summary>
+
+## Approvers
+- Code owner: @<owner>
+- Compliance: @<compliance>
 ```
 
 Parse `<ticket-id>` from the branch name (e.g. `task/T-001-CM-12345-something` → `CM-12345`) or from any commit message body. The pattern is preset-defined (default: `[A-Z]+-\d+`). If no match → abort: `Enterprise preset requires a change-management ticket id (pattern: <pattern>) in branch name or commit messages.`
@@ -266,6 +292,7 @@ Base:  <base_branch>
 Then a next-step hint:
 - If more pending tasks remain in the epic → suggest `/002-implement T-NNN` or `/002-auto-implement E-NNN`.
 - If this was the last task in the epic → suggest `/003-verify-dod T-LAST --epic-close` to run ATDD specs, then `/007-promote` if `stack.yaml.promote` is configured.
+<!-- FREEZE:ENDIF -->
 
 ## Discipline
 
@@ -284,10 +311,16 @@ Then a next-step hint:
 | Remote host unsupported | Abort: `Unsupported remote. Push branch and open MR manually.` |
 | `gh` or `glab` not installed | Abort with install hint URL. |
 | `pr_required: false` (solo) | Print solo notice, exit cleanly. |
+<!-- FREEZE:IF require_signed_commits -->
 | `require_signed_commits: true` + unsigned commit | Abort with the offending sha. |
+<!-- FREEZE:ENDIF -->
 | `git push` fails | Abort, surface raw git stderr, no retry. |
+<!-- FREEZE:IF preset == "enterprise" -->
 | Enterprise preset + no CM ticket id | Abort with the expected ticket-id pattern. |
+<!-- FREEZE:ENDIF -->
+<!-- FREEZE:IF require_dco_signoff -->
 | OSS preset + missing DCO sign-off | Abort in Phase 0 (BEFORE push) with the re-run-`/002-implement` or `git rebase --signoff` hint. |
+<!-- FREEZE:ENDIF -->
 | Task already has `pr_url` | Print existing URL, exit (no duplicate MR). |
 
 ## Vocabulary discipline
