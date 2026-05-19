@@ -1,15 +1,96 @@
 ---
-description: Code-review gate with self-heal. Reviewer subagent emits Findings; on fail the feedback-implementer applies fixes and the reviewer re-runs. Zero tolerance, max 3 iterations.
-argument-hint: <task-id>
+description: Dual-mode code-review gate. Epic mode (default, `<epic-id>` arg) reviews every status=done task in the epic by dispatching one reviewer subagent per task in parallel; aggregates epic-level status. Task mode (`<task-id>` arg, legacy) reviews one task. Both modes use the verbatim ruleset, zero tolerance, max 3 self-heal iterations per task.
+argument-hint: <epic-id> | <task-id>
 ---
 
-Run the code-review gate for **$ARGUMENTS**. Dispatches the `reviewer` subagent with the verbatim-injected ruleset and the branch diff, reads the resulting Findings, and — when the `auto_fix_on_review_fail` toggle is enabled — self-heals by dispatching `feedback-implementer` to apply the Violations and re-running the reviewer until the run returns `status: ok` or the 3-iteration cap is reached. Zero tolerance: every Finding is a blocker; only **Violations** (not Refactoring Suggestions) trigger the self-heal loop.
+Run the code-review gate for **$ARGUMENTS**. The command dispatches on argument shape:
 
-This command is standalone-invokable. It is also auto-chained by `/002-implement` after `/003-verify-dod` reports `status: ok`. The chaining mode does not change what this command does — only who reads the final `04X-review.json` afterwards.
+- **`<epic-id>`** (matches `^E-`) → **epic mode** (default). Locate `docs/planning/epic-{id}-tasks.yaml`, gather every task with `status: done`, and dispatch one `reviewer` subagent **per task in parallel** (5-way concurrency cap). Each per-task dispatch reviews that task's diff against the verbatim 18-file ruleset. Self-heal (when toggle on) runs **per task** — each failing task gets its own Phase 2/3 loop (max 3 iter per task); other tasks proceed independently. Aggregate epic `status: ok` iff every per-task `04-review.json` is `ok`.
+- **`<task-id>`** (matches `^T-`) → **task mode** (legacy). Review exactly one task. Single reviewer dispatch, optional self-heal loop. Preserves the legacy `/004-code-review <task-id>` contract.
+
+Zero tolerance: every Finding is a blocker; only **Violations** (not Refactoring Suggestions) trigger the self-heal loop. Aggregate epic status is the AND of every per-task status — one failing task fails the epic.
+
+This command is standalone-invokable. It is also auto-chained by `/002-implement` after `/003-verify-dod` reports `status: ok` (epic mode in epic-default chain, task mode in single-task chain).
+
+## Epic mode workflow
+
+When invoked with `<epic-id>`, the command runs an outer loop over every `status: done` task. The inner per-task workflow (Phase 0 → Phase 3 below) is unchanged — what changes is the orchestration.
+
+### Epic-mode Phase 0 — Pre-flight (outer)
+
+- Resolve epic-id, locate `docs/planning/epic-{id}-tasks.yaml` (3-digit zero-padded form). If absent, abort: `epic-{id}-tasks.yaml not found at <path>. Run /001-plan first.`
+- Gather every task with `status: done` (the eligible set). If empty, abort: `Epic <epic-id> has no done tasks to review. Run /002-implement first.`
+- Common pre-flight checks (`.claude/ruleset/` complete, `.claude/stack.yaml` parseable, branch state) run **once** here.
+- Acquire an epic lock at `.claude/runs/.lock-review-<epic_id>/` via `mkdir` (atomic). Held for the duration of the outer loop. Released in every exit branch.
+
+### Epic-mode Phase 1 — Parallel per-task dispatch
+
+For every task `T` in the eligible set, dispatch one `reviewer` subagent **in parallel** (single message, multiple Task tool calls). Each per-task dispatch follows the per-task Phase 1 contract (verbatim ruleset + task's diff scope, writes `runs/{epic_id}/{T}/04-review.json`).
+
+**Parallelism bound.** Maximum concurrent reviewer dispatches is `min(eligible_count, 5)`. If the eligible set exceeds 5, run in batches of 5 (sequentially batched, parallel within a batch).
+
+**Diff scope per task.** Each reviewer receives the **task-scoped diff**: files in `02-impl.json.payload.files_changed` for that task, computed against the task's branch base (resolved from `02-impl.json`). This avoids spreading reviewer attention across other tasks' code and keeps Finding locations precise. Epic-wide cross-cutting Findings (e.g. "feature X duplicated across tasks Y and Z") are out of per-task scope and stay implicit; they surface in the next review-cycle as the duplicating task's own Violations, not as a synthetic epic-level finding.
+
+### Epic-mode Phase 2 — Per-task self-heal (independent)
+
+When `auto_fix_on_review_fail` is on, each failing task gets its own self-heal loop (per-task Phase 2 → Phase 3 → loop max 3 iter) — independent per task, sequential within a failing task and parallel across failing tasks (bounded by the same 5-way cap). A failing task does not block a passing task. Artifact numbering (`04b-fix.json`, `04c-review.json`, ...) lives under each task's own subdir.
+
+When `auto_fix_on_review_fail` is off, every failing task halts at its own `04-review.json` with `status: "fail"`; the command prints the aggregate epic summary and exits.
+
+### Epic-mode Phase 3 — Aggregate epic status
+
+After every per-task loop settles, aggregate:
+
+- Epic `status: ok` iff every per-task **final** `04-review.json` (or `04c/04e/04g-review.json` after self-heal) has `status: "ok"`.
+- Epic `status: fail` if any per-task final review is `fail`.
+
+Write an epic-level summary artifact at `runs/{epic_id}/04-review-epic.json`:
+
+```json
+{
+  "phase": "review",
+  "epic_id": "E-NNN",
+  "agent": "reviewer",
+  "status": "ok" | "fail",
+  "started_at": "<ISO8601>",
+  "finished_at": "<ISO8601>",
+  "findings": [],
+  "next": "merge" | "feedback-impl",
+  "payload": {
+    "scope": "epic",
+    "tasks_reviewed": ["T-001", "T-002", ...],
+    "tasks_passed":   ["T-001"],
+    "tasks_failed":   ["T-002"],
+    "per_task_artifacts": {
+      "T-001": ".claude/runs/E-003/T-001/04-review.json",
+      "T-002": ".claude/runs/E-003/T-002/04c-review.json"
+    }
+  }
+}
+```
+
+The epic-level artifact is a **summary only**; per-task `04-review.json` files remain the canonical source of truth. The `scope: "epic"` discriminator distinguishes this from per-task artifacts. The epic artifact carries empty top-level `findings[]` — Violations live on per-task artifacts. Downstream consumers (`/002-implement` auto-chain, `/006-merge`) read the epic file's `status` for the aggregate signal.
+
+### Epic-mode summary print
+
+```
+Epic E-001 code review: N tasks reviewed, M passed, K failed.
+  ok  T-001 (18 rules checked, 0 Violations)
+  ok  T-002 (18 rules checked, 0 Violations, self-healed in 1 iter)
+  fail T-003 (18 rules checked, 2 Violations, 3 iters exhausted)
+```
+
+Suggest next step:
+- `ok` → `/006-merge <epic-id>` (or chained: control returns to `/002-implement`).
+- `fail` → manual remediation pointer (edit working tree for failing tasks, re-run `/004-code-review <epic-id>`).
+
+## Per-task inner workflow
+
+The sections below describe the **per-task** review flow. In task mode, this runs once. In epic mode, this runs **per eligible task** under the outer loop (parallel up to 5-way, independent self-heal).
 
 ## Inputs
 
-- **`<task-id>`** — passed as `$ARGUMENTS` (e.g. `T-014`). Required positional argument.
+- **`<task-id>`** — in task mode: `$ARGUMENTS` positional (e.g. `T-014`). In epic mode: the current task in the outer loop iteration.
 - **`docs/planning/epic-{id}-tasks.yaml`** — locate the task entry by scanning every `epic-*-tasks.yaml` under `docs/planning/`. The matching file's name yields the `epic_id` (e.g. `epic-003-tasks.yaml` → `E-003`). If the task is not found, abort with: `Task <task-id> not found in any epic-*-tasks.yaml. Run /001-plan first.`
 - **`.claude/ruleset/*.md`** — all 18 canonical Rule files, **verbatim-loaded** into memory for subagent injection. The Ruleset is the single source of truth for review checks. Per CONTEXT.md "Ruleset injection", content is pasted into the subagent prompt body — never via `@`-include, which does not always propagate to subagents.
 - **YAML toggle block in `.claude/ruleset/git-workflow.md`** — read `default_branch` (fallback `main`), `allow_commit_to_main` (fallback `false`), and `auto_fix_on_review_fail` (fallback `true`). The last governs whether Phase 2/3 + Loop execute or this command degrades to read-only.

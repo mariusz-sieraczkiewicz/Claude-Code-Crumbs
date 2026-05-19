@@ -1,9 +1,14 @@
 ---
-description: Audit every acceptance_criterion + run every DoD gate from stack.yaml.gates via the verifier subagent. Zero tolerance on both axes. Standalone-invokable or chained from /002-implement. Optionally self-heals via feedback-implementer + re-verify loop (max 3 iterations) when the toggle is on.
-argument-hint: <task-id> [--epic-close]
+description: Dual-mode DoD gate. Epic mode (default, `<epic-id>` arg) verifies every status=done task in the epic by dispatching one verifier subagent per task in parallel; aggregates epic-level status. Task mode (`<task-id>` arg, legacy) verifies one task. Both modes audit two axes: acceptance_criteria + stack.yaml.gates. Zero tolerance. Standalone-invokable or chained from /002-implement. Optionally self-heals via feedback-implementer + re-verify loop (max 3 iterations per task) when the toggle is on.
+argument-hint: <epic-id> | <task-id> [--epic-close]
 ---
 
-Run the Definition-of-Done check for **$ARGUMENTS** by dispatching the `verifier` subagent against **two independent axes**: every entry in the task's `acceptance_criteria: [...]` array (audited per-criterion against files touched, file:line evidence required) AND every gate declared in `.claude/stack.yaml.gates`. **Zero tolerance on both axes**: any unsatisfied/partial criterion is a blocker Finding regardless of gate status; any gate that exits non-zero is a blocker Finding regardless of criterion status.
+Run the Definition-of-Done check for **$ARGUMENTS**. The command dispatches on argument shape:
+
+- **`<epic-id>`** (matches `^E-`) → **epic mode** (default). Locate `docs/planning/epic-{id}-tasks.yaml`, gather every task with `status: done`, and dispatch one `verifier` subagent **per task in parallel**. Each per-task dispatch audits **two independent axes** for that task: every entry in `task.acceptance_criteria: [...]` against files touched (file:line evidence required) AND every gate declared in `.claude/stack.yaml.gates`. After all per-task dispatches return, aggregate: epic `status: ok` iff every per-task `03-verify.json` is `ok`. Self-heal (when toggle on) runs **per task** — each failing task gets its own Phase 2/3 loop (max 3 iterations per task); other tasks proceed independently. The aggregate epic status is computed after all per-task loops settle.
+- **`<task-id>`** (matches `^T-`) → **task mode** (legacy). Verify exactly one task. Single verifier dispatch, two-axis audit, optional self-heal loop. Preserves the legacy `/003-verify-dod <task-id>` contract for resume scenarios and standalone task re-verifies.
+
+**Zero tolerance on both axes**: any unsatisfied/partial criterion is a blocker Finding regardless of gate status; any gate that exits non-zero is a blocker Finding regardless of criterion status. Aggregate epic status is the AND of every per-task status — one failing task fails the epic.
 
 This command operates in one of two behavioural modes, gated by the `auto_fix_on_verify_fail` toggle from `git-workflow.md` (resolved at freeze time via the same mechanism as other ruleset toggles):
 
@@ -16,14 +21,95 @@ This command can be invoked **standalone** (user types `/003-verify-dod T-001`) 
 
 ## Modes
 
-1. **Per-task** (default) — `/003-verify-dod T-NNN`. Runs every gate in `stack.yaml.gates` **except** `atdd_specs` and `journeys`. ATDD specs are reserved for **epic close-out** (a task ships its spec file but the spec is not executed until the epic is complete — see `CONTEXT.md` ATDD spec entry). Journeys are reserved for **environment promotion** (see CONTEXT.md Journey entry).
-2. **Epic close-out** — `/003-verify-dod T-NNN --epic-close`. Adds `atdd_specs` to the gate run (so every task's spec executes against real or near-real infrastructure). **Still skips** `journeys` — those run only from `/007-promote` as the smoke gate against staging/prod.
+**Mode dispatch** is by argument shape (see top-of-file dispatch table). Within each mode, two gate-scope sub-modes are available via the optional `--epic-close` flag:
 
-The mode is purely additive over the gate set. The discipline, the schema, and the verifier subagent are identical.
+1. **Per-task scope** (default for both epic mode and task mode) — runs every gate in `stack.yaml.gates` **except** `atdd_specs` and `journeys`. ATDD specs are reserved for **epic close-out** (a task ships its spec file but the spec is not executed until the epic is complete — see `CONTEXT.md` ATDD spec entry). Journeys are reserved for **environment promotion** (see CONTEXT.md Journey entry).
+2. **Epic close-out scope** — `/003-verify-dod <id> --epic-close`. Adds `atdd_specs` to the gate run (every task's spec executes against real or near-real infrastructure). **Still skips** `journeys` — those run only from `/007-promote`. In epic mode, `--epic-close` is the canonical close-out invocation; in task mode it is the per-task close-out path used when a single task is the terminal task of its epic.
+
+The gate-scope toggle is purely additive over the gate set. The discipline, the schema, and the verifier subagent are identical across all four (epic|task) × (per-task|epic-close) combinations.
+
+## Epic mode workflow
+
+When invoked with `<epic-id>`, the command runs an outer loop over every `status: done` task in `epic-{id}-tasks.yaml`. The inner per-task workflow (Phase 0 → Phase 3 below) is unchanged — what changes is the orchestration around it.
+
+### Epic-mode Phase 0 — Pre-flight (outer)
+
+- Resolve epic-id, locate `docs/planning/epic-{id}-tasks.yaml` (3-digit zero-padded form, e.g. `E-001` → `epic-001-tasks.yaml`). If absent, abort: `epic-{id}-tasks.yaml not found at <path>. Run /001-plan first.`
+- Gather every task with `status: done` (the eligible set). If the eligible set is empty, abort: `Epic <epic-id> has no done tasks to verify. Run /002-implement first.`
+- Common pre-flight checks (`.claude/stack.yaml` present + parseable, `gates` non-trivial, `.claude/ruleset/` complete, git identity if relevant) run **once** here, not per task.
+- Acquire an epic lock at `.claude/runs/.lock-verify-<epic_id>/` via `mkdir` (atomic; fails if directory exists). Held for the duration of the outer loop. Released in every exit branch (success, abort, halt).
+
+### Epic-mode Phase 1 — Parallel per-task dispatch
+
+For every task `T` in the eligible set, dispatch one `verifier` subagent **in parallel** (single message, multiple Task tool calls). Each per-task dispatch follows the per-task Phase 1 contract below (acceptance_criteria + gates audit, writes `runs/{epic_id}/{T}/03-verify.json`).
+
+**Parallelism bound.** Maximum concurrent verifier dispatches is `min(eligible_count, 5)`. If the eligible set exceeds 5, run in batches of 5 (sequentially batched, parallel within a batch). This bounds memory and avoids saturating the host machine when gates spawn heavy subprocesses (typecheck, build).
+
+**Gate-command concurrency caveat.** Gates that mutate or contend on shared state (e.g. simulator boot, port binding, write to a single build cache) cannot run safely in parallel. Project authors must encode gate commands as idempotent reads; if a gate is known to be non-concurrent-safe, the project should declare it as a single epic-level gate in `stack.yaml.extras.concurrent_unsafe_gates: [gate_name, ...]` — in epic mode, those gates run **once** after all parallel verifiers complete (sequential epic-close pass), and their findings are folded into a synthetic per-task `03-verify.json` for the **terminal task** of the epic (the last task by id in the eligible set, sorted lexicographically). This keeps the artifact contract per-task even when the gate run is epic-level.
+
+### Epic-mode Phase 2 — Per-task self-heal (independent)
+
+When `auto_fix_on_verify_fail` is on, each failing task gets its own self-heal loop (per-task Phase 2 → Phase 3 → loop max 3 iter) — these run **independently per task**, sequentially within a failing task and in parallel across failing tasks (bounded by the same 5-way concurrency cap as Phase 1). A failing task does not block a passing task. The artifact numbering (`03b-fix.json`, `03c-verify.json`, ...) lives under each task's own subdir.
+
+When `auto_fix_on_verify_fail` is off, every failing task halts at its own `03-verify.json` with `status: "fail"`; the command prints the aggregate epic summary and exits.
+
+### Epic-mode Phase 3 — Aggregate epic status
+
+After every per-task loop settles (success, blocked fix, or 3-iter exhaustion), aggregate:
+
+- Epic `status: ok` iff every per-task **final** `03-verify.json` (or `03c/03e/03g-verify.json` after self-heal) has `status: "ok"`.
+- Epic `status: fail` if any per-task final verify is `fail`.
+
+Write an epic-level summary artifact at `runs/{epic_id}/03-verify-epic.json`:
+
+```json
+{
+  "phase": "verify",
+  "epic_id": "E-NNN",
+  "agent": "verifier",
+  "status": "ok" | "fail",
+  "started_at": "<ISO8601>",
+  "finished_at": "<ISO8601>",
+  "findings": [],
+  "next": "review" | "feedback-impl",
+  "payload": {
+    "criteria_audit": [],
+    "scope": "epic",
+    "tasks_verified": ["T-001", "T-002", ...],
+    "tasks_passed":   ["T-001"],
+    "tasks_failed":   ["T-002"],
+    "per_task_artifacts": {
+      "T-001": ".claude/runs/E-003/T-001/03-verify.json",
+      "T-002": ".claude/runs/E-003/T-002/03c-verify.json"
+    }
+  }
+}
+```
+
+The epic-level artifact is a **summary only**; per-task `03-verify.json` files remain the canonical source of truth. The epic artifact carries empty top-level `findings[]` and `payload.criteria_audit[]` — those live on per-task artifacts. The `scope: "epic"` discriminator distinguishes this from per-task artifacts; downstream consumers (`/004-code-review`, `/002-implement` auto-chain) read the epic file's `status` for the aggregate signal.
+
+Schema note: the epic-level artifact validates against the same `run-phase.schema.json` (`phase: "verify"`). The required `criteria_audit` array is satisfied by an empty array (criteria are recorded per task, not at epic level).
+
+### Epic-mode summary print
+
+```
+Epic E-001 DoD: N tasks verified, M passed, K failed.
+  ok  T-001 (3 criteria satisfied, 5 gates run, 5 passed, 0 findings)
+  ok  T-002 (4 criteria satisfied, 5 gates run, 5 passed, 0 findings, self-healed in 1 iter)
+  fail T-003 (1 criterion not_satisfied, 0 gate findings, 3 iters exhausted)
+```
+
+Suggest next step:
+- `ok` → `/004-code-review <epic-id>` (or chained: control returns to `/002-implement`).
+- `fail` → manual remediation pointer (edit working tree for failing tasks, re-run `/003-verify-dod <epic-id>`).
+
+## Per-task inner workflow
+
+The sections below (Inputs, Phase 0, Phase 1, Phase 2, Phase 3, Loop) describe the **per-task** verify flow. In task mode, this runs once for the given task. In epic mode, this runs **per eligible task** under the outer loop described in "Epic mode workflow" above (parallel up to 5-way concurrency, independent self-heal per task).
 
 ## Inputs
 
-- **`<task-id>`** — `$ARGUMENTS` positional (e.g. `T-001`). Optional trailing `--epic-close` flag toggles epic-close-out mode.
+- **`<task-id>`** — in task mode: `$ARGUMENTS` positional (e.g. `T-001`). In epic mode: the current task in the outer loop iteration. Optional trailing `--epic-close` flag toggles epic-close-out gate scope.
 - **`docs/planning/epic-{id}-tasks.yaml`** — locate the task by scanning every `epic-*-tasks.yaml`. The first match wins; capture its `epic_id`. If not found anywhere, abort with: `Task <task-id> not found in any epic-*-tasks.yaml. Run /001-plan first.`
 - **`docs/planning/epics.yaml`** — informational only. The verifier does **not** re-author or re-check Business scenarios; that mapping belongs to `/001-plan` and `/004-code-review`. Read it only if the gate output references a scenario name.
 - **`.claude/stack.yaml`** — read `gates`, `paths`, `extras`, `design_verify`. The `extras` block is propagated verbatim to the verifier and the feedback-implementer (per CONTEXT.md "Ruleset injection" — same channel as ruleset content).
