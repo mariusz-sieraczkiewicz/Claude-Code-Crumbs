@@ -14,9 +14,21 @@ The plugin is intentionally **lightweight**: it owns the workflow surface (comma
 
 ### Install
 
-```bash
-claude install plugin claude-code-crumbs@Claude-Code-Crumbs
+From a Claude Code session:
+
 ```
+/plugin marketplace add mariusz-sieraczkiewicz/Claude-Code-Crumbs
+/plugin install claude-code-crumbs@Claude-Code-Crumbs
+```
+
+Or from a local clone:
+
+```
+/plugin marketplace add /absolute/path/to/Claude-Code-Crumbs
+/plugin install claude-code-crumbs@Claude-Code-Crumbs
+```
+
+After install, `/000-prd-refine`..`/007-promote` and `/freeze` are available as slash commands.
 
 ### Bootstrap a project
 
