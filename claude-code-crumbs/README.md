@@ -56,13 +56,14 @@ Presets seed the ruleset files in `.claude/ruleset/`. You can edit them at any t
 
 Reads the `E-001` section of `PRD.md`, dispatches the `planner` subagent, writes `docs/planning/epic-E-001-tasks.yaml` plus per-task Business scenarios (Gherkin, UI-ignorant), and regenerates the flat `docs/planning/SCENARIOS.md` index.
 
-### Implement a task
+### Implement an epic or a single task
 
 ```bash
-/002-implement T-001            # single task, interactive
+/002-implement E-001            # epic mode (default): batch every pending task
+/002-implement T-001            # task mode (legacy): one task only
 ```
 
-`/002-implement` is the single-task TDD orchestrator: new branch, `implementer` subagent, auto-chain to `/003-verify-dod` and `/004-code-review`, propose `/006-merge` on clean.
+`/002-implement` is a dual-mode TDD orchestrator. **Epic mode** iterates every `status: pending` task in `epic-{id}-tasks.yaml` in dependency order; each task gets its own `implementer` subagent dispatch with a mandatory **Phase 1.5 plan checkpoint** (Approve / Iterate / Cancel) before TDD execution. After every task reaches `status: done`, the command auto-invokes `/003-verify-dod` and (gated by `auto_invoke_review`) `/004-code-review`, then proposes `/006-merge` on clean. **Task mode** runs the same per-task flow for one task only (resume / ad-hoc re-run).
 
 ## Commands
 
@@ -70,10 +71,10 @@ Reads the `E-001` section of `PRD.md`, dispatches the `planner` subagent, writes
 | --------------------------- | --------------------------------------------------------------------------------------------------------- |
 | `/000-prd-refine`           | Bootstrap a project (State A) or refine PRD / add-edit epics (State B/C). Single context-aware product-level command. |
 | `/001-plan`                 | Decompose an epic into tasks and author Business scenarios. Reads PRD per-epic section as the brief.      |
-| `/002-implement`            | Single-task TDD orchestrator. New branch, implementer subagent, auto-invokes verify+review, proposes merge on clean. |
+| `/002-implement`            | Dual-mode TDD orchestrator. `<E-NNN>` = epic mode (default; batch every pending task with per-task plan checkpoint). `<T-NNN>` = task mode (single task). Auto-chains `/003-verify-dod` then `/004-code-review`, proposes `/006-merge` on clean. |
 | `/003-verify-dod`           | Run every DoD gate from stack.yaml.gates via the verifier subagent. Zero tolerance. Standalone-invokable or chained from /002-implement. |
 | `/004-code-review`          | Code-review gate. Reviewer subagent reads verbatim-injected ruleset + branch diff and emits blocking findings. Zero tolerance. |
-| `/005-implement-feedback`   | Address findings from /003 or /004 via the feedback-implementer subagent. Loops back to verify. Caps at 3 iterations. |
+| `/005-implement-feedback`   | Epic-level user feedback flow: gather → plan new tasks → ATDD → verify → review → gatekeeper. **NOT a finding-fixer** — `/003` and `/004` self-heal internally. |
 | `/006-merge`                | Open a merge/pull request for a completed task. Uses conventions from ruleset/git-workflow.md.            |
 | `/007-promote`              | Trigger a pre-existing platform workflow to promote an environment. Plugin does not orchestrate the deploy itself. |
 
