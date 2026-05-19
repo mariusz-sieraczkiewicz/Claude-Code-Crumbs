@@ -1,9 +1,9 @@
 ---
-description: Run every DoD gate from stack.yaml.gates via the verifier subagent. Zero tolerance. Standalone-invokable or chained from /002-implement. Optionally self-heals via feedback-implementer + re-verify loop (max 3 iterations) when the toggle is on.
+description: Audit every acceptance_criterion + run every DoD gate from stack.yaml.gates via the verifier subagent. Zero tolerance on both axes. Standalone-invokable or chained from /002-implement. Optionally self-heals via feedback-implementer + re-verify loop (max 3 iterations) when the toggle is on.
 argument-hint: <task-id> [--epic-close]
 ---
 
-Run the Definition-of-Done check for **$ARGUMENTS** by dispatching the `verifier` subagent against every gate declared in `.claude/stack.yaml.gates`. **Zero tolerance**: any gate that exits non-zero, any rule violation surfaced by a gate, is a blocker Finding.
+Run the Definition-of-Done check for **$ARGUMENTS** by dispatching the `verifier` subagent against **two independent axes**: every entry in the task's `acceptance_criteria: [...]` array (audited per-criterion against files touched, file:line evidence required) AND every gate declared in `.claude/stack.yaml.gates`. **Zero tolerance on both axes**: any unsatisfied/partial criterion is a blocker Finding regardless of gate status; any gate that exits non-zero is a blocker Finding regardless of criterion status.
 
 This command operates in one of two behavioural modes, gated by the `auto_fix_on_verify_fail` toggle from `git-workflow.md` (resolved at freeze time via the same mechanism as other ruleset toggles):
 
@@ -29,7 +29,7 @@ The mode is purely additive over the gate set. The discipline, the schema, and t
 - **`.claude/stack.yaml`** — read `gates`, `paths`, `extras`, `design_verify`. The `extras` block is propagated verbatim to the verifier and the feedback-implementer (per CONTEXT.md "Ruleset injection" — same channel as ruleset content).
 - **`.claude/ruleset/*.md`** — **NOT injected into the verifier.** The verifier receives no ruleset bodies. It runs commands from `stack.yaml.gates` and surfaces their exit codes; Findings reference rule slugs by name only, sourced from the failing gate's command output. The **feedback-implementer** in Phase 2 *does* receive the subset of rulesets that the failing gates reference, so it can interpret rule prose during the fix.
 - **Prior phase files** under `.claude/runs/{epic_id}/{task_id}/`:
-  - `01-plan.json` (planner output — task's `domain_scenarios`, `atdd_spec` path, file list).
+  - `01-plan.json` (planner output — task's `acceptance_criteria`, `atdd_spec` path, file list).
   - `02-impl.json` (implementer output — commit hash, file list actually touched, ATDD spec path written, branch name).
   - Any `05*-feedback-impl.json` (one per prior epic-feedback iteration — read in numeric/alphabetic order so the verifier sees the latest state, with letter-suffixed reruns ordered `05a`, `05b`, `05c`).
   - Any prior intra-`/003` self-heal artifacts (`03b-fix.json`, `03c-verify.json`, ...) — used by subsequent loop iterations within the same `/003` invocation; not pre-existing on first entry.
@@ -65,6 +65,7 @@ Stopping rules:
 - Confirm at least one gate in `stack.yaml.gates` is non-null. If **every** gate is null, abort with: `No gates configured in stack.yaml.gates; DoD would trivially pass — but this is suspicious. Edit .claude/stack.yaml to enable at least lint + typecheck + domain_tests before re-running /003-verify-dod.` (Trivial-pass is treated as a configuration bug, not as a success.)
 - Confirm `.claude/ruleset/` contains all 18 canonical rule files (project sanity check — if any are missing, list them and abort with a pointer to `/000-prd-refine`). The verifier itself receives **no** ruleset bodies; this check protects downstream phases (`/004-code-review`, and Phase 2 here) that do need full or partial ruleset content.
 - Confirm `.claude/runs/{epic_id}/{task_id}/01-plan.json` and `02-impl.json` exist. If either is missing, abort with: `Phase prerequisites missing for <task-id>: <path>. Run /002-implement first.`
+- Read the task entry from `docs/planning/epic-{id}-tasks.yaml`. Confirm `acceptance_criteria` field exists and is a non-empty array of non-empty strings. If missing, empty, or contains an empty/whitespace-only entry, abort with: `Task <task-id>.acceptance_criteria missing or malformed. Re-run /001-plan or edit the task entry.` DoD has no bar to verify against without it.
 - Parse the trailing `--epic-close` flag. If present, set `epic_close = true`.
 - Compute the **effective gate set**:
   - Always include: every non-null gate **except** `atdd_specs` and `journeys`.
@@ -78,18 +79,21 @@ Use the Task tool with `subagent_type: "verifier"` (canonical payload shape: `ag
 
 - `task_id`, `epic_id`.
 - `epic_close` boolean (so the verifier knows whether to run `atdd_specs`).
+- **Task `acceptance_criteria` array** — the verbatim array from the task entry in `epic-{id}-tasks.yaml`, preserving the 1-based ordering. The verifier audits each entry against files touched (Phase A in `agents/verifier.md`). Pre-flight check by this command: if the array is missing or empty, abort with: `Task <task-id>.acceptance_criteria missing or empty. Re-run /001-plan or edit the task entry.`
+- **Files touched by the task** — the union of `02-impl.json.payload.files_changed` and the task entry's `files: [...]` field (if present). The verifier uses this to scope its criterion audit (do not range over the whole codebase).
 - **Effective gate set** — list of `{name, command}` pairs from `stack.yaml.gates`, filtered as Phase 0 computed. Pass each gate's `name` (key in the YAML) alongside its `command` (the shell string) so the verifier can label Findings.
 - **`stack.yaml` verbatim** — or at minimum the `gates`, `design_verify`, `extras`, and `paths` sections. The verifier may need `paths` to resolve relative gate commands (project may override `tests`, `src`, or `atdd_specs` paths); it propagates `extras` to any nested subagent (see Design-verify handling). `extras` is the documented escape hatch for stack-specific quirks (`bash_buffering_warning`, `user_ping_interval_minutes`, etc. — see CONTEXT.md "stack.yaml shape").
-- **Ruleset bodies are NOT injected.** The verifier does not interpret rule prose; it runs the gate commands and surfaces exit codes. Findings carry rule slugs (e.g. `tests.md:no-method-level-mocks`) only as they appear in the gate's own output — the verifier does not look them up against rule text. Rule-prose interpretation is the reviewer's job (`/004-code-review`) and, in self-heal mode, the feedback-implementer's job (Phase 2 below).
+- **Ruleset bodies are NOT injected.** The verifier does not interpret rule prose; it runs the gate commands and surfaces exit codes, plus it audits criterion prose (a task-level DoD check that operates on the criterion text, not on cross-cutting rule files). Gate findings carry rule slugs (e.g. `tests.md:no-method-level-mocks`) only as they appear in the gate's own output — the verifier does not look them up against rule text. Rule-prose interpretation is the reviewer's job (`/004-code-review`) and, in self-heal mode, the feedback-implementer's job (Phase 2 below).
 - **Prior phase file paths** — `01-plan.json`, `02-impl.json`, and every `05*-feedback-impl.json` found under `.claude/runs/{epic_id}/{task_id}/`, in lexicographic order (so `05a`, `05b`, `05c` are read in that order — matches the rerun numbering in CONTEXT.md "Runs directory"). The verifier opens them itself; the command does **not** inline the JSON content (it would bloat the dispatch prompt).
 
 The verifier's contract (defined in its subagent prompt) is:
 
-1. Run every gate in the effective set. Capture exit code, stdout, stderr.
-2. For each non-zero exit, emit one or more `findings[]` entries, each with: `rule` (the gate name or the rule it enforces), `severity: "blocker"` (zero-tolerance — there is no other severity), `location` (file:line where available), `message` (condensed error), `details` (relevant stderr/stdout excerpt — per the Finding object in `schemas/run-phase.schema.json`).
-3. If `stack.yaml.design_verify.type == "prompt"`, emit a single `design_verify_prompt` finding pointing at the prompt file (this command handles it — see below).
-4. Write `.claude/runs/{epic_id}/{task_id}/03-verify.json` with `status: "ok"` (zero findings) or `status: "fail"` (≥1 finding). Schema: `schemas/run-phase.schema.json`.
-5. Never edit source code. Never invoke another slash command. The verifier is **read-only** at the subagent level. (Fix execution, when enabled, is owned by Phase 2 of this command, which dispatches a **separate** subagent.)
+1. **Phase A — Audit every acceptance criterion** against the files touched. For each criterion (1-based index), classify `satisfied | partial | not_satisfied` with concrete `evidence: [{file, line, snippet}]`. For each `partial`/`not_satisfied`, emit a Finding with `rule: "acceptance_criterion:<i>"`, `severity: "blocker"`, `location: "<file:line if known, else epic-{id}-tasks.yaml>"`, `message`, `details`. Always populate `payload.criteria_audit[]` with one entry per criterion regardless of status.
+2. Run every gate in the effective set. Capture exit code, stdout, stderr.
+3. For each non-zero exit, emit one or more `findings[]` entries, each with: `rule` (the gate name or the rule it enforces), `severity: "blocker"` (zero-tolerance — there is no other severity), `location` (file:line where available), `message` (condensed error), `details` (relevant stderr/stdout excerpt — per the Finding object in `schemas/run-phase.schema.json`).
+4. If `stack.yaml.design_verify.type == "prompt"`, emit a single `design_verify_prompt` finding pointing at the prompt file (this command handles it — see below).
+5. Write `.claude/runs/{epic_id}/{task_id}/03-verify.json` with `status: "ok"` (every criterion `satisfied` AND zero gate findings) or `status: "fail"` (≥1 finding from either axis). Schema: `schemas/run-phase.schema.json`.
+6. Never edit source code. Never invoke another slash command. The verifier is **read-only** at the subagent level. (Fix execution, when enabled, is owned by Phase 2 of this command, which dispatches a **separate** subagent.)
 
 After the verifier returns, **validate `03-verify.json` against `schemas/run-phase.schema.json`** before branching (see "Schema validation" below). Then branch on `status`.
 
@@ -110,7 +114,7 @@ A schema-failing subagent output is a bug in the subagent prompt, not in the pro
 Print a tight summary to the user (counts only, no per-gate noise):
 
 ```
-DoD ok — <N> gates run, <N> passed, 0 findings.
+DoD ok — <N> criteria satisfied, <N> gates run, <N> passed, 0 findings.
 ```
 
 Suggest the next step depending on invocation context:
@@ -140,8 +144,9 @@ Use the Task tool with `subagent_type: "feedback-implementer"` (canonical payloa
 - `task_id`, `epic_id`.
 - **Iteration index** — `1` on first entry, `2` after `03c-verify.json` failed, `3` after `03e-verify.json` failed.
 - **Target artifact path** — the file the feedback-implementer must write: `03b-fix.json` on iteration 1, `03d-fix.json` on iteration 2, `03f-fix.json` on iteration 3.
-- **Source findings path** — the most recent `03X-verify.json` (`03-verify.json` for iteration 1, `03c-verify.json` for iteration 2, `03e-verify.json` for iteration 3). The feedback-implementer reads the `findings[]` array from this file.
-- **Ruleset subset** — bodies of every ruleset file referenced (by slug) in `findings[].rule`. For findings whose rule slug is just a gate name with no `.md:` prefix (e.g. `lint`, `typecheck`), no ruleset injection is needed — the gate command output is the authority. The dispatching command resolves slugs to file paths and reads each body; pass the bodies verbatim in the dispatch payload (same channel as the reviewer ruleset injection — see CONTEXT.md "Ruleset injection").
+- **Source findings path** — the most recent `03X-verify.json` (`03-verify.json` for iteration 1, `03c-verify.json` for iteration 2, `03e-verify.json` for iteration 3). The feedback-implementer reads the `findings[]` array AND the `payload.criteria_audit[]` array from this file — both axes drive the fix.
+- **Task `acceptance_criteria` array** — verbatim from `epic-{id}-tasks.yaml`. Findings with rule `acceptance_criterion:<i>` map to the i-th criterion; the feedback-implementer must write production code AND a Domain-test asserting the criterion (strict ATDD-E2E: test first if missing, then implementation).
+- **Ruleset subset** — bodies of every ruleset file referenced (by slug) in `findings[].rule`. For findings whose rule slug is just a gate name with no `.md:` prefix (e.g. `lint`, `typecheck`), no ruleset injection is needed — the gate command output is the authority. For criterion findings (`acceptance_criterion:<i>`), the criterion prose itself is the authority — no ruleset injection. The dispatching command resolves rule-slug findings to file paths and reads each body; pass the bodies verbatim in the dispatch payload (same channel as the reviewer ruleset injection — see CONTEXT.md "Ruleset injection").
 - **`stack.yaml.extras` verbatim** — propagate the escape hatch.
 - **Prior phase file paths** — `01-plan.json`, `02-impl.json`, every `05*-feedback-impl.json`, and **every prior `03X-fix.json` from the current loop** (so iteration 2 sees what iteration 1 already changed). Pass paths, not inlined content.
 
@@ -177,7 +182,7 @@ Validate the new `03X-verify.json` against the schema (shared helper). Then bran
 - `status: "ok"` → loop ends, run succeeds. Print:
 
   ```
-  DoD ok — self-healed in <iteration> fix iteration(s). <N> gates run, <N> passed, 0 findings.
+  DoD ok — self-healed in <iteration> fix iteration(s). <N> criteria satisfied, <N> gates run, <N> passed, 0 findings.
   ```
 
   Then follow the same "ok" next-step suggestion as the initial-detect ok branch above (chained vs standalone; honour `auto_invoke_review`). Exit.
@@ -320,21 +325,21 @@ Per-task DoD on a TypeScript stack with five non-null gates (`lint`, `typecheck`
 /003-verify-dod T-014
 ```
 
-Effective gate set: `lint`, `typecheck`, `domain_tests`, `build`, `security` (5 gates). `atdd_specs` is skipped (per-task mode). The verifier runs each. Initial detect passes:
+Effective gate set: `lint`, `typecheck`, `domain_tests`, `build`, `security` (5 gates). `atdd_specs` is skipped (per-task mode). The task has 3 entries in `acceptance_criteria`. The verifier audits each criterion against `02-impl.json.payload.files_changed`, then runs each gate. Initial detect passes on both axes:
 
 ```
-DoD ok — 5 gates run, 5 passed, 0 findings.
+DoD ok — 3 criteria satisfied, 5 gates run, 5 passed, 0 findings.
 Next: /004-code-review T-014
 ```
 
-Same task, but `lint` returns 2 violations on first detect, the feedback-implementer fixes both in iteration 1, re-verify passes:
+Same task, but criterion #2 (`"Calling cancel on already-cancelled subscription is a no-op"`) is `not_satisfied` (no guard clause found in `src/billing/cancel.ts`) and `lint` returns 2 violations on first detect. The feedback-implementer fixes all three in iteration 1 (writes the missing Domain-test + guard clause + fixes lint), re-verify passes:
 
 ```
-DoD ok — self-healed in 1 fix iteration(s). 5 gates run, 5 passed, 0 findings.
+DoD ok — self-healed in 1 fix iteration(s). 3 criteria satisfied, 5 gates run, 5 passed, 0 findings.
 Next: /004-code-review T-014
 ```
 
-Artifacts written: `03-verify.json` (status: fail, 2 findings) → `03b-fix.json` (status: ok, 2 fixes_applied) → `03c-verify.json` (status: ok, 0 findings).
+Artifacts written: `03-verify.json` (status: fail, 3 findings — 1 criterion + 2 lint) → `03b-fix.json` (status: ok, 3 fixes_applied) → `03c-verify.json` (status: ok, 0 findings, 3 criteria satisfied).
 
 Epic close-out on the same task (terminal task of the epic), self-heal off (enterprise preset):
 

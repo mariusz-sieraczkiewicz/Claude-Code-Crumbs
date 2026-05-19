@@ -80,6 +80,42 @@
         "title": { "type": "string" },
         "rationale": { "type": "string" }
       }
+    },
+    "criterionAuditItem": {
+      "type": "object",
+      "required": ["criterion_id", "criterion_text", "status"],
+      "additionalProperties": false,
+      "properties": {
+        "criterion_id": {
+          "description": "Stable identifier for the criterion within the task. Convention: 1-based index from acceptance_criteria array in epic-{id}-tasks.yaml.",
+          "type": "string"
+        },
+        "criterion_text": {
+          "description": "Verbatim criterion text from epic-{id}-tasks.yaml.",
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["satisfied", "partial", "not_satisfied"]
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["file"],
+            "additionalProperties": false,
+            "properties": {
+              "file": { "type": "string" },
+              "line": { "type": "integer" },
+              "snippet": { "type": "string" }
+            }
+          }
+        },
+        "rationale": {
+          "description": "One-line explanation when status is partial or not_satisfied.",
+          "type": "string"
+        }
+      }
     }
   },
   "allOf": [
@@ -99,8 +135,42 @@
     {
       "if": { "properties": { "phase": { "const": "verify" } }, "required": ["phase"] },
       "then": {
-        "properties": { "agent": { "const": "verifier" } },
-        "required": ["findings"]
+        "properties": {
+          "agent": { "const": "verifier" },
+          "payload": {
+            "type": "object",
+            "required": ["criteria_audit"],
+            "properties": {
+              "criteria_audit": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/criterionAuditItem" }
+              },
+              "gates_run": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "properties": {
+                    "gate": { "type": "string" },
+                    "status": { "type": "string", "enum": ["ok", "fail"] }
+                  }
+                }
+              },
+              "gates_skipped": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "properties": {
+                    "gate": { "type": "string" },
+                    "reason": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "required": ["findings", "payload"]
       }
     },
     {

@@ -29,7 +29,7 @@ The id is resolved at Phase 0 against the filesystem:
 
 - **`<epic-id>`** or **`<task-id>`** — passed as `$ARGUMENTS`. Required positional argument.
 - **`docs/planning/epic-{id}-tasks.yaml`** — the task list. Epic mode reads the whole file (iterating pending tasks); task mode reads the one matching entry.
-- **`docs/planning/epics.yaml`** — Business scenarios referenced by each task's `domain_scenarios` field. Read each Gherkin block-scalar verbatim from the matching epic entry. If a referenced scenario is missing, abort with the path and missing scenario name.
+- **`docs/planning/epics.yaml`** — Business scenarios for the epic (Gherkin block-scalars), injected verbatim into the implementer so it can author the ATDD spec. Read the matching epic entry's `business_scenarios` field. If the field is missing on the epic entry, abort with the path and a hint to re-run `/001-plan`.
 - **`.claude/ruleset/*.md`** — all 18 canonical rule files, verbatim-loaded into memory for downstream subagent injection (no `@`-include — content is pasted into the subagent prompt body).
 - **`.claude/ruleset/git-workflow.md`** — parse the YAML toggle block at the top of the file. Toggle keys consulted:
   - `auto_invoke_review`, `auto_invoke_verify`, `allow_commit_to_main`, `pr_required`, `branch_name_pattern`
@@ -125,12 +125,11 @@ finally:
 <!-- FREEZE:ELSE -->
   - `allow_commit_to_main: false` (default; non-solo presets) → abort: `Working tree has uncommitted changes. Commit or stash them before /002-implement.`
 <!-- FREEZE:ENDIF -->
-- **Domain-scenario name validation.** Before dispatching the implementer, verify every entry in the task's `domain_scenarios: [name1, name2, ...]` array matches a scenario header in the epic's `business_scenarios` Gherkin block-scalar:
-  1. Open `docs/planning/epics.yaml` and locate the matching epic by `epic_id`.
-  2. Extract the `business_scenarios` block-scalar verbatim.
-  3. Regex-extract every `## Scenario: (.+)` header from that block; collect the captured names into a set.
-  4. For each name in the task's `domain_scenarios`, check membership in that set.
-  5. On the first miss, abort: `Task <task-id> references domain_scenario "<name>" which is not in epic <epic-id>'s business_scenarios. Fix the task entry or re-run /001-plan.`
+- **Acceptance criteria sanity check.** Before dispatching the implementer, verify the task entry has a non-empty `acceptance_criteria: [...]` array:
+  1. Read the task entry from `epic-{id}-tasks.yaml`.
+  2. If `acceptance_criteria` is missing or empty, abort: `Task <task-id> has no acceptance_criteria. Re-run /001-plan or edit the task entry.`
+  3. If any entry is the empty string or whitespace only, abort: `Task <task-id> acceptance_criteria contains an empty entry. Fix the task entry.`
+  4. The implementer is responsible for the substantive interpretation of each criterion; this command only enforces shape.
 - Verify the task `status` is `pending` or `blocked`. If `done` or `in_progress`, behaviour depends on mode:
   - Task mode: `done` → `Task <task-id> is already done. Use /001-plan --resplit to revisit.`; `in_progress` → `Task <task-id> is already in_progress. Clear status manually before re-running /002-implement.`
   - Epic mode: `done` → skip silently (task already complete, loop continues to next eligible); `in_progress` → abort the entire epic with the same message as task mode (do not silently overwrite an in-flight task).
@@ -301,8 +300,8 @@ The approved plan path is the SINGLE input passed to Phase 2 below (as a `--- ap
 
 Use the **Task tool** with `subagent_type: "implementer"`. Inject the following into the subagent prompt body (verbatim, no `@`-includes):
 
-1. **Task entry (YAML)** — the entire YAML entry for the task as it appears in `epic-{id}-tasks.yaml`. Include `id`, `slug`, `title`, `status`, `domain_scenarios`, `atdd_spec`, `acceptance`, `notes`, and any other fields present.
-2. **Business scenarios** — for each name listed in the task's `domain_scenarios`, paste the matching `## Scenario: <name>` Gherkin block verbatim from `epics.yaml`. Preface with `--- Business Scenario: <name> ---`.
+1. **Task entry (YAML)** — the entire YAML entry for the task as it appears in `epic-{id}-tasks.yaml`. Include `id`, `slug`, `title`, `status`, `acceptance_criteria`, `atdd_spec`, `rules_in_scope`, `depends_on`, `notes`, and any other fields present. The `acceptance_criteria` array is the authoritative DoD bar — the implementer writes Domain-tests asserting each criterion.
+2. **Business scenarios (epic-level)** — paste the entire `business_scenarios` Gherkin block-scalar from the matching epic entry in `epics.yaml` verbatim under a header `--- Business Scenarios (epic-level) ---`. The implementer uses this to author the task's `atdd_spec` happy-path file; it is not a per-task DoD source (the DoD bar is `acceptance_criteria` on the task).
 3. **Verbatim ruleset SUBSET** — inject the ruleset **subset** via `scripts/inject-ruleset.sh --rules <comma-separated-slugs>` where slugs = the planner's `01-plan.json.payload.rules_in_scope` for this task ∪ the mandatory core `{architecture, testing, code-style, git-workflow}`. Capture the script's stdout via the Bash tool and inline it verbatim into the implementer's prompt. The script handles path resolution (honours `paths.ruleset` from `stack.yaml`, falls back to `.claude/ruleset/`), alphabetical ordering of `*.md` files, the `--- <basename> ---` header per file, and the subset filter (mandatory core is always included regardless of `--rules`). Do not re-implement the read+concatenate logic inline. Do not summarise, do not omit any rule in the subset. The remaining rules outside the subset are the reviewer's concern (`/004`), not the implementer's — they are the holistic gate that sweeps the full 18.
 4. **`stack.yaml.extras`** — paste the `extras` mapping verbatim under a header `--- stack.yaml.extras ---`. This is the escape hatch for stack-specific quirks (e.g. `bash_buffering_warning`, `user_ping_interval_minutes`).
 5. **Approved plan** — paste the contents of the approved plan artifact (e.g. `02b-plan.json` from Phase 1.5) verbatim under a header `--- approved plan ---`. The implementer treats this as binding: file set, RED sketch, GREEN shape, REFACTOR notes, and ATDD spec shape are pre-agreed with the user. Deviations are allowed only when the implementer hits an issue the plan missed; in that case the implementer emits `status: blocked` with a `payload.reason` describing the gap, and the flow halts back to the user.
@@ -612,7 +611,7 @@ Given epic `E-003` with three pending tasks `T-014`, `T-015`, `T-016` (each depe
 
 Given task `T-014` belonging to epic `E-003`:
 
-1. **Phase 0** — `/002-implement T-014` locates `docs/planning/epic-003-tasks.yaml`, finds entry `id: T-014, status: pending, slug: cancel-subscription, domain_scenarios: ["User cancels subscription"]`. Flips status to `in_progress`. Acquires `.claude/runs/.lock-E-003-T-014/`. Creates `.claude/runs/E-003/T-014/`.
+1. **Phase 0** — `/002-implement T-014` locates `docs/planning/epic-003-tasks.yaml`, finds entry `id: T-014, status: pending, slug: cancel-subscription, acceptance_criteria: ["SubscriptionService.cancel(...) persists status=cancelled and emits SubscriptionCancelled event", "Calling cancel on already-cancelled subscription is a no-op"]`. Flips status to `in_progress`. Acquires `.claude/runs/.lock-E-003-T-014/`. Creates `.claude/runs/E-003/T-014/`.
 2. **Phase 1** — Branch pattern `task/{task_id}-{slug}` resolves to `task/T-014-cancel-subscription`. Checked out from `main`.
 3. **Phase 1.5** — `implementer` (plan-only) writes `02a-plan.json` with file list, RED sketch, GREEN shape, REFACTOR notes, ATDD spec shape. User picks **Approve**.
 4. **Phase 2** — `implementer` (full) receives task YAML, the Gherkin block for `User cancels subscription`, ruleset subset verbatim, `stack.yaml.extras`, and the approved `02a-plan.json`. Writes Domain-tests in `tests/domain/cancel-subscription.test.ts`, production code in `src/billing/cancel.ts`, an ATDD spec in `tests/atdd/cancel-subscription.spec.ts`, commits with message `feat(billing): cancel subscription (T-014)`, writes `02-impl.json` with `status: ok`.

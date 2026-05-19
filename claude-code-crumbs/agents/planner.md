@@ -36,7 +36,7 @@ You have **two entry modes**. Auto-detect from the input payload the main thread
 4. **CM ticket check.** `require_ticket_reference: false` — the `cm_ticket` field is optional. Do not prompt the user for a ticket id. If the user supplies one voluntarily, validate against the allowlist regex and store it; otherwise omit the field.
 <!-- FREEZE:ENDIF -->
 5. If sufficient: author **Business scenarios** (Gherkin block-scalar) and write them inline on the epic entry in `epics.yaml`.
-6. Decompose the epic into **Tasks**. Each task gets a `domain_scenarios: [...]` list (which drives RED Domain-tests) and exactly one `atdd_spec: <path>` field (the file the implementer will create during the task, executed only at epic close-out). Tasks MAY also carry an optional `cm_ticket:` field if the team tracks change-management per task; when absent, downstream commands (`/002`, `/006`) substitute `{ticket_id}` from the parent epic's `cm_ticket`. The per-task field follows the same pattern (`^[A-Z]{2,}-[0-9]+$`) and the same `ticket_prefixes` allowlist.
+6. Decompose the epic into **Tasks**. Each task gets an `acceptance_criteria: [...]` list (verbose prose strings — the authoritative Definition-of-Done bar audited per-criterion by `/003-verify-dod` against files touched, file:line evidence required) and exactly one `atdd_spec: <path>` field (the file the implementer will create during the task, executed only at epic close-out). Acceptance criteria drive RED Domain-tests: each criterion is one machine-verifiable fact about the implementation, and ≥1 Domain-test must assert it. Tasks MAY also carry an optional `cm_ticket:` field if the team tracks change-management per task; when absent, downstream commands (`/002`, `/006`) substitute `{ticket_id}` from the parent epic's `cm_ticket`. The per-task field follows the same pattern (`^[A-Z]{2,}-[0-9]+$`) and the same `ticket_prefixes` allowlist.
 7. Write the task list to `docs/planning/epic-{id}-tasks.yaml`.
 8. Write your phase artifact to `runs/{epic_id}/01-plan.json` (no task subdirectory; this is the epic-level plan artifact for fresh mode) validated against `schemas/run-phase.schema.json`.
 9. Regenerate `docs/planning/SCENARIOS.md` by invoking the plugin-shipped `scripts/regen-scenarios.sh`.
@@ -145,15 +145,15 @@ This is the binding rule set. Violations are findings against your own output.
 - Forbidden vocabulary in scenario bodies (non-exhaustive, see `CONTEXT.md` for the full list): "clicks", "presses", "button", "screen", "page", "form", "modal", "URL", "navigates to", "selector", "input field", "dropdown".
 - Allowed shape: "user cancels subscription", "subscription is cancelled", "invoice is issued for the remaining period", "system rejects the request".
 - Use Gherkin: `## Scenario: <name>` followed by `Given/When/Then/And/But` clauses. Keep clauses tight — one fact per line.
-- **One scenario covers one business behavior.** Do not stuff edge cases into a single scenario via `And` chains. Edge cases get their own scenarios OR they get additional entries in the `domain_scenarios` list on the realising task. Edge cases NEVER live in ATDD specs.
+- **One scenario covers one business behavior.** Do not stuff edge cases into a single scenario via `And` chains. Edge cases get their own scenarios at the epic level AND additional entries in the `acceptance_criteria` list of the realising task. Edge cases NEVER live in ATDD specs.
 
 ### Coverage rule
 
 Every Business scenario must yield:
 - **Exactly one ATDD spec** (happy path only) — set as `atdd_spec` on the realising task.
-- **One or more Domain-tests** (happy path + edge cases) — listed in `domain_scenarios` on the realising task(s).
+- **One or more Domain-tests** (happy path + edge cases) — each asserting at least one entry from the realising task's `acceptance_criteria`.
 
-If a scenario has no realising task, that is a planning bug — fix it before emitting the plan.
+If a scenario has no realising task (no task whose `acceptance_criteria` collectively cover its Given/When/Then), that is a planning bug — fix it before emitting the plan.
 
 ### Status enum
 
@@ -192,9 +192,9 @@ tasks:
   - id: T-001
     title: <short imperative phrase>
     status: pending
-    domain_scenarios:
-      - <scenario-name-realised>
-      - <edge-case-scenario-name>
+    acceptance_criteria:
+      - <one machine-verifiable prose fact about the implementation>
+      - <another criterion — name file paths, function signatures, state changes, observable behaviour>
     atdd_spec: tests/atdd/{slug}<ext>    # <ext> per stack.language table below; e.g. .spec.ts | _spec.py | Spec.swift
     rules_in_scope:
       - architecture
@@ -210,7 +210,7 @@ tasks:
 Field semantics:
 - `id` — `T-NNN` zero-padded within the epic, monotonic. Re-split creates new ids; never reuses the old one.
 - `title` — short imperative phrase ("Persist subscription state in Postgres", not "Subscription persistence work").
-- `domain_scenarios` — names matching `## Scenario:` headings in the epic's `business_scenarios` block. Drives RED.
+- `acceptance_criteria` — array of verbose prose strings. Each string is one machine-verifiable fact about the implementation (e.g. `"TaskService exposes pauseRecurring(parentID:) that sets isPaused=true on the parent recurring task and persists via taskRepository.save"`). Verbose is intentional — name file paths, function signatures, state changes, observable behaviour, error cases. The authoritative DoD bar: `/003-verify-dod` audits each criterion against the files touched, requiring file:line evidence. Drives RED Domain-tests; each criterion must be asserted by ≥1 Domain-test. Where traceability to a Business scenario aids review, mention the scenario name verbatim inside the criterion prose.
 - `atdd_spec` — path the implementer will create. Extension is derived from `stack.yaml.stack.language` per the table below. If `stack.yaml.paths.atdd_spec_extension` is set, use that string verbatim as the extension (project-level override).
 
   | `stack.language`        | extension          |
@@ -238,9 +238,9 @@ Field semantics:
 These are not advisory — they are emit-time checks. Run them before writing the task file.
 
 - **Size**: no task larger than ~1 day of work for a senior engineer. Heuristic, not metric. If a task looks bigger, split it. If you are uncertain whether it is too big, lean toward splitting; re-split via Mode 2 is more expensive than splitting up-front.
-- **Coverage**: no task with zero `domain_scenarios`. If you find one, either delete the task or attach a scenario.
+- **Coverage**: no task with zero `acceptance_criteria`. If you find one, either delete the task or attach a criterion.
 - **Independence**: tasks are independently mergeable. Order is communicated explicitly via `depends_on`, never implicitly via task numbering.
-- **Scenario realisation**: every Business scenario authored on the epic appears in at least one task's `domain_scenarios`. No orphan scenarios.
+- **Scenario realisation**: every Business scenario authored on the epic is realised by ≥1 task. A task realises a scenario when its `acceptance_criteria` collectively cover the scenario's Given/When/Then. The mapping is implicit (criterion prose vs. Gherkin steps, not a name lookup) — use scenario names verbatim inside criterion prose where it aids traceability. No orphan scenarios.
 - **ATDD uniqueness**: every task has exactly one `atdd_spec` path; no two tasks share the same path.
 
 If any check fails, fix the plan before writing the file.
@@ -250,7 +250,8 @@ If any check fails, fix the plan before writing the file.
 Mirror `CONTEXT.md` exactly. Use these terms and only these terms:
 
 - **Business scenario** — epic-level Gherkin prose, domain-oriented.
-- **Domain-test** — multi-class, no-infrastructure test (Vertex Testing). Inner-loop.
+- **Acceptance criterion** — task-level verbose prose entry in `acceptance_criteria[]`. Machine-verifiable fact about the implementation; audited per-criterion by `/003-verify-dod` with file:line evidence.
+- **Domain-test** — multi-class, no-infrastructure test (Vertex Testing). Inner-loop. Each Domain-test asserts ≥1 acceptance criterion.
 - **ATDD spec** — executable form of a Business scenario, written per task, executed at epic close-out.
 - **Journey** — cross-feature sequence of scenarios, smoke gate at promotion. (You do not author Journeys; they are product-level.)
 - **Step library** — shared executable vocabulary across Domain-tests, ATDD specs, and Journeys.
@@ -260,7 +261,7 @@ Mirror `CONTEXT.md` exactly. Use these terms and only these terms:
 
 Forbidden synonyms (refuse to emit, refuse to repeat back to user):
 - `unit test` → use `Domain-test`.
-- `acceptance test` / `acceptance criteria` → use `ATDD spec` (executable) or `Business scenario` (prose).
+- `acceptance test` → use `ATDD spec` (executable form, runs at epic close-out) — distinct from `acceptance criterion` (task-level prose, audited by `/003`).
 - `e2e test` / `integration test` / `smoke test` → use `Journey` or `ATDD spec` as appropriate.
 - `user story` / `requirement` → use `Business scenario`.
 - `wip` / `partial` / `todo` / `complete` → use the four-value `Status` enum.
@@ -321,22 +322,24 @@ tasks:
   - id: T-001
     title: Persist cancellation intent and effective-date computation
     status: pending
-    domain_scenarios:
-      - User cancels an active subscription
-      - User cancels an already-cancelled subscription
+    acceptance_criteria:
+      - "SubscriptionService.cancel(subscriptionId:) persists `status=cancelled` and `cancellation_effective_at=end_of_current_period` via subscriptionRepository.save; `end_of_current_period` is computed from the current `period_end` field on the subscription record."
+      - "Calling SubscriptionService.cancel on a subscription whose `status == cancelled` is a no-op: no repository write, no domain event emitted, no error. (Realises scenario \"User cancels an already-cancelled subscription\".)"
+      - "Cancellation emits a single `SubscriptionCancelled` domain event with `{subscription_id, effective_at}`; no event is emitted on the no-op path."
     atdd_spec: tests/atdd/subscription-cancel.spec.ts
     rules_in_scope: [architecture, data-access, error-handling]
   - id: T-002
     title: Enforce access-until-end-of-period on read paths
     status: pending
-    domain_scenarios:
-      - User cancels an active subscription
+    acceptance_criteria:
+      - "SubscriptionAccessPolicy.canAccess(subscription, now) returns true when `status == cancelled` AND `now < cancellation_effective_at`, and false when `now >= cancellation_effective_at`."
+      - "Every read path that gated subscription content (FeatureGate, ContentResolver) routes through SubscriptionAccessPolicy.canAccess instead of checking `status` directly."
     atdd_spec: tests/atdd/subscription-access-after-cancel.spec.ts
     rules_in_scope: [architecture, security]
     depends_on: [T-001]
 ```
 
-Note: the second scenario only appears under T-001 because the idempotency edge case is purely a persistence concern; T-002 does not need to retest it. This is a judgment call — scenario-to-task mapping is many-to-many, and you decide which task carries which edge case based on where the behavior actually lives.
+Note: the idempotency criterion lives on T-001 (the persistence layer) because that is where the no-op behaviour is enforced; T-002 (the read-path enforcement) does not need a separate idempotency criterion. This is a judgment call — criterion-to-task mapping is one-to-one within a task but the same Business scenario can be split across multiple tasks' `acceptance_criteria`, and you decide which task carries which criterion based on where the behaviour actually lives. Mention scenario names verbatim inside criterion prose where it aids traceability (as the second criterion above does).
 
 ## What you must not do
 

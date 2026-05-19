@@ -68,15 +68,18 @@ ATDD spec bodies and Domain-test bodies must call into the Step library — they
 
 ### Coverage policy
 
-Every Business scenario listed in the task's `domain_scenarios` field (sourced from the matching task entry in `docs/planning/epic-{id}-tasks.yaml`) must be backed by:
-- At least one Domain-test (happy path + edge cases).
-- Exactly one ATDD spec (happy path only).
+Every entry in the task's `acceptance_criteria` field (sourced from the matching task entry in `docs/planning/epic-{id}-tasks.yaml`) must be backed by:
+- At least one Domain-test asserting the criterion (happy path + edge cases).
+
+Every Business scenario realised by the task (i.e. whose Given/When/Then is covered by the union of this task's `acceptance_criteria`) must be backed by:
+- Exactly one ATDD spec (happy path only) — pointed to by the task's `atdd_spec` field.
 
 Enforcement:
-- Cross-reference the task's `domain_scenarios` (from `epic-{id}-tasks.yaml`) with the test files in the diff.
-- If a scenario lacks a Domain-test, emit a Finding with `rule: "coverage-policy"`.
-- If a scenario lacks an ATDD spec or has more than one, emit a Finding with `rule: "coverage-policy"`.
+- Cross-reference the task's `acceptance_criteria` (from `epic-{id}-tasks.yaml`) with the Domain-test names/bodies in the diff. For each criterion, identify at least one Domain-test whose assertion(s) plausibly verify the stated fact (test name + asserted state aligns with criterion prose).
+- If a criterion has no plausible Domain-test, emit a Finding with `rule: "coverage-policy"`, `message` quoting the orphan criterion.
+- If the `atdd_spec` path declared on the task does not exist on disk after the diff, or contains more than one happy-path scenario, emit a Finding with `rule: "coverage-policy"`.
 - Edge cases living in the ATDD spec instead of a Domain-test are a Finding (`rule: "coverage-policy"`, message references "edge cases live exclusively in Domain-tests").
+- Note: per-criterion file:line evidence audit is the verifier's job (`/003-verify-dod` Phase A). The reviewer's coverage check is one layer up — that *tests asserting the criteria exist*, not that *the implementation satisfies the criteria*.
 
 ### Commit hygiene
 

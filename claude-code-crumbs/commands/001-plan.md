@@ -74,7 +74,7 @@ The planner produces:
 
 - `runs/{epic_id}/01-plan.json` — validated against `schemas/run-phase.schema.json`. Contains the planner's decisions, BS list, task list, and any open questions.
 - Updated `docs/planning/epics.yaml` — adds a `business_scenarios:` key on the epic entry, whose value is a Gherkin block-scalar (`|`) containing all scenarios for this epic. Existing keys (`status`, `goal`, `out_of_scope`) are preserved.
-- New `docs/planning/epic-{id}-tasks.yaml` — flat list of task entries. Each entry has: `id`, `title`, `status: pending`, `domain_scenarios: [<BS title>, ...]`, `atdd_spec: <path>`, optional `notes`.
+- New `docs/planning/epic-{id}-tasks.yaml` — flat list of task entries. Each entry has: `id`, `title`, `status: pending`, `acceptance_criteria: [<verbose prose string>, ...]` (machine-verifiable facts, audited per-criterion by `/003-verify-dod`), `atdd_spec: <path>`, optional `notes`. See `agents/planner.md` § "Task YAML shape" for full field semantics.
 
 If the planner returns `status: "needs_clarification"` in `01-plan.json`, surface the questions to the user, collect answers, and re-dispatch with the expanded brief.
 
@@ -105,30 +105,33 @@ Read `runs/{epic_id}/{task_id}/02-impl.json`. Required:
 
 If either is missing, abort with: "Task T-NNN was not flagged as too_big. Re-split requires an implementer's too_big_proposal."
 
-Also read the original task entry from `epic-{id}-tasks.yaml` (for its `domain_scenarios` list — these are the anchor the new tasks inherit).
+Also read the original task entry from `epic-{id}-tasks.yaml` (for its `acceptance_criteria` list — these are the anchor the new tasks inherit; the resplit redistributes criteria across smaller tasks rather than introducing new ones).
 
 ### Phase 1.5 — Resplit depth check
 
-Before dispatching the planner, count prior resplit archives whose lineage overlaps this task's Business Scenarios. Maximum resplit depth is 3 per Business Scenario lineage. Beyond that, the planner is failing to decompose meaningfully and manual intervention is required.
+Before dispatching the planner, count prior resplit archives for this epic whose archived `01-plan.json` references **any acceptance criterion** present on the current task. Maximum resplit depth is 3 per criterion lineage. Beyond that, the planner is failing to decompose meaningfully and manual intervention is required.
+
+Criterion overlap is detected by substring match: each archived plan artifact is searched for a unique 40-char fragment of every current criterion. If any fragment hits, the archive is part of this task's lineage.
 
 ```sh
-# Extract source task's domain_scenarios names from epic-{id}-tasks.yaml.
+# Extract source task's acceptance_criteria entries from epic-{id}-tasks.yaml.
 # Prefer yq when available; fall back to a POSIX awk parser for the flat task list.
 EPIC_NUM="${EPIC_ID#E-}"
 TASKS_FILE="docs/planning/epic-${EPIC_NUM}-tasks.yaml"
 
 if command -v yq >/dev/null 2>&1; then
-    SCENARIO_NAMES="$(yq -r ".tasks[] | select(.id == \"$TASK_ID\") | .domain_scenarios[]" "$TASKS_FILE" 2>/dev/null)"
+    CRITERIA="$(yq -r ".tasks[] | select(.id == \"$TASK_ID\") | .acceptance_criteria[]" "$TASKS_FILE" 2>/dev/null)"
 else
-    SCENARIO_NAMES="$(awk -v t="$TASK_ID" '
-        /^  - id:/ { in_task = ($3 == t) ? 1 : 0; in_ds = 0 }
-        in_task && /^    domain_scenarios:/ { in_ds = 1; next }
-        in_task && in_ds && /^      - / { sub(/^      - /, ""); print; next }
-        in_ds && /^    [a-zA-Z]/ { in_ds = 0 }
+    CRITERIA="$(awk -v t="$TASK_ID" '
+        /^  - id:/ { in_task = ($3 == t) ? 1 : 0; in_ac = 0 }
+        in_task && /^    acceptance_criteria:/ { in_ac = 1; next }
+        in_task && in_ac && /^      - / { sub(/^      - /, ""); gsub(/^"|"$/, ""); print; next }
+        in_ac && /^    [a-zA-Z]/ { in_ac = 0 }
     ' "$TASKS_FILE")"
 fi
 
-# Count prior resplit archives whose archived 01-plan.json references any of these scenarios.
+# For each criterion, take the first 40 chars (after stripping leading whitespace) as a lineage probe.
+# Criteria are verbose prose — a 40-char fragment is enough to avoid accidental matches.
 DEPTH=0
 ARCHIVE_ROOT=".claude/runs-archive/${EPIC_ID}"
 if [ -d "$ARCHIVE_ROOT" ]; then
@@ -136,10 +139,11 @@ if [ -d "$ARCHIVE_ROOT" ]; then
         [ -d "$archive" ] || continue
         plan="${archive}01-plan.json"
         [ -f "$plan" ] || continue
-        # Match if any scenario name appears in the archived plan artifact.
-        printf '%s\n' "$SCENARIO_NAMES" | while IFS= read -r name; do
-            [ -n "$name" ] || continue
-            if grep -qF -- "$name" "$plan"; then
+        printf '%s\n' "$CRITERIA" | while IFS= read -r criterion; do
+            [ -n "$criterion" ] || continue
+            probe="$(printf '%s' "$criterion" | sed 's/^[[:space:]]*//' | cut -c1-40)"
+            [ -n "$probe" ] || continue
+            if grep -qF -- "$probe" "$plan"; then
                 exit 9
             fi
         done
@@ -151,11 +155,11 @@ if [ -d "$ARCHIVE_ROOT" ]; then
 fi
 
 if [ "$DEPTH" -ge 3 ]; then
-    echo "Resplit lineage for scenarios sharing this task has depth $DEPTH (>= 3)." >&2
+    echo "Resplit lineage for criteria sharing this task has depth $DEPTH (>= 3)." >&2
     echo "The planner is failing to decompose. Halting." >&2
     echo "Manual remediation options:" >&2
     echo "  1. Inspect the prior resplit archives in .claude/runs-archive/${EPIC_ID}/" >&2
-    echo "  2. Re-author the Business Scenario in epics.yaml to be smaller in scope" >&2
+    echo "  2. Re-author the acceptance_criteria on this task to be narrower in scope" >&2
     echo "  3. Edit ${TASKS_FILE} directly and accept the task as written" >&2
     exit 6
 fi
@@ -176,7 +180,7 @@ Use the Task tool with `subagent_type: "planner"`, mode set to `resplit`. Brief:
 
 The planner produces:
 
-- New task entries replacing the original in `epic-{id}-tasks.yaml`. New task ids continue the existing numbering (e.g., if the original was `T-007` and the epic had tasks up to `T-012`, new tasks become `T-013`, `T-014`, …). **All new tasks inherit the original task's `domain_scenarios` list verbatim** — re-split does not change BS coverage, only granularity.
+- New task entries replacing the original in `epic-{id}-tasks.yaml`. New task ids continue the existing numbering (e.g., if the original was `T-007` and the epic had tasks up to `T-012`, new tasks become `T-013`, `T-014`, …). **The original task's `acceptance_criteria` are redistributed across the new tasks** — every criterion from the original must appear on exactly one new task (no orphans, no duplicates). Re-split does not author new criteria; it only redistributes existing ones to smaller chunks. Business scenarios at the epic level are unchanged.
 - `runs/{epic_id}/{task_id}/01-plan.json` — re-split phase output, recording which task was split, the reason, and the new task ids.
 
 ### Phase 3 — Archive old task
@@ -199,7 +203,7 @@ Print:
 
 - **PRD per-epic immutability** — the planner only reads PRD; it never writes to PRD. PRD-level changes (renaming an epic, adjusting scope) belong to `/000-prd-refine`. If the planner suggests a PRD edit, surface it as a question to the user, do not apply it.
 - **Business scenarios MUST be domain-oriented (UI-ignorant)**. Reject planner output if any BS contains UI vocabulary: buttons, pages, clicks, URLs, selectors, CSS, screens, modals, forms, fields, tabs. If detected, re-dispatch the planner with a clarifying instruction quoting the offending line.
-- **Coverage policy** — every BS must map to at least one task (via `domain_scenarios` on that task). Every task must have at least one entry in `domain_scenarios` and exactly one `atdd_spec` path. Reject planner output that violates this; surface the gap and re-dispatch.
+- **Coverage policy** — every BS must be realised by at least one task (a task realises a BS when its `acceptance_criteria` collectively cover the BS's Given/When/Then). Every task must have at least one entry in `acceptance_criteria` and exactly one `atdd_spec` path. Reject planner output that violates this; surface the gap and re-dispatch.
 - **Status enum on new tasks** — always `pending`. The planner never sets any other status; status transitions are owned by `/002-implement` and `/003-finalize`.
 - **No silent rewrites** — if the planner's output would overwrite existing scenarios in `epics.yaml` for the same epic, halt and ask the user whether to merge or replace. Default: refuse and surface the conflict.
 

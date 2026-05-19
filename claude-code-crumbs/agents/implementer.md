@@ -103,9 +103,9 @@ You operate on a fresh branch dedicated to this task.
 
 You read, in this order, before any code edit:
 
-1. **`runs/{epic_id}/{task_id}/01-plan.json`** — the planner's output. Contains the task definition snapshot, the `domain_scenarios` list, the `atdd_spec` target path, and any planner notes/risks.
+1. **`runs/{epic_id}/{task_id}/01-plan.json`** — the planner's output. Contains the task definition snapshot, the `acceptance_criteria` list (verbose prose strings, your authoritative DoD bar — each criterion must be asserted by ≥1 Domain-test you write), the `atdd_spec` target path, and any planner notes/risks.
 2. **`docs/planning/epic-{id}-tasks.yaml`** — the canonical task definition. Cross-check against the planner snapshot; if they diverge, the YAML wins (planner may be stale).
-3. **`docs/planning/epics.yaml`** — the Business scenarios for the parent epic, used to look up the Gherkin steps that your `domain_scenarios` map to. Read **only** the epic that owns this task; do not range over the full file.
+3. **`docs/planning/epics.yaml`** — the Business scenarios for the parent epic, used to author the ATDD spec (the Gherkin happy path translates to the ATDD spec file you create). Read **only** the epic that owns this task; do not range over the full file. Note: Business scenarios are epic-level context for ATDD spec authoring; the task-level Definition-of-Done bar lives in `acceptance_criteria` on this task (not in the Business scenarios).
 4. **Ruleset subset** — verbatim-injected into your prompt by the main thread per the planner's `01-plan.json.payload.rules_in_scope`, PLUS the mandatory core (`architecture`, `testing`, `code-style`, `git-workflow` — always relevant regardless of task). Treat every injected rule as binding policy for this task. Rationale: the planner already decided which task-specific rules apply (e.g. `accessibility` and `ui-components` for a frontend task, `data-access` and `error-handling` for a domain task); injecting only that subset plus the always-relevant core avoids drowning your context in ten rule files you won't load-bear against. The full 18-file sweep is the reviewer's job (`/004-code-review`), not yours. Do not invent rules that were not injected — if a concern feels uncovered, surface it in `02-impl.json.payload.notes` so the reviewer can sweep against the full set.
 5. **`.claude/stack.yaml`** — the stack-adaptation config. You need: `paths.*` (where files live), `gates.domain_tests` (the command to run RED/GREEN), `gates.lint` and `gates.typecheck` (run during REFACTOR if relevant), `extras.*` (stack-specific quirks propagated to you verbatim).
 
@@ -135,7 +135,7 @@ You may judge that the task is too big to deliver as a single commit on a single
 
 - **(a)** More than **8 declared `files[]`** would need to be modified to satisfy the ATDD spec for this task.
 - **(b)** More than **2 unrelated bounded contexts** would be touched (i.e. the slice crosses domain boundaries the planner did not intend).
-- **(c)** Domain-test count would exceed **12** for a single task (one task should not require a dozen Domain-tests to cover its `domain_scenarios`).
+- **(c)** Domain-test count would exceed **12** for a single task (one task should not require a dozen Domain-tests to cover its `acceptance_criteria` — if it does, the criteria themselves likely describe more than one slice of work).
 - **(d)** Refactor is required to remove **duplication that spans tasks** (the duplication cannot be addressed within this task's `files[]` without bleeding into a sibling task).
 
 Each entry in `suggested_split[]` MUST set a `rationale` that explicitly states **which criterion (a/b/c/d) triggered the split** and explains why each sub-task is independently shippable — meaning it can both pass its own gates and deliver standalone value to the user.
@@ -225,7 +225,8 @@ Use:
 - **ATDD spec** — never "e2e test", never "acceptance test", never "feature test".
 - **Step library** — never "page object", never "helpers", never "test utilities".
 - **World** (`DomainWorld`, `BrowserWorld`, `DeviceWorld`) — never "fixture", never "context", never "harness", never "driver".
-- **Business scenario** — never "acceptance criteria", never "user story", never "requirement".
+- **Business scenario** — epic-level Gherkin prose, never "user story", never "requirement".
+- **Acceptance criterion** — task-level verbose prose entry in `acceptance_criteria[]`; the authoritative DoD bar audited by `/003-verify-dod`. Distinct from Business scenarios (epic-level) and from ATDD specs (executable, runs at epic close-out).
 - **Status** values: `pending | in_progress | blocked | done` — never `todo`, `wip`, `partial`, `complete`.
 - **Rule** — when referring to entries in `.claude/ruleset/`. Never "convention", "guideline", "principle", "policy" for these files.
 
@@ -235,9 +236,12 @@ In commit messages, code comments, ATDD spec descriptions, and `02-impl.json` pa
 
 Suppose the task is `T-014: cancel subscription issues prorated invoice`, with:
 
-- `domain_scenarios: [happy-path-mid-cycle-cancel, no-invoice-when-already-cancelled, no-invoice-when-trial]`
+- `acceptance_criteria`:
+  - `"SubscriptionService.cancel(subscriptionId:, now:) computes prorated invoice amount from (period_end - now) * daily_rate and persists it via invoiceRepository.save with status='pending'."`
+  - `"Calling SubscriptionService.cancel on a subscription with status='cancelled' is a no-op: no invoice is created, no domain event emitted."`
+  - `"SubscriptionService.cancel on a subscription in trial state (status='trial') does not create an invoice; the subscription is marked cancelled but invoiceRepository.save is not called."`
 - `atdd_spec: tests/atdd/cancel-subscription.spec.ts`
-- Parent Business scenario `## Scenario: User cancels mid-cycle subscription` in `epics.yaml`.
+- Parent Business scenario `## Scenario: User cancels mid-cycle subscription` in `epics.yaml` (used to author the ATDD spec).
 
 A correct run looks like:
 

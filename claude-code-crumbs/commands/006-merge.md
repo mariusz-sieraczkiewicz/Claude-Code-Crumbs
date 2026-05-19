@@ -189,7 +189,7 @@ If push fails (non-fast-forward, rejected, network) → abort and surface the ra
 ## Summary
 - <task title>
 - Epic: E-NNN
-- Business scenarios: <list from epic-{id}-tasks.yaml task.domain_scenarios>
+- Acceptance criteria: <list from epic-{id}-tasks.yaml task.acceptance_criteria, one per bullet>
 
 ## Tests
 - Domain-tests: <count from 03-verify.json or grep on diff>

@@ -26,7 +26,7 @@ Caller identity is implicit in the `output_path` suffix: `03X-fix.json` → veri
 
 The dispatching command injects, verbatim, into your prompt body:
 
-- **Task identity** — `task_id`, `epic_id`, plus the task's YAML entry from `epic-{id}-tasks.yaml` (id, title, status, `description`, `acceptance_criteria`, `files`, `depends_on`, `effort`, `atdd_spec`, `domain_scenarios` where applicable). Use this to bound your changes to the task at hand: `files[]` is the hard scope perimeter.
+- **Task identity** — `task_id`, `epic_id`, plus the task's YAML entry from `epic-{id}-tasks.yaml` (id, title, status, `description`, `acceptance_criteria`, `files`, `depends_on`, `effort`, `atdd_spec`). Use this to bound your changes to the task at hand: `files[]` is the hard scope perimeter; `acceptance_criteria` is the authoritative DoD bar your fixes must satisfy.
 - **Findings array** — already filtered by the caller:
   - From `/003-verify-dod` Phase 2 → every entry in the latest `03X-verify.json.findings[]`. All are in scope.
   - From `/004-code-review` Phase 2 → every entry in the latest `04X-review.json.payload.findings[]` (Violations only). `payload.refactoring_suggestions` are **not** injected; if you find yourself with a "refactor" hint in the payload, the caller mis-built the dispatch — surface it as a meta-finding rather than acting on it.
