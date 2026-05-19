@@ -8,9 +8,9 @@ Run the Definition-of-Done check for **$ARGUMENTS** by dispatching the `verifier
 This command operates in one of two behavioural modes, gated by the `auto_fix_on_verify_fail` toggle from `git-workflow.md` (resolved at freeze time via the same mechanism as other ruleset toggles):
 
 - **Self-heal on (`auto_fix_on_verify_fail: true`)** — default for solo / small-team / oss. On `fail`, dispatch a `feedback-implementer` subagent to fix the findings, then re-dispatch the `verifier` to confirm. Loop up to 3 fix iterations. Stop early on first `status: ok`. Escalate to user if still failing after the third re-verify.
-- **Self-heal off (`auto_fix_on_verify_fail: false`)** — default for enterprise. Behave strictly read-only: print findings and suggest `/005-implement-feedback`. Never edit code.
+- **Self-heal off (`auto_fix_on_verify_fail: false`)** — default for enterprise. Behave strictly read-only: print findings and a manual-remediation pointer (user edits the working tree, then re-runs `/003-verify-dod`). Never edit code. `/005-implement-feedback` is reserved for epic-level user feedback, not gate-finding fixes.
 
-The on-disk contract is identical in both modes for Phase 1 — the verifier always emits `runs/{epic_id}/{task_id}/03-verify.json`, validated against `schemas/run-phase.schema.json`. The self-heal mode appends additional artifacts (`03b-fix.json`, `03c-verify.json`, `03d-fix.json`, ...) — see "Artifact numbering" below. Append-only history: no prior file is ever overwritten.
+The on-disk contract is identical in both modes for Phase 1 — the verifier always emits `.claude/runs/{epic_id}/{task_id}/03-verify.json`, validated against `schemas/run-phase.schema.json`. The self-heal mode appends additional artifacts (`03b-fix.json`, `03c-verify.json`, `03d-fix.json`, ...) — see "Artifact numbering" below. Append-only history: no prior file is ever overwritten.
 
 This command can be invoked **standalone** (user types `/003-verify-dod T-001`) or **chained** (parent `/002-implement` runs it as part of the per-task loop). Standalone exit prints a human summary; chained exit returns control to the parent, which reads the JSON.
 
@@ -49,7 +49,7 @@ Append-only. No prior file is ever overwritten or deleted. The full possible art
 | `03f-fix.json` | Phase 2 iteration 3 (fix) | `feedback-implementer` | `ok` \| `blocked` |
 | `03g-verify.json` | Phase 3 iteration 3 (re-verify) | `verifier` | `ok` \| `fail` |
 
-Design-fidelity (`stack.yaml.design_verify.type == "prompt"`) writes a sibling `03b-design-verify.json` only on the **initial** Phase 1 run — see "Design-verify handling". That artifact lives alongside `03-verify.json` and is **not** renumbered or repeated for subsequent loop iterations; it is treated as part of the initial detect.
+Design-fidelity (`stack.yaml.design_verify.type == "prompt"`) writes a sibling `03-design-verify.json` only on the **initial** Phase 1 run — see "Design-verify handling". That artifact lives alongside `03-verify.json` and is **not** renumbered or repeated for subsequent loop iterations; it is treated as part of the initial detect.
 
 Stopping rules:
 - Any `03X-verify.json` (X ∈ {`""`, `c`, `e`, `g`}) with `status: "ok"` → loop ends, run succeeds. The "final" status of the `/003` invocation is `ok`.
@@ -64,7 +64,7 @@ Stopping rules:
 - Confirm `.claude/stack.yaml` exists and parses. If absent, abort with: `stack.yaml missing. Run /000-prd-refine first.`
 - Confirm at least one gate in `stack.yaml.gates` is non-null. If **every** gate is null, abort with: `No gates configured in stack.yaml.gates; DoD would trivially pass — but this is suspicious. Edit .claude/stack.yaml to enable at least lint + typecheck + domain_tests before re-running /003-verify-dod.` (Trivial-pass is treated as a configuration bug, not as a success.)
 - Confirm `.claude/ruleset/` contains all 18 canonical rule files (project sanity check — if any are missing, list them and abort with a pointer to `/000-prd-refine`). The verifier itself receives **no** ruleset bodies; this check protects downstream phases (`/004-code-review`, and Phase 2 here) that do need full or partial ruleset content.
-- Confirm `runs/{epic_id}/{task_id}/01-plan.json` and `02-impl.json` exist. If either is missing, abort with: `Phase prerequisites missing for <task-id>: <path>. Run /002-implement first.`
+- Confirm `.claude/runs/{epic_id}/{task_id}/01-plan.json` and `02-impl.json` exist. If either is missing, abort with: `Phase prerequisites missing for <task-id>: <path>. Run /002-implement first.`
 - Parse the trailing `--epic-close` flag. If present, set `epic_close = true`.
 - Compute the **effective gate set**:
   - Always include: every non-null gate **except** `atdd_specs` and `journeys`.
@@ -74,21 +74,21 @@ Stopping rules:
 
 ### Phase 1 — Dispatch verifier subagent (detect)
 
-Use the Task tool with `subagent_type: "verifier"`. The dispatch payload contains:
+Use the Task tool with `subagent_type: "verifier"` (canonical payload shape: `agents/verifier.md`). The dispatch payload contains:
 
 - `task_id`, `epic_id`.
 - `epic_close` boolean (so the verifier knows whether to run `atdd_specs`).
 - **Effective gate set** — list of `{name, command}` pairs from `stack.yaml.gates`, filtered as Phase 0 computed. Pass each gate's `name` (key in the YAML) alongside its `command` (the shell string) so the verifier can label Findings.
 - **`stack.yaml` verbatim** — or at minimum the `gates`, `design_verify`, `extras`, and `paths` sections. The verifier may need `paths` to resolve relative gate commands (project may override `tests`, `src`, or `atdd_specs` paths); it propagates `extras` to any nested subagent (see Design-verify handling). `extras` is the documented escape hatch for stack-specific quirks (`bash_buffering_warning`, `user_ping_interval_minutes`, etc. — see CONTEXT.md "stack.yaml shape").
 - **Ruleset bodies are NOT injected.** The verifier does not interpret rule prose; it runs the gate commands and surfaces exit codes. Findings carry rule slugs (e.g. `tests.md:no-method-level-mocks`) only as they appear in the gate's own output — the verifier does not look them up against rule text. Rule-prose interpretation is the reviewer's job (`/004-code-review`) and, in self-heal mode, the feedback-implementer's job (Phase 2 below).
-- **Prior phase file paths** — `01-plan.json`, `02-impl.json`, and every `05*-feedback-impl.json` found under `runs/{epic_id}/{task_id}/`, in lexicographic order (so `05a`, `05b`, `05c` are read in that order — matches the rerun numbering in CONTEXT.md "Runs directory"). The verifier opens them itself; the command does **not** inline the JSON content (it would bloat the dispatch prompt).
+- **Prior phase file paths** — `01-plan.json`, `02-impl.json`, and every `05*-feedback-impl.json` found under `.claude/runs/{epic_id}/{task_id}/`, in lexicographic order (so `05a`, `05b`, `05c` are read in that order — matches the rerun numbering in CONTEXT.md "Runs directory"). The verifier opens them itself; the command does **not** inline the JSON content (it would bloat the dispatch prompt).
 
 The verifier's contract (defined in its subagent prompt) is:
 
 1. Run every gate in the effective set. Capture exit code, stdout, stderr.
 2. For each non-zero exit, emit one or more `findings[]` entries, each with: `rule` (the gate name or the rule it enforces), `severity: "blocker"` (zero-tolerance — there is no other severity), `location` (file:line where available), `message` (condensed error), `details` (relevant stderr/stdout excerpt — per the Finding object in `schemas/run-phase.schema.json`).
 3. If `stack.yaml.design_verify.type == "prompt"`, emit a single `design_verify_prompt` finding pointing at the prompt file (this command handles it — see below).
-4. Write `runs/{epic_id}/{task_id}/03-verify.json` with `status: "ok"` (zero findings) or `status: "fail"` (≥1 finding). Schema: `schemas/run-phase.schema.json`.
+4. Write `.claude/runs/{epic_id}/{task_id}/03-verify.json` with `status: "ok"` (zero findings) or `status: "fail"` (≥1 finding). Schema: `schemas/run-phase.schema.json`.
 5. Never edit source code. Never invoke another slash command. The verifier is **read-only** at the subagent level. (Fix execution, when enabled, is owned by Phase 2 of this command, which dispatches a **separate** subagent.)
 
 After the verifier returns, **validate `03-verify.json` against `schemas/run-phase.schema.json`** before branching (see "Schema validation" below). Then branch on `status`.
@@ -135,7 +135,7 @@ Branch on the `auto_fix_on_verify_fail` toggle.
 
 Self-heal is ON. Dispatch a `feedback-implementer` subagent to address the findings.
 
-Use the Task tool with `subagent_type: "feedback-implementer"`. The dispatch payload contains:
+Use the Task tool with `subagent_type: "feedback-implementer"` (canonical payload shape: `agents/feedback-implementer.md`). The dispatch payload contains:
 
 - `task_id`, `epic_id`.
 - **Iteration index** — `1` on first entry, `2` after `03c-verify.json` failed, `3` after `03e-verify.json` failed.
@@ -148,22 +148,24 @@ Use the Task tool with `subagent_type: "feedback-implementer"`. The dispatch pay
 The feedback-implementer's contract (defined in its subagent prompt) is:
 
 1. Read the findings file. For each finding, edit source files to address the root cause. Strict ATDD-E2E: if the finding is a missing/failing test, write/fix the test first (RED), then the implementation (GREEN).
-2. After all fixes, re-run the failing gate commands locally (subset of `stack.yaml.gates` whose names appear in `findings[].rule`) to confirm exit 0. If any still fail, the fix is incomplete — surface it in `payload.unresolved_findings[]` and emit `status: "blocked"`.
-3. Write the target artifact (`03b-fix.json` / `03d-fix.json` / `03f-fix.json`) with:
+2. After all fixes, re-run the failing gate commands locally (subset of `stack.yaml.gates` whose names appear in `findings[].rule`) to confirm exit 0. If any still fail, the fix is incomplete — emit `status: "blocked"` with `payload.reason` populated.
+3. Write the target artifact (`03b-fix.json` / `03d-fix.json` / `03f-fix.json`) with (canonical payload shape: `agents/feedback-implementer.md`):
    - `phase: "feedback-impl"`, `agent: "feedback-implementer"`, `task_id`, `epic_id`, `status: "ok" | "blocked"`, `started_at`, `finished_at`.
-   - `payload.fixes_applied`: array of `{file, summary}` entries describing each touched file.
-   - `payload.unresolved_findings`: array of `rule` slugs the implementer could not address (present only when `status: "blocked"`).
+   - `payload.fixes_applied`: array of `{finding_id, file, change_summary}` entries describing each touched file.
+   - `payload.commits_made` (optional): array of commit identifiers if the implementer staged commits during the fix.
+   - `payload.reason`: single-paragraph explanation (required when `status: "blocked"`).
+   - `payload.unresolved_rules` (optional): array of rule slugs the implementer could not address.
    - `payload.iteration`: the iteration index (1, 2, or 3) for forensic tracing.
 4. Do **not** invoke `/003-verify-dod` recursively. Do **not** invoke any other slash command. The next Phase (re-verify) is dispatched by **this** command, not by the subagent.
 
 After the feedback-implementer returns, **validate the new `03X-fix.json` against the schema** (shared helper above). Then branch:
 
-- `status: "blocked"` → loop ends. Print the unresolved findings, suggest `/005-implement-feedback <task-id>` as the human-mediated escalation, exit with run status `fail`.
+- `status: "blocked"` → loop ends. Print the unresolved findings, print the manual-remediation pointer (`edit the working tree to address each finding, then re-run /003-verify-dod <task-id>`; `/005-implement-feedback` is for epic-level user feedback, not gate-finding fixes), exit with run status `fail`.
 - `status: "ok"` → proceed to Phase 3.
 
 ### Phase 3 — Re-dispatch verifier (re-verify)
 
-Dispatch `verifier` again with the **same payload shape as Phase 1**, except:
+Dispatch `verifier` again with the **same payload shape as Phase 1** (canonical payload shape: `agents/verifier.md`), except:
 
 - **Target artifact path** — `03c-verify.json` on iteration 1, `03e-verify.json` on iteration 2, `03g-verify.json` on iteration 3.
 - **Prior phase file paths** — include the just-written `03X-fix.json` and every earlier `03X-fix.json` / `03X-verify.json` from the current loop.
@@ -197,13 +199,13 @@ The Phase 2 → Phase 3 cycle repeats at most **3 iterations**. After each itera
     ...
   ```
 
-  Truncate `message` at ~120 chars; the JSON has full details. Suggest `/005-implement-feedback <task-id>` so the user can drive the next round under human supervision (the epic-feedback flow is the formal escalation; intra-`/003` looping is an automation convenience, not a guarantee).
+  Truncate `message` at ~120 chars; the JSON has full details. Print the manual-remediation pointer (`edit the working tree to address each finding above, then re-run /003-verify-dod <task-id>`); intra-`/003` looping is an automation convenience, not a guarantee, and `/005-implement-feedback` is reserved for epic-level user feedback rather than gate-finding fixes.
 
-- If any `03X-fix.json.status == "blocked"` → loop ends immediately (no Phase 3 follows a blocked fix). Print the unresolved findings and the same `/005-implement-feedback` escalation.
+- If any `03X-fix.json.status == "blocked"` → loop ends immediately (no Phase 3 follows a blocked fix). Print the unresolved findings and the same manual-remediation pointer.
 
 The hard maximum is 3 fix iterations regardless of how it ends — there is no override flag, no "just one more try". This bounds the worst-case cost (3 × feedback-implementer + 4 × verifier including the initial detect) and forces a human checkpoint when the loop cannot converge automatically.
 
-**Chained mode note.** When `/002-implement` invokes this command, the parent will see the **final** artifact (the last `03X-verify.json` written) and route accordingly. The intra-`/003` loop is invisible to the parent except via the additional artifacts on disk; the parent does **not** restart its own outer loop. Looping discipline stays single-owner: `/002-implement` may invoke `/005-implement-feedback` after `/003` returns `fail`, but it does so **once**, not in a tight retry — the in-command loop here is the only auto-retry layer for verify findings.
+**Chained mode note.** When `/002-implement` invokes this command, the parent will see the **final** artifact (the last `03X-verify.json` written) and route accordingly. The intra-`/003` loop is invisible to the parent except via the additional artifacts on disk; the parent does **not** restart its own outer loop. Looping discipline stays single-owner: the parent routes on `/003`'s final status per its own contract, but it does so **once**, not in a tight retry — the in-command loop here is the only auto-retry layer for verify findings.
 
 <!-- FREEZE:ELSE -->
 
@@ -225,10 +227,11 @@ Truncate `message` at ~120 chars. Do **not** dump full stderr; the JSON has it f
 
 Suggest the next step:
 
-- **Chained**: parent will see `status: "fail"` and invoke `/005-implement-feedback <task-id>` itself; do not re-suggest.
-- **Standalone**: suggest `/005-implement-feedback <task-id>` to address the findings, then re-run `/003-verify-dod <task-id>`.
+- **Chained**: parent will see `status: "fail"` and route accordingly; do not re-suggest.
+- **Standalone**: print a manual-remediation pointer:
+  > Manual remediation: edit the working tree to address each finding above, then re-run `/003-verify-dod <task-id>` to confirm fixes. (`/005-implement-feedback` is for epic-level user feedback, not gate-finding fixes.)
 
-The command exits after printing. It does **not** loop, retry, or auto-invoke any other command. Looping in this preset is owned by the human reviewer board: they drive `/005-implement-feedback`, which produces its own artifact chain, and then re-run `/003-verify-dod` manually. This matches the enterprise compliance expectation that no automated agent edits code in response to a failing gate without an explicit human-mediated remediation step.
+The command exits after printing. It does **not** loop, retry, or auto-invoke any other command. Remediation in this preset is owned by the human reviewer board: they edit the working tree manually to address each Finding, then re-run `/003-verify-dod` to confirm. This matches the enterprise compliance expectation that no automated agent edits code in response to a failing gate without an explicit human-mediated remediation step. (`/005-implement-feedback` covers a different flow — epic-level user feedback — and is not the right escalation for gate-finding fixes.)
 
 <!-- FREEZE:ENDIF -->
 
@@ -236,13 +239,13 @@ The command exits after printing. It does **not** loop, retry, or auto-invoke an
 
 `stack.yaml.design_verify` declares the project's design-fidelity gate. It is special-cased because it has two forms:
 
-- **`type: "script"`** — an executable (e.g. `swiftlint --strict` with custom rules, a Python `design_check.py`). The verifier treats it like any other gate: run, check exit code, capture findings. **No extra handling in this command.** Script form contributes a single Finding to `03-verify.json` (under `findings[]`) — no `03b-design-verify.json` sibling is written. Only the `prompt` form writes the sibling artifact. In self-heal mode, a script-form design-verify finding flows through Phase 2 like any other finding — the feedback-implementer fixes it, the next verifier re-runs the script.
+- **`type: "script"`** — an executable (e.g. `swiftlint --strict` with custom rules, a Python `design_check.py`). The verifier treats it like any other gate: run, check exit code, capture findings. **No extra handling in this command.** Script form contributes a single Finding to `03-verify.json` (under `findings[]`) — no `03-design-verify.json` sibling is written. Only the `prompt` form writes the sibling artifact. In self-heal mode, a script-form design-verify finding flows through Phase 2 like any other finding — the feedback-implementer fixes it, the next verifier re-runs the script.
 - **`type: "prompt"`** — a markdown file containing instructions for an LLM-driven design check (e.g. "compare diff against `docs/DESIGN.md` token table; flag any deviation"). The verifier cannot execute prose — it instead emits a single `design_verify_prompt` finding pointing at the prompt file. This command then (only on the **initial** Phase 1 detect — not repeated for loop iterations):
   1. Reads the prompt file's full content.
   2. Computes the diff for the task (compare working tree against the branch base recorded in `02-impl.json`).
   3. Spawns a **separate general-purpose subagent** via the Task tool, with `subagent_type: "general-purpose"`. The prompt content is the subagent's instructions; the diff is the input. Inject `stack.yaml.extras` verbatim (same channel as the verifier).
   4. Collects the general-purpose subagent's findings (it returns the same `findings[]` shape).
-  5. **Does not mutate `03-verify.json`.** Phase artifacts are append-only history; the verifier's output stays untouched. Instead, write a NEW sibling file `runs/{epic_id}/{task_id}/03b-design-verify.json` with shape:
+  5. **Does not mutate `03-verify.json`.** Phase artifacts are append-only history; the verifier's output stays untouched. Instead, write a NEW sibling file `.claude/runs/{epic_id}/{task_id}/03-design-verify.json` with shape:
 
      ```json
      {
@@ -258,10 +261,10 @@ The command exits after printing. It does **not** loop, retry, or auto-invoke an
      ```
 
      `status: "ok"` when the general-purpose subagent returned an empty findings list; `status: "fail"` otherwise.
-  6. Downstream consumers (notably `/004-code-review` Phase 0) gate on **both** files: review aborts if `03-verify.json.status != "ok"` OR `03b-design-verify.json` exists AND `03b-design-verify.json.status != "ok"`.
-  7. In self-heal mode, if `03b-design-verify.json.status == "fail"`, the design-fidelity findings are **merged into the Phase 2 dispatch payload** alongside the verifier's own findings — the feedback-implementer addresses both in the same fix iteration. The design-verify sibling artifact is **not** rewritten on subsequent re-verifies (it is a once-per-initial-detect artifact); to re-check design fidelity after a fix iteration, the project must encode that as a script-form gate in `stack.yaml.gates` (which then flows through the normal loop).
+  6. Downstream consumers (notably `/004-code-review` Phase 0) gate on **both** files: review aborts if `03-verify.json.status != "ok"` OR `03-design-verify.json` exists AND `03-design-verify.json.status != "ok"`.
+  7. In self-heal mode, if `03-design-verify.json.status == "fail"`, the design-fidelity findings are **merged into the Phase 2 dispatch payload** alongside the verifier's own findings — the feedback-implementer addresses both in the same fix iteration. The design-verify sibling artifact is **not** rewritten on subsequent re-verifies (it is a once-per-initial-detect artifact); to re-check design fidelity after a fix iteration, the project must encode that as a script-form gate in `stack.yaml.gates` (which then flows through the normal loop).
 
-**Note on artifact naming collision.** The `03b-design-verify.json` design-fidelity sibling and the `03b-fix.json` self-heal iteration-1 artifact share the `03b-` prefix because they are distinct files (different basename suffixes) — there is no overwrite. Both can coexist in the same task directory; downstream consumers branch on the suffix.
+**Note on artifact naming.** The `03-design-verify.json` design-fidelity sibling sits alongside `03-verify.json` (initial detect) and is not part of the self-heal iteration sequence (`03b-fix.json`, `03c-verify.json`, ...). The leading prefix `03-` (with no letter suffix) marks it as a once-per-initial-detect artifact; downstream consumers branch on the basename, not the prefix letter.
 
 This indirection exists because `verifier` is a small, gate-focused subagent and design checks frequently need a broader LLM with general code-reading capability. The split keeps `verifier` deterministic, the design check tunable per-project via a markdown file, and the runs history append-only.
 
@@ -290,7 +293,7 @@ Concretely, the per-mode behavioural contract is:
 - **Zero tolerance.** Any non-zero gate exit produces a blocker Finding. There are no severity tiers, no overrides, no "minor advisory" Findings (CONTEXT.md "Finding policy"). A single `lint` warning that the project's `lint` gate treats as an error is enough to fail DoD.
 - **Self-heal is bounded.** Max 3 fix iterations. There is no escape hatch to extend the loop — projects that consistently need more iterations have a configuration smell (overlapping gates, unstable tests, ruleset contradictions) that the human should diagnose, not the agent.
 - **Append-only history.** Every iteration writes a fresh artifact (`03b-fix`, `03c-verify`, ...). No prior NN-*.json is ever overwritten or deleted by this command. Re-invoking `/003-verify-dod` on the same task **does** overwrite `03-verify.json` only — the initial-detect artifact is idempotent per invocation, but the loop artifacts from a previous invocation are preserved alongside the new ones (the loop letter-suffix scheme allows arbitrary numbers of historical artifacts to coexist).
-- The verifier is **read-only at the subagent level**. The feedback-implementer subagent is the only writer of source files in this command's chain, and only when the toggle is on. When the toggle is off, this command does not stage, commit, or modify any source file; fixes route through `/005-implement-feedback`, which reads the latest `03X-verify.json` and edits the working tree under human supervision.
+- The verifier is **read-only at the subagent level**. The feedback-implementer subagent is the only writer of source files in this command's chain, and only when the toggle is on. When the toggle is off, this command does not stage, commit, or modify any source file; the user manually edits the working tree to address each Finding (reading the latest `03X-verify.json` for the full forensic detail) and then re-runs `/003-verify-dod` to confirm. `/005-implement-feedback` is reserved for epic-level user feedback flows and is not the right tool for gate-finding fixes.
 - **Verifier receives NO ruleset bodies.** Several gates encode rule names in their output (e.g. `tests.md:no-method-level-mocks`, `data-modeling.md:no-anemic-model`); the verifier passes those slugs through verbatim into `findings[].rule` without interpreting them. The feedback-implementer in Phase 2 **does** receive the subset of rulesets referenced in the findings (so it can read rule prose during the fix). Mapping a slug back to actionable prose at review time belongs to the reviewer (`/004-code-review`), which receives all 18 ruleset files.
 - **No `journeys` execution here, ever** — including in `--epic-close` mode. Journeys are the **promotion** smoke gate and belong to `/007-promote`. They compose multiple Business scenarios across features (CONTEXT.md "Journey") and need a real production-like environment that the per-task DoD loop deliberately does not boot.
 - **No source-of-truth mutation.** Neither the verifier nor the feedback-implementer edits `epics.yaml`, `epic-{id}-tasks.yaml`, `stack.yaml`, or any file under `.claude/ruleset/`. The only writes are under `.claude/runs/` (artifacts) and, in self-heal mode, under the project's source tree (the files the feedback-implementer fixes).
@@ -345,7 +348,7 @@ Effective gate set adds `atdd_specs`. Now 6 gates run. If the ATDD spec for T-01
 DoD fail — 1 findings.
 
   [atdd_specs] tests/e2e/specs/checkout.spec.ts:42 — expected redirect to /confirmation, got /error
-Next: /005-implement-feedback T-014
+Next: edit the working tree to address each finding above, then re-run /003-verify-dod T-014.
 ```
 
 No `03b-fix.json` is written — the toggle is off, the command is read-only after Phase 1.
@@ -356,7 +359,7 @@ Same task with self-heal on, three iterations exhaust without convergence:
 DoD fail — 3 fix iterations exhausted, 1 findings remain. Escalating to user.
 
   [atdd_specs] tests/e2e/specs/checkout.spec.ts:42 — expected redirect to /confirmation, got /error
-Next: /005-implement-feedback T-014
+Next: edit the working tree to address each finding above, then re-run /003-verify-dod T-014.
 ```
 
 Artifacts written: `03-verify.json`, `03b-fix.json`, `03c-verify.json`, `03d-fix.json`, `03e-verify.json`, `03f-fix.json`, `03g-verify.json` — all seven coexist under the task directory for forensic reading.

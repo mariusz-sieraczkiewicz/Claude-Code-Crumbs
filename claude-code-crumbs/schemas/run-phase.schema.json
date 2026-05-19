@@ -9,7 +9,7 @@
   "properties": {
     "phase": {
       "type": "string",
-      "enum": ["plan", "impl", "verify", "review", "feedback-impl"]
+      "enum": ["plan", "impl", "impl-plan", "verify", "review", "feedback-impl"]
     },
     "mode": {
       "type": "string",
@@ -47,7 +47,7 @@
     "next": {
       "oneOf": [
         { "type": "null" },
-        { "enum": ["plan", "resplit", "impl", "verify", "review", "feedback-impl", "merge", "promote", "user-decision", "loop-limit"] }
+        { "enum": ["plan", "resplit", "impl", "impl-plan", "verify", "review", "feedback-impl", "merge", "promote", "user-decision", "loop-limit"] }
       ]
     },
     "payload": {
@@ -63,6 +63,7 @@
       "properties": {
         "rule": { "type": "string" },
         "severity": {
+          "description": "Severity tier. Two tier systems coexist for back-compat: (1) 'blocker' is the legacy/default tier emitted by /003-verify-dod (verifier agent) — every DoD failure is a hard blocker. (2) 'Critical' | 'High' | 'Medium' | 'Low' are the /004-code-review reviewer tiers per sielappkowo convention. All 5 values are kept (none dropped); consumers should treat 'blocker' as equivalent to 'Critical' for halt decisions.",
           "type": "string",
           "enum": ["blocker", "Critical", "High", "Medium", "Low"]
         },
@@ -92,6 +93,10 @@
       "then": { "properties": { "agent": { "const": "implementer" } } }
     },
     {
+      "if": { "properties": { "phase": { "const": "impl-plan" } }, "required": ["phase"] },
+      "then": { "properties": { "agent": { "const": "implementer" } } }
+    },
+    {
       "if": { "properties": { "phase": { "const": "verify" } }, "required": ["phase"] },
       "then": {
         "properties": { "agent": { "const": "verifier" } },
@@ -116,6 +121,33 @@
     {
       "if": { "properties": { "phase": { "const": "impl" } }, "required": ["phase"] },
       "then": { "properties": { "status": { "enum": ["ok", "too_big_proposal", "blocked"] } } }
+    },
+    {
+      "if": { "properties": { "phase": { "const": "impl-plan" } }, "required": ["phase"] },
+      "then": { "properties": { "status": { "enum": ["ok", "too_big_proposal", "blocked"] } } }
+    },
+    {
+      "if": { "properties": { "phase": { "const": "impl-plan" } }, "required": ["phase"] },
+      "then": {
+        "required": ["payload"],
+        "properties": {
+          "payload": {
+            "type": "object",
+            "required": ["iteration", "files_to_touch", "red_sketch", "green_shape", "refactor_notes"],
+            "properties": {
+              "iteration": { "type": "integer" },
+              "files_to_touch": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "red_sketch": { "type": "string" },
+              "green_shape": { "type": "string" },
+              "refactor_notes": { "type": "string" },
+              "user_feedback": { "type": "string" }
+            }
+          }
+        }
+      }
     },
     {
       "if": { "properties": { "phase": { "const": "verify" } }, "required": ["phase"] },

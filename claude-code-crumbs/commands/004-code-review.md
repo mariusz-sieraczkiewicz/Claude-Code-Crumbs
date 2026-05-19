@@ -35,9 +35,7 @@ This command is standalone-invokable. It is also auto-chained by `/002-implement
 <!-- FREEZE:ELSE -->
 - **Branch check.** `allow_commit_to_main: false` — confirm the current branch is the task branch (commonly `task/<task-id>-<slug>`). If the current branch is the default branch, abort with: `On <default_branch>; expected task branch. Did /002-implement run?`
 <!-- FREEZE:ENDIF -->
-- **Verifier gate check.** Read `.claude/runs/{epic_id}/{task_id}/03-verify.json`. If the file is missing or `status != "ok"`, abort with: `Run /003-verify-dod first.` Additionally, if `.claude/runs/{epic_id}/{task_id}/03b-design-verify.json` exists AND its `status != "ok"`, abort with the same message: `Run /003-verify-dod first.` The design-verify sibling artifact is produced by `/003-verify-dod` when `stack.yaml.design_verify.type == "prompt"`; it is append-only and lives alongside `03-verify.json` rather than mutating it. Rationale: review only runs after DoD passes — otherwise Findings would compound with infrastructure noise (failing gates leak through as spurious reviewer Findings). This pre-flight gate is **preserved verbatim** under both branches of the `auto_fix_on_review_fail` toggle below; self-heal does not bypass it.
-- Ensure `.claude/runs/{epic_id}/{task_id}/artifacts/` exists for transient subagent outputs.
-
+- **Verifier gate check.** Read `.claude/runs/{epic_id}/{task_id}/03-verify.json`. If the file is missing or `status != "ok"`, abort with: `Run /003-verify-dod first.` Additionally, if `.claude/runs/{epic_id}/{task_id}/03-design-verify.json` exists AND its `status != "ok"`, abort with the same message: `Run /003-verify-dod first.` The design-verify sibling artifact is produced by `/003-verify-dod` when `stack.yaml.design_verify.type == "prompt"`; it is append-only and lives alongside `03-verify.json` rather than mutating it. Rationale: review only runs after DoD passes — otherwise Findings would compound with infrastructure noise (failing gates leak through as spurious reviewer Findings). This pre-flight gate is **preserved verbatim** under both branches of the `auto_fix_on_review_fail` toggle below; self-heal does not bypass it.
 ### Phase 1 — Dispatch reviewer subagent (initial review)
 
 Use the **Task tool** with `subagent_type: "reviewer"`. Inject the following into the subagent prompt body (verbatim, no `@`-includes):
@@ -47,9 +45,9 @@ Use the **Task tool** with `subagent_type: "reviewer"`. Inject the following int
 3. **Verbatim Ruleset** — for each of the 18 files in `.claude/ruleset/`, paste the file content prefixed by a header line `--- <filename>.md ---`. Order alphabetically. Do not summarise, do not omit. The reviewer enforces every active Rule.
 4. **`stack.yaml.extras`** — paste the `extras` mapping verbatim under a header `--- stack.yaml.extras ---`. Stack-specific quirks (e.g. `bash_buffering_warning`, `user_ping_interval_minutes`) propagate via this channel.
 5. **Prior phase artifact paths** — list the absolute paths to `01-plan.json`, `02-impl.json`, `03-verify.json`, and every `05X-feedback-impl.json` present. The reviewer reads them directly (filesystem-only subagent comms per CONTEXT.md "Subagent chain"); do not paste their contents.
-6. **Output contract** — instruct the reviewer to write its result to `.claude/runs/{epic_id}/{task_id}/04-review.json`, validated against `schemas/run-phase.schema.json`. Top-level `status` ∈ `{ "ok", "fail" }`. Payload shape:
-   - `status: "ok"` → `payload.rules_checked` (array of rule slug strings, e.g. `["accessibility", "api-design", "architecture", "code-style", ...]` — each entry is a Rule filename without the `.md` suffix or a cross-cutting check name), `payload.files_reviewed` (array of paths).
-   - `status: "fail"` → `payload.findings` (non-empty array, the **Violations** set — these drive Phase 2). Each finding object: `{ rule: "<filename>.md", location: "<path>:<line>", message: "<one-line description>", severity: "Critical" | "High" | "Medium" | "Low" }`. Additionally, `payload.refactoring_suggestions` MAY be present — these are **advisory only** and never trigger Phase 2.
+6. **Output contract** — instruct the reviewer to write its result to `.claude/runs/{epic_id}/{task_id}/04-review.json`, validated against `schemas/run-phase.schema.json`. Top-level `status` ∈ `{ "ok", "fail" }`. The schema (`run-phase.schema.json` `phase: "review"` branch) requires a **top-level `findings: []`** array on every review artifact, regardless of status — pass it as a mirror of `payload.findings` (empty array `[]` when `status: "ok"`). The canonical Violation set lives in `payload.findings`; the top-level field is a schema-compliance duplicate. Payload shape:
+   - `status: "ok"` → `payload.rules_checked` (array of rule slug strings, e.g. `["accessibility", "api-design", "architecture", "code-style", ...]` — each entry is a Rule filename without the `.md` suffix or a cross-cutting check name), `payload.files_reviewed` (array of paths), `payload.findings: []` (empty). Top-level `findings: []` mirrors this empty array.
+   - `status: "fail"` → `payload.findings` (non-empty array, the **Violations** set — these drive Phase 2; this is the canonical location). Each finding object: `{ rule: "<filename>.md", location: "<path>:<line>", message: "<one-line description>", severity: "Critical" | "High" | "Medium" | "Low" }`. Top-level `findings` mirrors `payload.findings` verbatim (schema compliance). Additionally, `payload.refactoring_suggestions` MAY be present — these are **advisory only** and never trigger Phase 2.
 
 The reviewer is **read-only**. It does not edit files, does not run `git`, does not stage anything. Source-code fixes are produced by the `feedback-implementer` subagent in Phase 2 below; epic-level user feedback rounds remain the job of `/005-implement-feedback`.
 
@@ -73,12 +71,13 @@ When `04-review.json.status == "fail"` and `auto_fix_on_review_fail: true`, disp
 
 1. **Task identity** — `task_id`, `epic_id`, and the full task YAML entry. Same shape as Phase 1.
 2. **Violations to apply** — the `payload.findings` array from the **latest** review artifact (`04-review.json` on iteration 1, `04c-review.json` on iteration 2, `04e-review.json` on iteration 3). Pass the array verbatim — including `rule`, `location`, `message`, and `severity` for each finding. The feedback-implementer treats every Violation as actionable regardless of severity tier; severity is informational metadata, not a filter.
-3. **Refactoring Suggestions are NOT injected.** Per the Discipline section below, `payload.refactoring_suggestions` from the review artifact are advisory only. They are surfaced to the user in the final render but never passed to the feedback-implementer in this loop.
-4. **`stack.yaml.extras`** — paste verbatim under `--- stack.yaml.extras ---`. Same channel as Phase 1.
-5. **Prior phase artifact paths** — `01-plan.json`, `02-impl.json`, `03-verify.json`, every `05X-feedback-impl.json`, and **every prior in-loop artifact** for this `/004` run (`04-review.json`, `04b-fix.json`, `04c-review.json`, …). The feedback-implementer reads them itself; paths only.
-6. **Output contract** — instruct the subagent to write its result to `.claude/runs/{epic_id}/{task_id}/04b-fix.json` on iteration 1, `04d-fix.json` on iteration 2, `04f-fix.json` on iteration 3. Validate against `schemas/run-phase.schema.json`. Top-level `status` ∈ `{ "ok", "fail" }`. Payload shape:
+3. **Ruleset subset** — bodies of every rule file whose slug appears in any failing finding's `rule` field. Pass the ruleset subset verbatim (same channel as the reviewer ruleset injection — paste each file content prefixed by `--- <filename>.md ---`). The `feedback-implementer` agent requires this per `agents/feedback-implementer.md`: it interprets rule prose during the fix, and an `@`-include does not propagate to subagents. Mirror /003's Phase 2 dispatch wording: resolve each unique `rule` slug to its `.claude/ruleset/<slug>` file and inject the body.
+4. **Refactoring Suggestions are NOT injected.** Per the Discipline section below, `payload.refactoring_suggestions` from the review artifact are advisory only. They are surfaced to the user in the final render but never passed to the feedback-implementer in this loop.
+5. **`stack.yaml.extras`** — paste verbatim under `--- stack.yaml.extras ---`. Same channel as Phase 1.
+6. **Prior phase artifact paths** — `01-plan.json`, `02-impl.json`, `03-verify.json`, every `05X-feedback-impl.json`, and **every prior in-loop artifact** for this `/004` run (`04-review.json`, `04b-fix.json`, `04c-review.json`, …). The feedback-implementer reads them itself; paths only.
+7. **Output contract** — instruct the subagent to write its result to `.claude/runs/{epic_id}/{task_id}/04b-fix.json` on iteration 1, `04d-fix.json` on iteration 2, `04f-fix.json` on iteration 3. Validate against `schemas/run-phase.schema.json`. Top-level `status` ∈ `{ "ok", "blocked" }` (per the schema's `phase: "feedback-impl"` constraint). Payload shape:
    - `status: "ok"` → `payload.files_changed` (array of paths the subagent modified), `payload.violations_addressed` (subset of input findings the subagent claims to have fixed), `payload.commit_sha` (the new commit, if the subagent committed).
-   - `status: "fail"` → `payload.error` (string explaining why no fix could be produced — e.g. ambiguous Violation, edit conflict, missing context). Treat this as a terminal halt for the loop; do not advance to Phase 3 on a `fail` fix.
+   - `status: "blocked"` → `payload.reason` (string explaining why no fix could be produced — e.g. ambiguous Violation, edit conflict, missing context). Treat this as a terminal halt for the loop; do not advance to Phase 3 on a `blocked` fix.
 
 The feedback-implementer is **the only writer of source code in this loop.** The main thread never edits files directly between Phase 1 and Phase 3.
 
@@ -113,13 +112,13 @@ Loop termination:
 
   <grouped violations render — same shape as the read-only branch below>
 
-  Next: /005-implement-feedback <task-id>   # epic-level user-feedback round; not the same as the in-loop fix
+  Manual remediation: edit the working tree to address each Violation above, then re-run `/004-code-review <task-id>` to confirm fixes. (`/005-implement-feedback` is for epic-level user feedback, not Violation fixes.)
   ```
-- **Fix-step terminal halt** — if any `04X-fix.json` itself returns `status: "fail"` (the feedback-implementer could not produce a fix), do **not** advance to the next re-review. Print:
+- **Fix-step terminal halt** — if any `04X-fix.json` itself returns `status: "blocked"` (the feedback-implementer could not produce a fix), do **not** advance to the next re-review. Print:
   ```
-  Code review fail — feedback-implementer halted at <artifact> with: <payload.error>.
+  Code review fail — feedback-implementer halted at <artifact> with: <payload.reason>.
 
-  Next: /005-implement-feedback <task-id>
+  Manual remediation: edit the working tree to address each Violation above, then re-run `/004-code-review <task-id>` to confirm fixes. (`/005-implement-feedback` is for epic-level user feedback, not Violation fixes.)
   ```
 
 Refactoring Suggestions accumulated across all review artifacts in the loop are surfaced once, at the end of the final render, regardless of terminal status. They never appear in fix-step input.
@@ -153,10 +152,10 @@ Then list any `payload.refactoring_suggestions` under a separate `Refactoring Su
 After the full list, print the suggested next step:
 
 ```
-Next: /005-implement-feedback <task-id>
+Manual remediation: edit the working tree to address each Violation above, then re-run `/004-code-review <task-id>` to confirm fixes. (`/005-implement-feedback` is for epic-level user feedback, not Violation fixes.)
 ```
 
-Exit. The user invokes `/005-implement-feedback` or edits the working tree manually.
+Exit. The user edits the working tree manually and re-runs `/004-code-review`.
 
 <!-- FREEZE:ENDIF -->
 
@@ -173,11 +172,11 @@ Either way, the contract is the set of artifacts under `.claude/runs/{epic_id}/{
 - **Refactoring Suggestions stay advisory.** They appear in `payload.refactoring_suggestions`, are surfaced in the terminal render, and are **never** passed into Phase 2's fix dispatch. The feedback-implementer only ever sees the `payload.findings` (Violations) array. This separation is load-bearing: it keeps the self-heal loop focused on contract violations and lets discretionary refactors remain a human decision.
 - **Reviewer is read-only.** It does not edit files, run formatters, or commit. Any code change is the job of the feedback-implementer subagent (Phase 2) or, for epic-level user-feedback rounds, `/005-implement-feedback`. This separation keeps the review immutable as a forensic record.
 - **Verbatim Ruleset injection.** All 18 Rule files MUST be pasted into the subagent prompt body — on Phase 1 **and on every Phase 3 re-review**. The `@`-include syntax does not propagate to subagents (per CONTEXT.md "Ruleset injection"); using it would silently strip the Ruleset and produce a vacuous review.
-- **Cross-cutting reviewer checks live in the subagent prompt.** Test discipline (Domain-test + ATDD spec coverage), Step library discipline (shared steps, no per-test helpers), coverage policy, commit hygiene (Conventional Commits per `git-workflow.md`), vocabulary discipline (CONTEXT.md terms only — no "unit test", no "acceptance criteria", no "wip"), ADR-missing detection (hard-to-reverse decisions surfaced in the diff without a corresponding `docs/adr/NNNN-*.md`) — all of these live in `.claude-plugin/agents/reviewer.md`. This command does **not** enumerate them; it only dispatches.
+- **Cross-cutting reviewer checks live in the subagent prompt.** Test discipline (Domain-test + ATDD spec coverage), Step library discipline (shared steps, no per-test helpers), coverage policy, commit hygiene (Conventional Commits per `git-workflow.md`), vocabulary discipline (CONTEXT.md terms only — no "unit test", no "acceptance criteria", no "wip"), ADR-missing detection (hard-to-reverse decisions surfaced in the diff without a corresponding `docs/adr/NNNN-*.md`) — all of these live in `agents/reviewer.md`. This command does **not** enumerate them; it only dispatches.
 - **Filesystem-only subagent comms.** The reviewer's output is the `04X-review.json` family. The feedback-implementer's output is the `04X-fix.json` family. The main thread never relies on a subagent's in-memory state or chat-style return value — it re-reads the artifact after the subagent returns.
 - **Append-only runs history.** Never overwrite a prior `04*.json` within the same `/004` run. Each iteration writes a new letter-suffixed file (`04`, `04b`, `04c`, `04d`, `04e`, `04f`, `04g`); the prior artifacts remain on disk as a forensic trail. The only case where an existing `04-review.json` is replaced is when the user invokes `/004-code-review` **standalone on a new round** — for example, after a `/005-implement-feedback` epic-feedback round has produced new commits, the next `/004` run starts fresh from `04-review.json`. The historical narrative around "overwriting `04-review.json` after `/005` runs" predates the self-heal loop; under the new shape, only an explicit user re-run of `/004` (standalone, new round) overwrites — the in-`/004` self-heal never overwrites.
 - **Max 3 fix iterations.** The cap is a hard ceiling. After `04g-review.json` is written, the loop exits regardless of status. There is no `--max-iterations` flag; the cap is structural.
-- **Verifier gate is preserved across both toggle branches.** Whether `auto_fix_on_review_fail` is true or false, Phase 0 still aborts when `03-verify.json.status != "ok"` (and when `03b-design-verify.json` exists with `status != "ok"`). Self-heal does not bypass the verifier gate — reviewing on a broken build still produces noise, regardless of whether we plan to auto-fix.
+- **Verifier gate is preserved across both toggle branches.** Whether `auto_fix_on_review_fail` is true or false, Phase 0 still aborts when `03-verify.json.status != "ok"` (and when `03-design-verify.json` exists with `status != "ok"`). Self-heal does not bypass the verifier gate — reviewing on a broken build still produces noise, regardless of whether we plan to auto-fix.
 
 ## Vocabulary discipline
 
@@ -194,7 +193,7 @@ Do not introduce synonyms. If you find yourself reaching for one, re-read the re
 
 ## What the reviewer subagent does (informational)
 
-This command does not enumerate review checks — they live in `.claude-plugin/agents/reviewer.md`. The list below is a reference for what the reviewer is expected to apply, **not a contract this command enforces**. If a check is missing from the reviewer prompt, fix the subagent definition; do not patch this command.
+This command does not enumerate review checks — they live in `agents/reviewer.md`. The list below is a reference for what the reviewer is expected to apply, **not a contract this command enforces**. If a check is missing from the reviewer prompt, fix the subagent definition; do not patch this command.
 
 - **Per-Rule application** — for each of the 18 Rule files, the reviewer walks the changed files and applies the Rule's intent. Rules are free-form markdown; the reviewer interprets them, it does not lint them.
 - **Test discipline** — verify the task added at least one Domain-test (per `testing.md`) and exactly one ATDD spec (per CONTEXT.md "ATDD spec"). Extra Domain-tests are fine; missing or duplicated ATDD specs are Violations.
@@ -214,7 +213,7 @@ These checks compose with — they do not replace — the per-Rule walkthrough. 
 - **Wrong branch** (not on the task branch under non-solo presets) → abort at Phase 0 with the expected vs actual branch.
 - **Schema validation fails** on any `04*.json` → halt with the artifact path and the validator error.
 - **Subagent invocation error** (Task tool failure, ruleset directory unreadable, diff command fails) → halt with the underlying error and the offending path. Do not retry silently.
-- **Feedback-implementer halts** (`04X-fix.json.status == "fail"`) → terminal halt for the loop; surface the `payload.error` and suggest `/005-implement-feedback`. Do not advance to the next re-review.
+- **Feedback-implementer halts** (`04X-fix.json.status == "blocked"`) → terminal halt for the loop; surface the `payload.reason` and instruct the user to manually edit the working tree and re-run `/004-code-review`. Do not advance to the next re-review.
 - **3-iteration cap reached** (`04g-review.json.status == "fail"`) → exit with final `fail`, surface remaining Violations grouped by Rule, suggest `/005-implement-feedback`.
 
 ## Subagent chain position
@@ -233,7 +232,7 @@ Two distinct loops are in play and must not be confused:
 - **Intra-`/004` self-heal loop** — Phase 1 → Phase 2 → Phase 3, max 3 iterations, governed by `auto_fix_on_review_fail`. Fixes are mechanical applications of reviewer Violations by the `feedback-implementer` subagent. No user involvement.
 - **Epic-level user-feedback loop** — `/005-implement-feedback` triggered after the intra-`/004` loop exhausts or when the toggle is off. This is a user-driven round that may add new tasks to `epic-{id}-tasks.yaml`, edit the PRD, or otherwise reshape the epic. It is not a finding-fixer.
 
-The reviewer subagent definition lives in `.claude-plugin/agents/reviewer.md` (plugin-owned). The feedback-implementer subagent definition lives in `.claude-plugin/agents/feedback-implementer.md` (plugin-owned). This command owns only the dispatch + loop-orchestration + result-rendering surface — the review and fix logic themselves are the subagents' responsibility.
+The reviewer subagent definition lives in `agents/reviewer.md` (plugin-owned). The feedback-implementer subagent definition lives in `agents/feedback-implementer.md` (plugin-owned). This command owns only the dispatch + loop-orchestration + result-rendering surface — the review and fix logic themselves are the subagents' responsibility.
 
 ## Output rendering details
 
@@ -259,7 +258,7 @@ Under `auto_fix_on_review_fail: true`, re-running on the same task between epic-
 Given task `T-014` in epic `E-003` under the `small-team` preset (`auto_fix_on_review_fail: true`):
 
 1. **Phase 0** — locate `docs/planning/epic-003-tasks.yaml`; find `id: T-014`. Confirm 18 files in `.claude/ruleset/`. Read `.claude/runs/E-003/T-014/03-verify.json` — `status: "ok"`. Current branch is `task/T-014-cancel-subscription`. `default_branch: main`. `auto_fix_on_review_fail: true`. Proceed.
-2. **Phase 1** — reviewer dispatched. Writes `04-review.json` with `status: "fail"`, two Violations under `accessibility.md` and `observability.md`, one Refactoring Suggestion against `cleancode.md`.
+2. **Phase 1** — reviewer dispatched. Writes `04-review.json` with `status: "fail"`, two Violations under `accessibility.md` and `observability.md`, one Refactoring Suggestion against `code-style.md`.
 3. **Phase 2 (iteration 1)** — feedback-implementer dispatched with the two Violations (the Refactoring Suggestion is withheld). Subagent edits `src/billing/CancelButton.svelte` and `src/billing/cancel.ts`, commits, writes `04b-fix.json` with `status: "ok"` and `files_changed: [...]`.
 4. **Phase 3 (iteration 1)** — reviewer re-dispatched against the refreshed diff. Writes `04c-review.json` with `status: "ok"`, 0 Violations. Loop exits.
 5. **Final render**:
@@ -267,7 +266,7 @@ Given task `T-014` in epic `E-003` under the `small-team` preset (`auto_fix_on_r
    Code review ok — 1 iteration, 2 Violations auto-fixed, 0 remaining.
 
    Refactoring Suggestions (advisory):
-     cleancode.md: src/billing/cancel.ts:42 — extract the retry constant.
+     code-style.md: src/billing/cancel.ts:42 — extract the retry constant.
 
    Next: /006-merge T-014
    ```

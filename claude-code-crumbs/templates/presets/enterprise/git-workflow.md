@@ -84,8 +84,10 @@ require_security_review_for_sensitive_paths: true
 dismiss_stale_approvals_on_push: true
 block_self_approval: true
 auto_invoke_verify: true
-auto_fix_on_verify_fail: false   # compliance: /003-verify-dod findings exit read-only; the review board mediates fixes via /005-implement-feedback so each remediation has a human checkpoint and audit trail
-auto_fix_on_review_fail: false   # compliance: /004-code-review Violations exit read-only; auto-fix would bypass the mandatory human checkpoint required by change-management policy
+auto_fix_on_verify_fail: false   # compliance: when /003-verify-dod or /004-code-review surfaces gate findings, enterprise compliance forbids automated remediation. Remediation path is manual: a human (developer or review-board delegate) edits the working tree to address each finding, then re-runs /003-verify-dod or /004-code-review to confirm closure. This preserves the audit trail for change-management review.
+auto_fix_on_review_fail: false   # compliance: same rationale as auto_fix_on_verify_fail — gate findings from /004-code-review are remediated manually by a human editing the working tree and re-running /004-code-review to confirm closure; no automated fixer is permitted on the read-only path.
+# Note on /005-implement-feedback under enterprise:
+# /005-implement-feedback is reserved for epic-level user feedback against an already-done epic (new tasks appended, new ATDD round). It is NOT a gate-finding fixer and must not be invoked for that purpose.
 branch_name_pattern: "task/{ticket_id}/{task_id}-{slug}"   # nested under change-management ticket id
 ```
 

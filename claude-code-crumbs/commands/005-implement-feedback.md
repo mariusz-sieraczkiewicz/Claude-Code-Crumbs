@@ -13,7 +13,7 @@ This command runs **after** an epic has been implemented (typically via `/002-im
 
 **This command does NOT participate in the intra-/003 or intra-/004 self-heal loop.** `/003-verify-dod` and `/004-code-review` heal their own findings internally (Phase 2/3 loops, bounded at 3 iterations). When those gates pass, control flows back to whoever invoked them. `/005` is invoked explicitly by the user after an epic settles, not auto-dispatched by a failing gate.
 
-**MANDATORY: every step below runs, regardless of fix size.** A one-line CSS change still goes through: gather → clarify → plan → ATDD impl → verify → review → gatekeeper. No shortcuts. Use `TaskCreate` to track progress across the six steps.
+**MANDATORY: every step below runs, regardless of fix size.** A one-line CSS change still goes through: gather → clarify → plan → ATDD impl → verify → review → gatekeeper. No shortcuts. Use the harness's `TaskCreate` tool (not to be confused with planning tasks `T-NNN` in `epic-{id}-tasks.yaml`) to track per-step progress in the conversation.
 
 Argument: `$ARGUMENTS` — `<epic-id>` (required) and optional `[feedback-text]` as `$2`. Examples:
 
@@ -36,12 +36,21 @@ Otherwise, prompt the user via `AskUserQuestion`:
 
 Do NOT proceed without a non-empty feedback string. Record the feedback verbatim for the audit trail.
 
+### Round lock
+
+`mkdir .claude/runs/.lock-feedback-$1/`. Exit 5 on collision (another `/005` round in progress for this epic). Release via `rm -rf` on every halt branch and on completion.
+
 ## Step 1 — Clarify and research
 
 1. Read the epic definition: PRD epic section for `$1` (search `PRD.md` for the matching epic-id) and the task breakdown `docs/planning/epic-$1-tasks.yaml`.
 2. Read the relevant ruleset files in `.claude/ruleset/` that the feedback touches (e.g. if it is UI feedback, pull the UI-relevant rules; if it is data/contract, pull architecture/testing). Do not re-state their content — read them so the new task entries land in the right scope.
 3. Read the affected source files, test files, and any design documentation referenced by the feedback so you can describe what changes.
-4. **If the feedback is ambiguous or admits multiple reasonable interpretations, call `AskUserQuestion` to clarify before proceeding.** Do not assume. If the user said "fix import", ask what specifically is wrong with import.
+4. **Trigger `AskUserQuestion` ONLY if:**
+   - the feedback names a feature that does not appear in `PRD.md` or `epics.yaml`, OR
+   - the feedback could legitimately mean two or more different code changes, OR
+   - the feedback implies a PRD scope change (new epic, deprecation, contract change).
+
+   Otherwise proceed to the Step 1 summary + user confirmation.
 5. Summarise your understanding of the feedback and the proposed approach — which tasks you will add, which existing tasks they depend on, and what the acceptance shape will look like. Confirm with the user before moving to Step 2.
 
 IMPORTANT: Do not modify `PRD.md` without explicit user approval. If the feedback implies a PRD change (new business scenario, scope revision), ask explicitly.
@@ -70,26 +79,28 @@ Implement **only the new tasks recorded as `new_task_ids` in Step 2**, by delega
 For each new task, in dependency order:
 
 1. **Phase 1.5 plan checkpoint** — the implementer subagent presents its plan first; the user approves, requests iteration, or cancels. (T-002 adds this checkpoint to `/002-implement`.)
-2. **Phase 2 TDD execution** — RED → GREEN → REFACTOR scoped to that task, with the per-stack gate stack run to exit 0.
+2. **Phase 2 TDD execution** — per `/002-implement` Phase 2.
 3. **Mark the task `status: done`** in `epic-$1-tasks.yaml` only after its acceptance criteria pass and the gates exit clean.
 
 Tasks done before this feedback cycle are out of scope and MUST NOT be re-implemented.
+
+**Step 3 completion check:** if `/002-implement <id>` (task mode, auto-invoke=true) has already produced `03-verify.json` with `status: ok` and `04-review.json` with `status: ok` for every new task, Steps 4 and 5 SKIP per-task re-invocation and just aggregate the existing artifacts into `05c-verify.json` / `05d-review.json`. Re-invoke only the new tasks where per-task chain is missing or non-ok.
 
 Emit the impl artifact: `.claude/runs/{epic_id}/_feedback/{round_id}/05b-impl.json` — either emitted directly by this command after Step 3 completes, or delegated to `/002-implement` to write under this path (preferred when `/002-implement` accepts a feedback-round-id parameter). The artifact summarises per-task: id, title, commit shas, final status (`done` or `blocked`).
 
 ## Step 4 — Verify Definition of Done
 
-Run `/003-verify-dod` semantics **scoped to the new task IDs from Step 2**. Do NOT redefine the audit protocol — `/003-verify-dod` owns the per-task DoD check, the gate stack, and the self-heal Phase 2/3 loop (T-003 makes `/003` self-healing internally; `/005` simply waits for it to settle).
+For each id in `new_task_ids`, invoke `/003-verify-dod <id>` and collect the per-task verdict. Emit the aggregated result as `05c-verify.json`. Do NOT redefine the audit protocol — `/003-verify-dod` owns the per-task DoD check, the gate stack, and the self-heal Phase 2/3 loop (T-003 makes `/003` self-healing internally; `/005` simply waits for it to settle).
 
-Zero tolerance applies: per-task verdict must be `done`; every gate exits 0. Do NOT dismiss failures as "pre-existing", "flaky", or "unrelated".
+Zero tolerance applies: per-task verdict from `/003` must be `status: ok`; every gate exits 0. Do NOT dismiss failures as "pre-existing", "flaky", or "unrelated".
 
-Emit the verify artifact: `.claude/runs/{epic_id}/_feedback/{round_id}/05c-verify.json` — either emitted by this command summarising the per-task verify outcomes, or delegated to `/003-verify-dod` to write under this path. Contents: per-new-task verdict (`done` or `fail`), aggregate verdict, references to any heal iterations inside `/003`.
+Emit the verify artifact: `.claude/runs/{epic_id}/_feedback/{round_id}/05c-verify.json` — aggregated by this command from the per-task `/003` outcomes. Contents: per-new-task verdict (`ok` or `fail`), aggregate verdict, references to any heal iterations inside `/003`.
 
 ## Step 5 — Code review
 
-Run `/004-code-review` semantics on the **uncommitted diff** (or the branch diff, per the project's branch policy) produced by the new tasks from Step 3. Do NOT redefine the review protocol — `/004-code-review` owns the reviewer subagent, the verbatim ruleset injection, the severity policy, and the self-heal Phase 2/3 loop (T-004 makes `/004` self-healing internally).
+For each id in `new_task_ids`, invoke `/004-code-review <id>` and collect the per-task verdict. Emit the aggregated result as `05d-review.json`. The review applies to the branch diff per `git-workflow.md` branch policy produced by the new tasks from Step 3. Do NOT redefine the review protocol — `/004-code-review` owns the reviewer subagent, the verbatim ruleset injection, the severity policy, and the self-heal Phase 2/3 loop (T-004 makes `/004` self-healing internally).
 
-Emit the review artifact: `.claude/runs/{epic_id}/_feedback/{round_id}/05d-review.json` — either emitted by this command, or delegated to `/004-code-review` to write under this path. Contents: per-finding outcome, aggregate verdict (`pass` or `fail`), references to any heal iterations inside `/004`.
+Emit the review artifact: `.claude/runs/{epic_id}/_feedback/{round_id}/05d-review.json` — aggregated by this command from the per-task `/004` outcomes. Contents: per-finding outcome, aggregate verdict (`ok` or `fail`), references to any heal iterations inside `/004`.
 
 ## Step 6 — Gatekeeper audit (strict subagent)
 
@@ -103,8 +114,8 @@ Pass the subagent: the draft completion report you intend to send to the user, p
 > 1. Was feedback gathered (Step 0) and clarified (Step 1) with user confirmation before any task was planned?
 > 2. Are the new tasks present in `epic-{id}-tasks.yaml` as appended entries (not replacements), with full schema (id, title, status, description, acceptance_criteria, files, depends_on, effort)? Were any existing `done` tasks modified? Modifying a done task is a **FAIL**.
 > 3. Were ALL new tasks implemented via `/002-implement` semantics including the Phase 1.5 plan checkpoint, then driven through the per-stack gate stack to exit 0?
-> 4. Did `/003-verify-dod` reach `done` verdict for every new task (Step 4)? Pull the raw numbers from `05c-verify.json`.
-> 5. Did `/004-code-review` reach `pass` for the uncommitted diff (Step 5)? Pull the raw numbers from `05d-review.json`.
+> 4. Did `/003-verify-dod` return `status: ok` for every new task, AND is every new task `status: done` in `epic-{id}-tasks.yaml` (Step 4)? Pull the raw numbers from `05c-verify.json`. (`/003` artifact status is `"ok"`; task YAML status is `"done"`. The two namespaces must be disambiguated.)
+> 5. Did `/004-code-review` reach `ok` for the branch diff per `git-workflow.md` branch policy (Step 5)? Pull the raw numbers from `05d-review.json`.
 > 6. Does the report dismiss, rationalise, or explain away ANY failure using phrases like "pre-existing", "flaky", "timing", "unrelated", or "not caused by our changes"? If so → **FAIL**. Zero tolerance is zero tolerance.
 > 7. Are tasks marked `done` before this feedback cycle untouched in implementation and review scope?
 >
@@ -122,7 +133,7 @@ Report to the user:
 2. **New tasks** — IDs and titles of the tasks appended in Step 2.
 3. **Implementation** — per-new-task status (`done` or `blocked`) and commit shas.
 4. **DoD result** — aggregate verdict from `/003` scoped to new tasks.
-5. **Review result** — aggregate verdict from `/004` on the uncommitted diff.
+5. **Review result** — aggregate verdict from `/004` on the branch diff per `git-workflow.md` branch policy.
 6. **Gatekeeper verdict** — `PASS` or `FAIL` (must be `PASS` to claim COMPLETE).
 7. **Final status:** **COMPLETE** (every new task done, `/003` clean, `/004` clean, gatekeeper PASS) or **NEEDS_ATTENTION** (with the precise blocker and the artifact path that documents it).
 

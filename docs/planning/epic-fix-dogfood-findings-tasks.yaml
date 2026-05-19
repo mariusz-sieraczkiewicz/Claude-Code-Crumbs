@@ -1,0 +1,108 @@
+epic_id: E-fix-dogfood
+title: Fix P0/P1 findings from 5-scenario dogfood
+summary:
+  total_tasks: 7
+  scope: P0 blockers + tightly-coupled P1 paper cuts. Pure-cosmetic items deferred.
+
+tasks:
+  - id: T-001
+    title: Schema fix — plan-only phase + severity legacy
+    effort: S
+    depends_on: []
+    files:
+      - claude-code-crumbs/schemas/run-phase.schema.json
+    acceptance_criteria:
+      - Add discriminator branch (if/then) requiring payload.sub_mode plus plan-only fields (files_to_touch, red_sketch, green_shape, refactor_notes, iteration) when phase==impl AND payload.sub_mode=="plan-only", OR add new phase enum value "impl-plan" (preferred — simpler). Pick one and document.
+      - severity enum: keep blocker for back-compat; do not drop. Add comment block describing tier semantics.
+      - validate-schemas.sh exits 0 after change.
+
+  - id: T-002
+    title: /003-verify-dod.md consistency fixes
+    effort: M
+    depends_on: []
+    files:
+      - claude-code-crumbs/commands/003-verify-dod.md
+    acceptance_criteria:
+      - All runs paths prefixed .claude/runs/{epic_id}/{task_id}/... — no bare runs/.
+      - payload.fixes_applied shape aligned with agents/feedback-implementer.md ({finding_id, file, change_summary} + optional commits_made[]).
+      - Drop payload.unresolved_findings; require payload.reason on blocked status (mirrors agent).
+      - Rename design-verify sibling 03b-design-verify.json → 03-design-verify.json (no letter suffix) to free b/d/f for fix iterations.
+      - Phase 1/2/3 cross-reference agents/verifier.md and agents/feedback-implementer.md as canonical shape source.
+      - ELSE branch suggestion: replace "/005-implement-feedback <task-id>" with "edit working tree manually to address findings, then re-run /003-verify-dod <task-id>".
+      - test-freeze.sh exits 0.
+
+  - id: T-003
+    title: /004-code-review.md schema + parallelism fixes
+    effort: M
+    depends_on: []
+    files:
+      - claude-code-crumbs/commands/004-code-review.md
+    acceptance_criteria:
+      - 04X-fix.json status enum: replace ok|fail with ok|blocked (schema-required for feedback-impl phase).
+      - 04-review.json top-level findings:[] required on both ok and fail (schema-mandated).
+      - payload.error renamed to payload.reason (parallel with /003).
+      - Worked-example rule cleancode.md → code-style.md.
+      - Phase 2 dispatch payload includes ruleset subset (rules referenced by failing findings' rule field) — currently only findings array passed.
+      - Plugin agent path references: .claude-plugin/agents/ → agents/ (3 locations).
+      - ELSE branch suggestion: replace "/005-implement-feedback <task-id>" with manual-edit + re-run /004 (mirrors /003 fix).
+      - Drop dead "Ensure .claude/runs/{epic_id}/{task_id}/artifacts/ exists" line OR document its purpose.
+      - test-freeze.sh exits 0.
+
+  - id: T-004
+    title: /005-implement-feedback.md correctness fixes
+    effort: M
+    depends_on: []
+    files:
+      - claude-code-crumbs/commands/005-implement-feedback.md
+    acceptance_criteria:
+      - Step 4/5 use explicit loop wording — for each id in new_task_ids invoke /003-verify-dod <id> resp. /004-code-review <id> (current "scoped to new task IDs" implies batch arg that commands do not accept).
+      - Step 3 explicitly states /002-implement task-mode auto-chain to /003 SATISFIES Step 4 (skip re-invocation if per-task 03-verify.json already exists with status ok). Same for /004 / Step 5.
+      - Step 5 drop "uncommitted diff" phrasing — use "branch diff per git-workflow.md" only (implementer always commits at Phase 6).
+      - Round lock: mkdir .claude/runs/.lock-feedback-<epic_id>/ at Step 0; release on every halt branch and on completion. Exit 5 on collision (mirror /002 lock).
+      - Step 6 gatekeeper checklist item: "/003-verify-dod returned status: ok for every new task AND task status: done in epic-{id}-tasks.yaml" (currently looks for verdict "done" which /003 never emits).
+      - TaskCreate disambiguated — "harness tool, not plugin T-NNN".
+      - Step 3 line trimmed — drop inline "per-stack gate stack run to exit 0" (delegate to /002 narrative).
+      - Step 1 ambiguity trigger turned into deterministic 3-bullet checklist.
+      - test-freeze.sh exits 0.
+
+  - id: T-005
+    title: /002-implement.md fixes — Cancel outcome, freeze orphan, plan-iter warning, scenario alignment
+    effort: M
+    depends_on: [T-001]
+    files:
+      - claude-code-crumbs/commands/002-implement.md
+    acceptance_criteria:
+      - If T-001 chose phase rename, switch plan-only artifact to phase "impl-plan" everywhere in /002. If T-001 chose if/then, document the sub_mode discriminator + required fields.
+      - Cancel path emits structured outcome discriminator (epic_outcome ∈ {cancelled, halted_too_big, halted_blocked, halted_verify, halted_review, done}).
+      - Plan iteration warning copy aligned — pick "every 3 iterations" or "5 iterations and counting"; remove the off-by-two.
+      - Phase 2 commit-policy numbered list — fix so that pruning items 8/9 under freeze does not leave orphan header at frozen line 232. Either wrap the entire "commit policy" block in a single FREEZE:IF (require_signed_commits OR require_dco_signoff), or restructure as unnumbered bullets, or write ELSE stub "no commit-policy flags active".
+      - branch_name_pattern read gated by allow_commit_to_main:false ELSE (currently read even when branch creation skipped).
+      - Vocabulary section disambiguates "task status" (pending|in_progress|blocked|done — in epic-{id}-tasks.yaml) from "artifact status" (ok|fail|blocked|too_big_proposal — in NN-*.json).
+      - "Phase 3-5 skipped in epic mode" — consolidate into single skip-table in epic-mode section.
+      - Phase 0.5 resume — explicitly name Phase 1.5 in the "fresh-from-onward" path.
+      - Phase 0.5 resume case "02X-plan.json exists but no 02-impl.json" — explicitly re-invoke AskUserQuestion(Approve/Iterate/Cancel) on re-presentation.
+      - Phase 1.5 Cancel — remove explicit lock release (defer to finally block).
+      - test-freeze.sh exits 0.
+
+  - id: T-006
+    title: Enterprise preset rationale alignment
+    effort: S
+    depends_on: [T-002, T-003]
+    files:
+      - claude-code-crumbs/templates/presets/enterprise/git-workflow.md
+    acceptance_criteria:
+      - Replace "review board mediates fixes via /005-implement-feedback" wording with the new manual-edit + re-run /003/004 path (mirrors T-002/T-003 ELSE-branch fix).
+      - Rationale paragraph still emphasizes human-mediated remediation but does not point at /005 for finding-consumption.
+      - Mention /005 only as the path for net-new feedback observed against an already-done epic (its actual purpose).
+
+  - id: T-007
+    title: Verification — re-run T-010 dogfood + 4-preset smoke + schema validation
+    effort: S
+    depends_on: [T-002, T-003, T-004, T-005, T-006]
+    files: []
+    acceptance_criteria:
+      - bash scripts/test-freeze.sh exits 0.
+      - bash scripts/validate-schemas.sh exits 0.
+      - Re-run 4-preset smoke — solo/small-team/oss self-heal text present, enterprise read-only text present, no FREEZE markers leaked, frozen 002-implement.md commit-policy block well-formed (no orphan headers).
+      - Spot-check each of the 5 dogfood scenarios — confirm the top-10 blockers from prior round are resolved by reading the relevant command bodies.
+      - 0 grep hits for cleancode.md as a rule reference in plugin sources (only in docs/planning is OK).
