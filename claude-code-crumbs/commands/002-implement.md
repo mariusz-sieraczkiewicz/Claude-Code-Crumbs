@@ -201,33 +201,24 @@ Branch on the highest-numbered artifact present:
 
 In all "resume" paths above, the task status in `epic-{id}-tasks.yaml` is set to `in_progress` (idempotent re-set; no-op if already `in_progress`). On any halt path inside Phase 0.5, the Task lock acquired in Phase 0 MUST be released via `rm -rf "$LOCK_DIR"` before exit.
 
-### Phase 1 — Branch
+### Phase 1 — Ensure on epic branch
 
-**Branch model.** One branch per **epic** (not per task). The branch is created once at the start of the `/002-implement` invocation (epic-mode outer Phase 1, or task-mode first-task entry) and reused for every task in the epic. Each task contributes one or more commits on the same branch (impl commit from the implementer; subsequent verify-fix and review-fix commits from the feedback-implementer during `/003` and `/004` self-heal). The merge happens once at epic close via `/006-merge <epic-id>`.
+**Branch model.** One branch per **epic** (not per task). The epic branch is created by `/001-plan <epic-id>` (Fresh mode, Phase 0.5) — NOT by `/002-implement`. Every task in the epic contributes one or more commits onto the same branch (impl commit from the implementer; subsequent verify-fix and review-fix commits from the feedback-implementer during `/003` and `/004` self-heal). The merge happens once at epic close via `/006-merge <epic-id>`.
 
-**Branch handling dispatch.** Read `allow_commit_to_main` from the YAML toggle block. The toggle determines whether `branch_name_pattern` is even consulted:
+`/002-implement`'s job in this phase is to **verify** HEAD is on the expected epic branch and check it out if not — never to create.
 
-- If `allow_commit_to_main: true` (solo preset) → SKIP branch creation entirely. Do NOT read `branch_name_pattern`. Implementer + feedback-implementer commit directly to `main` (or the configured default branch). Jump to Phase 1.5.
-- If `allow_commit_to_main: false` (default) → read `branch_name_pattern` and compute the **epic branch** name as described below, then check out it (or create from base if it does not exist).
+**Branch handling dispatch.** Read `allow_commit_to_main` from the YAML toggle block:
+
+- If `allow_commit_to_main: true` (solo preset) → SKIP entirely. Do NOT read `branch_name_pattern`. Implementer + feedback-implementer commit directly to the current branch (typically `main`). Jump to Phase 1.5.
+- If `allow_commit_to_main: false` (default) → resolve the expected epic branch name and ensure HEAD is on it.
 
 The remainder of this section applies ONLY when `allow_commit_to_main: false`:
 
-- Read `branch_name_pattern` from the YAML toggle block in `.claude/ruleset/git-workflow.md`. Default: <!-- FREEZE:VAL branch_name_pattern -->`epic/{epic_id}-{slug}`<!-- FREEZE:ENDVAL -->. Recognised substitution keys: `{epic_id}`, `{slug}`, `{ticket_id}`.
-  1. Substitute `{epic_id}` with the resolved epic id (e.g. `E-003`).
-  2. **Resolve `{slug}`** — read the epic entry from `docs/planning/epics.yaml`. Prefer the explicit `slug:` field if present; otherwise derive from `title:` via kebab-case (lowercase, strip non-alphanumerics, collapse runs of `-`). Example: title `"Subscription cancellation"` → slug `subscription-cancellation`. If the derived slug is empty (title is non-Latin / pure punctuation), abort: `Cannot derive {slug} for epic <epic-id> from title "<...>". Add an explicit slug: field to the epic entry in epics.yaml.`
-<!-- FREEZE:IF require_ticket_reference -->
-  3. **Resolve `{ticket_id}`** (only required when the pattern contains the placeholder; enterprise default `epic/{ticket_id}/{epic_id}-{slug}`):
-     a. Read `epic.cm_ticket` from the matching epic entry in `epics.yaml`.
-     b. If absent AND the pattern contains `{ticket_id}`:
-        - If `git-workflow.md.require_ticket_reference: true` → ABORT with: `Epic E-NNN has no cm_ticket. Add one via /001-plan or edit epics.yaml. (Enterprise preset requires CM ticket per epic.)`
-        - Else → substitute `{ticket_id}` with the empty string and emit a visible warning.
-     c. **Validate against `ticket_prefixes`** from `git-workflow.md` (if the key is present): the resolved `<id>` must start with one of the configured prefixes (e.g. `CHG-`, `CM-`, `JIRA-`, `INC-`). Reject anything starting with `E-` or `T-` — the plugin's own id namespace is reserved and must never be reused as a ticket id. On mismatch → ABORT with the resolved id, the allowed prefixes, and the source (epic) from which the id was read.
-<!-- FREEZE:ENDIF -->
-- Determine the default base branch (`main` unless `stack.yaml.paths.default_branch` overrides).
-- **Epic branch check.** Run `git show-ref --verify --quiet refs/heads/<computed-branch-name>`. Two cases:
-  - **Branch exists** → this is a **resume** (a prior `/002-implement <epic-id>` run created it; later tasks reuse it). Run `git checkout <computed-branch-name>`. Do NOT pull from base — that would drag in main-branch changes mid-epic and risk conflicts with the in-progress epic work; rebases against base are owned by the user before opening the PR. Skip the `git checkout -b` step. Continue at Phase 1.5.
-  - **Branch does NOT exist** → this is a **fresh epic start**. Run `git checkout <base>` then `git pull --ff-only` to sync. Then create and check out the epic branch: `git checkout -b <computed-branch-name>`.
-- The branch persists across the entire epic loop. Subsequent tasks in the same epic loop iteration find the branch already checked out (HEAD on the epic branch) and skip both the create and the checkout step — they simply commit on top.
+- Read `branch_name_pattern` from the YAML toggle block in `.claude/ruleset/git-workflow.md`. Default: <!-- FREEZE:VAL branch_name_pattern -->`epic/{epic_id}-{slug}`<!-- FREEZE:ENDVAL -->. Recognised substitution keys: `{epic_id}`, `{slug}`, `{ticket_id}`. Use the same resolution rules as `/001-plan` Phase 0.5 (substitute `{epic_id}`, derive `{slug}` from `epics.yaml`, validate `{ticket_id}` against `ticket_prefixes` when present).
+- **Epic branch check.** Run `git show-ref --verify --quiet refs/heads/<computed-branch-name>`:
+  - **Branch exists** → if HEAD is already on it, no-op. Otherwise run `git checkout <computed-branch-name>`. Do NOT pull from base — rebases against base are owned by the user before opening the PR.
+  - **Branch does NOT exist** → ABORT: `Epic branch <computed-branch-name> not found. /002-implement does not create branches; the branch is owned by /001-plan. Run \`/001-plan <epic-id>\` first (Fresh mode creates the epic branch and commits planning artifacts).` Release the task lock acquired in Phase 0 before exit.
+- The branch persists across the entire epic loop. Subsequent tasks in the same epic loop iteration find the branch already checked out (HEAD on the epic branch) and skip even the checkout step — they simply commit on top.
 
 ### Phase 1.5 — Plan checkpoint (plan-only implementer dispatch + user approval)
 
@@ -525,7 +516,8 @@ The `branch_name_pattern` is `epic/{epic_id}-{slug}` across all presets unless t
 - **Verify fails after `/003`'s self-heal cap** → halt at Phase 4 (task mode) or at the epic-level auto-chain (epic mode); leave task `in_progress`.
 - **Review fails after `/004`'s self-heal cap** → halt at Phase 5 (task mode) or at the epic-level auto-chain (epic mode); leave task `in_progress`.
 - **Subagent invocation error** (missing file, tool failure, ruleset directory absent) → halt with the underlying error and the offending path. Do not retry silently.
-- **Branch creation fails** (dirty working tree, base branch behind, etc.) → halt at Phase 1 with the git error verbatim. Do not force any operation.
+- **Epic branch missing** (Phase 1) → ABORT with the message above; suggest `/001-plan <epic-id>`. Branch creation is owned by `/001-plan`; `/002-implement` never creates.
+- **Checkout fails** at Phase 1 (uncommitted changes blocking, etc.) → halt with the git error verbatim. Phase 0's dirty-tree check should have caught this; if it slips through, do not force any operation.
 
 ## Discipline
 
@@ -629,7 +621,7 @@ Given epic `E-003` with three pending tasks `T-014`, `T-015`, `T-016` (each depe
 Given task `T-014` belonging to epic `E-003`:
 
 1. **Phase 0** — `/002-implement T-014` locates `docs/planning/epic-003-tasks.yaml`, finds entry `id: T-014, status: pending, slug: cancel-subscription, acceptance_criteria: ["SubscriptionService.cancel(...) persists status=cancelled and emits SubscriptionCancelled event", "Calling cancel on already-cancelled subscription is a no-op"]`. Flips status to `in_progress`. Acquires `.claude/runs/.lock-E-003-T-014/`. Creates `.claude/runs/E-003/T-014/`.
-2. **Phase 1** — Branch pattern `epic/{epic_id}-{slug}` resolves to `epic/E-003-subscription-cancellation` (slug derived from epic title "Subscription cancellation"). Branch does not exist → checked out from `main` as fresh epic start. (If the user is re-running `/002-implement E-003` to resume an interrupted batch, the branch already exists → reuse without pulling base.)
+2. **Phase 1** — Branch pattern `epic/{epic_id}-{slug}` resolves to `epic/E-003-subscription-cancellation`. Branch was created by `/001-plan E-003` (Phase 0.5) and already holds the `plan(e-003): decompose Subscription cancellation into N tasks` commit. `/002-implement` verifies the branch exists, checks it out if HEAD is elsewhere, and proceeds. If the branch is missing, `/002` aborts with a hint to run `/001-plan E-003` first.
 3. **Phase 1.5** — `implementer` (plan-only) writes `02a-plan.json` with file list, RED sketch, GREEN shape, REFACTOR notes, ATDD spec shape. User picks **Approve**.
 4. **Phase 2** — `implementer` (full) receives task YAML, the Gherkin block for `User cancels subscription`, ruleset subset verbatim, `stack.yaml.extras`, and the approved `02a-plan.json`. Writes Domain-tests in `tests/domain/cancel-subscription.test.ts`, production code in `src/billing/cancel.ts`, an ATDD spec in `tests/atdd/cancel-subscription.spec.ts`, commits with message `feat(billing): cancel subscription (T-014)`, writes `02-impl.json` with `status: ok`.
 5. **Phase 4** — `/003-verify-dod T-014` runs `stack.yaml.gates`. All pass → `03-verify.json` status `ok`.

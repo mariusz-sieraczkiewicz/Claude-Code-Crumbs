@@ -47,11 +47,51 @@ Example invocations:
 
 If any of the 18 ruleset files is missing, halt with: "Ruleset incomplete: <name>.md missing. Run plugin setup."
 
-### Phase 1 — Adaptive grilling
+### Phase 1 — Epic branch creation
+
+**Branch model.** One branch per **epic** (not per task). The epic branch is created HERE, in `/001-plan`, so every downstream stage (`/002-implement`, `/003`, `/004`, `/005`, `/006-merge`) operates on the same branch. The planning artifacts produced in Phase 3 and 4 land as the first commit on the branch (Phase 5 below).
+
+**Preflight checks** (run before branch creation; abort on failure with the verbatim message):
+
+- **Detached HEAD check.** Run `git rev-parse --abbrev-ref HEAD`. If the output is the literal string `HEAD` → ABORT: `HEAD is detached. Check out a branch first: \`git checkout <branch-name>\` (e.g. main).`
+- **Dirty working tree check.** Run `git status --porcelain`. If non-empty:
+<!-- FREEZE:IF allow_commit_to_main -->
+  - `allow_commit_to_main: true` (solo preset) → proceed; print warning: `Working tree dirty; proceeding under allow_commit_to_main=true. Planning-artifact commit will include all current staged/unstaged changes.`
+<!-- FREEZE:ELSE -->
+  - `allow_commit_to_main: false` (default) → ABORT: `Working tree has uncommitted changes. Commit or stash them before /001-plan.`
+<!-- FREEZE:ENDIF -->
+- **Git identity preflight.** `git config --get user.email` and `git config --get user.name` must both return non-empty. If either is empty → ABORT: `Git identity not configured. Run \`git config --global user.email "<you@example>"\` and \`git config --global user.name "<Your Name>"\` then re-run.`
+
+**Branch handling dispatch.** Read `allow_commit_to_main` from the YAML toggle block in `.claude/ruleset/git-workflow.md`:
+
+- If `allow_commit_to_main: true` (solo preset) → SKIP branch creation entirely. Do NOT read `branch_name_pattern`. Planning artifacts will be committed on the current branch (typically `main`). Proceed to Phase 2.
+- If `allow_commit_to_main: false` (default) → read `branch_name_pattern` and create the epic branch as described below.
+
+**Branch name resolution** (only when `allow_commit_to_main: false`):
+
+- Read `branch_name_pattern` from the YAML toggle block. Default: <!-- FREEZE:VAL branch_name_pattern -->`epic/{epic_id}-{slug}`<!-- FREEZE:ENDVAL -->. Recognised substitution keys: `{epic_id}`, `{slug}`, `{ticket_id}`.
+  1. Substitute `{epic_id}` with the argument (e.g. `E-003`).
+  2. **Resolve `{slug}`** — read the epic entry from `docs/planning/epics.yaml`. Prefer the explicit `slug:` field if present; otherwise derive from `title:` via kebab-case (lowercase, strip non-alphanumerics, collapse runs of `-`). Example: title `"Subscription cancellation"` → slug `subscription-cancellation`. If the derived slug is empty (non-Latin title / pure punctuation), ABORT: `Cannot derive {slug} for epic <epic-id> from title "<...>". Add an explicit slug: field to the epic entry in epics.yaml.`
+<!-- FREEZE:IF require_ticket_reference -->
+  3. **Resolve `{ticket_id}`** (only when the pattern contains the placeholder; enterprise default `epic/{ticket_id}/{epic_id}-{slug}`):
+     a. Read `epic.cm_ticket` from the epic entry in `epics.yaml`.
+     b. If absent AND the pattern contains `{ticket_id}`:
+        - If `git-workflow.md.require_ticket_reference: true` → ABORT: `Epic E-NNN has no cm_ticket. Add one via /001-plan or edit epics.yaml. (Enterprise preset requires CM ticket per epic.)`
+        - Else → substitute with empty string and emit a visible warning.
+     c. **Validate against `ticket_prefixes`** from `git-workflow.md` (if present): the resolved id must start with one of the configured prefixes (e.g. `CHG-`, `CM-`, `JIRA-`, `INC-`). Reject ids starting with `E-` or `T-`. On mismatch → ABORT with the resolved id, allowed prefixes, and source.
+<!-- FREEZE:ENDIF -->
+- Determine the default base branch (`main` unless `stack.yaml.paths.default_branch` overrides).
+- **Epic branch check.** Run `git show-ref --verify --quiet refs/heads/<computed-branch-name>`. Two cases:
+  - **Branch exists** → this is a **resume** (a prior `/001-plan <epic-id>` run created it; e.g. user halted during grilling). Run `git checkout <computed-branch-name>`. Do NOT pull from base. Proceed to Phase 2.
+  - **Branch does NOT exist** → this is a **fresh epic start**. Run `git checkout <base>` then `git pull --ff-only` to sync. Then create and check out: `git checkout -b <computed-branch-name>`.
+
+The branch persists across `/001-plan` (resume), every `/002-implement` task iteration, `/003`, `/004`, `/005`, and is closed by `/006-merge`. Downstream commands assume the branch exists and abort with a hint to run `/001-plan` if it does not.
+
+### Phase 2 — Adaptive grilling
 
 Read the PRD per-epic section. Decide:
 
-- **Sufficient** — the section covers the happy path, at least one edge case, and a scope boundary (an explicit "out of scope" or "not included" note). Proceed to Phase 2.
+- **Sufficient** — the section covers the happy path, at least one edge case, and a scope boundary (an explicit "out of scope" or "not included" note). Proceed to Phase 3.
 - **Underspecified** — any of the three pillars is missing. Emit clarifying questions inline to the user. Do NOT proceed without user answers. Wait. Typical questions:
   - "What is the primary success path for this epic, in one sentence?"
   - "What is the most plausible failure mode you want covered?"
@@ -59,7 +99,7 @@ Read the PRD per-epic section. Decide:
 
 Once answers arrive, append them to the brief under a `### Clarifications` heading and proceed.
 
-### Phase 2 — Dispatch planner subagent
+### Phase 3 — Dispatch planner subagent
 
 Use the Task tool with `subagent_type: "planner"` (the agent we ship in this plugin). The brief includes:
 
@@ -78,19 +118,60 @@ The planner produces:
 
 If the planner returns `status: "needs_clarification"` in `01-plan.json`, surface the questions to the user, collect answers, and re-dispatch with the expanded brief.
 
-### Phase 3 — Regenerate SCENARIOS.md
+### Phase 4 — Regenerate SCENARIOS.md
 
 Run `scripts/regen-scenarios.sh` (plugin-shipped, built in Wave 8). It reads `epics.yaml`, extracts every `## Scenario:` title, and overwrites `docs/planning/SCENARIOS.md` with a flat index, one scenario title per line, grouped by epic. If the script is not yet on disk (pre-Wave 8 install), warn the user but do not fail the command.
 
 The regen script ALSO follows the write-to-tmp + rename pattern documented in `agents/planner.md` under "Atomic writes": it writes `docs/planning/SCENARIOS.md.tmp` first, then atomically renames into place on success. On error, the `.tmp` file is left behind for inspection and the script exits non-zero. This guards against half-written `SCENARIOS.md` if the script is interrupted mid-write.
 
-### Phase 4 — Summary to user
+### Phase 5 — Commit planning artifacts
+
+Commit the planning artifacts on the epic branch so the branch is self-contained from the start (downstream stages can clone, branch, or rebase against a meaningful starting point). Skip this phase when `allow_commit_to_main: true` AND working tree was dirty at Phase 1 (solo preset path) — in that case the artifacts are left as working-tree changes and rolled into the next implementer commit.
+
+Files staged:
+
+- `docs/planning/epics.yaml` (updated `business_scenarios:` block on the epic entry)
+- `docs/planning/epic-{NN}-tasks.yaml` (new flat task list)
+- `.claude/runs/{epic_id}/01-plan.json` (planner output)
+- `docs/planning/SCENARIOS.md` (regenerated flat index)
+
+Commit message follows `.claude/ruleset/git-workflow.md` conventions (Conventional Commits by default):
+
+```
+plan({epic_id_lower}): decompose <epic-title> into N tasks
+
+- M Business scenarios on epic
+- N tasks with acceptance criteria + ATDD spec paths
+```
+
+<!-- FREEZE:IF require_ticket_reference -->
+When `require_ticket_reference: true`, append the resolved `cm_ticket` to the subject per the `commit_subject_pattern`, e.g. `plan(e-003): decompose Subscription cancellation into 5 tasks [CHG-12345]`.
+<!-- FREEZE:ENDIF -->
+<!-- FREEZE:IF require_signed_commits -->
+When `require_signed_commits: true`, commit with `-S` (GPG/SSH signing). The Phase 1 git-identity preflight does NOT validate signing config; `/002-implement` Phase 0 will repeat with stricter checks. If signing fails here, ABORT with the git error verbatim — never commit unsigned when the toggle is true.
+<!-- FREEZE:ENDIF -->
+<!-- FREEZE:IF require_dco_signoff -->
+When `require_dco_signoff: true`, commit with `-s` (appends a `Signed-off-by:` trailer).
+<!-- FREEZE:ENDIF -->
+
+Re-split mode commits to the same epic branch with a different prefix:
+
+```
+plan({epic_id_lower}): resplit <task-id> into N tasks
+
+Reason: <one-line reason from 02-impl.json>
+```
+
+Never amend. Never force-push. If `git commit` exits non-zero (e.g. pre-commit hook failure), surface the hook output verbatim and halt — do not auto-fix or bypass hooks.
+
+### Phase 6 — Summary to user
 
 Print a tight summary:
 
 - Epic id and title
 - Business scenario count
 - Task count
+- Epic branch name (or `main` when `allow_commit_to_main: true`) and the plan commit SHA from Phase 5
 - File paths written (`docs/planning/epics.yaml`, `docs/planning/epic-{id}-tasks.yaml`, `runs/{epic_id}/01-plan.json`, `docs/planning/SCENARIOS.md`)
 - Next-step suggestion: `/002-implement <epic-id>` (default — runs every pending task in the epic). The legacy single-task form `/002-implement T-001` remains available for ad-hoc re-runs but is not the default.
 
@@ -107,7 +188,18 @@ If either is missing, abort with: "Task T-NNN was not flagged as too_big. Re-spl
 
 Also read the original task entry from `epic-{id}-tasks.yaml` (for its `acceptance_criteria` list — these are the anchor the new tasks inherit; the resplit redistributes criteria across smaller tasks rather than introducing new ones).
 
-### Phase 1.5 — Resplit depth check
+### Phase 1 — Ensure on epic branch
+
+The epic branch was created during the original Fresh-mode `/001-plan <epic-id>` invocation. Re-split runs against the same branch.
+
+- Read `allow_commit_to_main`. If `true` → SKIP (no branch to check; planning artifacts and resplit commits land on the current branch).
+- Otherwise resolve the expected branch name via the same logic as Fresh-mode Phase 1 (substitute `{epic_id}`, `{slug}`, `{ticket_id}`).
+- Run `git show-ref --verify --quiet refs/heads/<computed-branch-name>`:
+  - **Branch exists** → if HEAD is already on it, no-op; else `git checkout <computed-branch-name>`.
+  - **Branch does NOT exist** → ABORT: `Epic branch <name> not found. The original /001-plan <epic-id> run should have created it. Re-run /001-plan <epic-id> (Fresh mode) to recreate the branch, or check out it manually if it was renamed.`
+- Detached-HEAD and dirty-tree checks: same as Fresh-mode Phase 1.
+
+### Phase 2 — Resplit depth check
 
 Before dispatching the planner, count prior resplit archives for this epic whose archived `01-plan.json` references **any acceptance criterion** present on the current task. Maximum resplit depth is 3 per criterion lineage. Beyond that, the planner is failing to decompose meaningfully and manual intervention is required.
 
@@ -165,9 +257,9 @@ if [ "$DEPTH" -ge 3 ]; then
 fi
 ```
 
-Exit code `6` is reserved for this halt (distinct from existing planner exit codes). If the check passes, proceed to Phase 2.
+Exit code `6` is reserved for this halt (distinct from existing planner exit codes). If the check passes, proceed to Phase 3.
 
-### Phase 2 — Dispatch planner subagent (re-split mode)
+### Phase 3 — Dispatch planner subagent (re-split mode)
 
 Use the Task tool with `subagent_type: "planner"`, mode set to `resplit`. Brief:
 
@@ -183,13 +275,31 @@ The planner produces:
 - New task entries replacing the original in `epic-{id}-tasks.yaml`. New task ids continue the existing numbering (e.g., if the original was `T-007` and the epic had tasks up to `T-012`, new tasks become `T-013`, `T-014`, …). **The original task's `acceptance_criteria` are redistributed across the new tasks** — every criterion from the original must appear on exactly one new task (no orphans, no duplicates). Re-split does not author new criteria; it only redistributes existing ones to smaller chunks. Business scenarios at the epic level are unchanged.
 - `runs/{epic_id}/{task_id}/01-plan.json` — re-split phase output, recording which task was split, the reason, and the new task ids.
 
-### Phase 3 — Archive old task
+### Phase 4 — Archive old task
 
 Move the old task's `runs/{epic_id}/{task_id}/` directory to `runs-archive/{epic_id}/{task_id}-resplit-{timestamp}-{short_uuid}/` where `{timestamp}` is `YYYYMMDD-HHMMSS` UTC and `{short_uuid}` is the first 8 chars of `uuidgen | tr -d '-'` (POSIX equivalent: `date +%s%N | sha1sum | cut -c1-8`). The suffix avoids collisions on sub-second re-splits. Example: `runs-archive/E-003/T-014-resplit-20260518-143022-a3f9b2c1/`. The main thread invokes `mv` directly (or a small shell snippet); the planner does not touch the filesystem outside the planning artifacts.
 
 Do NOT preserve a `parent` pointer on the new task entries. The history of the too_big_proposal lives in the archive directory only — new tasks start with a clean slate.
 
-### Phase 4 — Summary
+### Phase 5 — Commit resplit artifacts
+
+Same semantics as Fresh-mode Phase 5 (commit on epic branch). Files staged:
+
+- `docs/planning/epic-{NN}-tasks.yaml` (replaced task entry + new entries)
+- `.claude/runs/{epic_id}/{task_id}/01-plan.json` (resplit phase output)
+- `.claude/runs-archive/{epic_id}/{task_id}-resplit-{ts}-{uuid}/` (archived prior run)
+
+Commit message:
+
+```
+plan({epic_id_lower}): resplit <task-id> into N tasks
+
+Reason: <one-line reason from 02-impl.json>
+```
+
+Skip when `allow_commit_to_main: true` AND working tree dirty (artifacts roll into next implementer commit). Same signing/sign-off/ticket toggles apply as Fresh-mode Phase 5.
+
+### Phase 6 — Summary
 
 Print:
 

@@ -177,7 +177,7 @@ your-project/
 Project-specific glossary lives in `CONTEXT.md` (created on bootstrap). The plugin's own canonical terms:
 
 - **Epic.** A PRD-level deliverable, id `E-NNN`. Decomposed into tasks by `/001-plan`.
-- **Task.** A unit of work, id `T-NNN`, owned by a single epic. Drives one branch, one PR.
+- **Task.** A unit of work, id `T-NNN`, owned by a single epic. Tasks share the epic branch (one branch per epic, one PR per epic).
 - **Phase.** One step of the per-task pipeline: implement, verify, review, feedback. Each phase emits one JSON artifact under `.claude/runs/`.
 - **Gate.** A command declared in `stack.yaml.gates` that the verifier runs. Exit code is the truth.
 - **Ruleset.** The set of `.md` files under `.claude/ruleset/`. Verbatim-injected into the reviewer prompt.

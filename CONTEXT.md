@@ -111,10 +111,10 @@ The orchestration pattern used by `/001`..`/005` commands. Each command spawns a
   - **State B (PRD exists, no/few epics)**: prompts to add epic, edit top-level PRD, or refine an epic header. New epic = `## Epic E-NNN` section in PRD + entry in `epics.yaml` (status: pending, no BS). Term-resolution into `CONTEXT.md` and ADR offers continue inline.
   - **State C (PRD + epics exist)**: edit guidance (free-form refine with plugin pointing at sections), not section-by-section grilling. Same inline context-building behaviour.
   - **PRD-level immutability**: `/000-prd-refine` does not modify existing epic sections in PRD. If user wants PRD-level change to an existing epic, command nudges toward creating a new epic. Implementation-level adjustments stay with `/001-plan`.
-- `/001-plan` — epic decomposition + BS authoring (replaces mentora `plan-tasks`)
+- `/001-plan` — epic decomposition + BS authoring (replaces mentora `plan-tasks`). **Creates the epic branch** (Phase 0.5) and commits planning artifacts on it (Phase 4) so every downstream stage operates on the same branch from the start. Branch name: `epic/{epic_id}-{slug}` by default (pattern in `git-workflow.md`). Skipped under `allow_commit_to_main: true` (solo).
 - `/002-implement` — **dual-mode orchestrator** (replaces `plan-and-implement` + the deleted batch conductor). Dispatches on arg shape:
   - **Epic-default mode** (`<epic-id>`): iterates all `status: pending` tasks in dependency order; each task gets its own `implementer` subagent dispatch. Per task:
-    1. Creates the **epic branch** if it does not exist (`epic/{epic_id}-{slug}` by default, naming convention in `git-workflow.md`). Reuses the existing epic branch on resume or when subsequent tasks in the loop run on the already-checked-out branch. One branch per epic; every task in the epic commits onto the same branch (impl commit per task + later `fix(verify)` / `fix(review)` commits from `/003`/`/004` self-heal).
+    1. **Verifies** HEAD is on the epic branch created by `/001-plan` (`epic/{epic_id}-{slug}` by default). Checks it out if HEAD is elsewhere; ABORTS with a hint to run `/001-plan` if the branch is missing. `/002` never creates branches. One branch per epic; every task in the epic commits onto the same branch (impl commit per task + later `fix(verify)` / `fix(review)` commits from `/003`/`/004` self-heal).
     2. **Plan checkpoint** (Phase 1.5) — plan-only `implementer` dispatch + `AskUserQuestion` (Approve / Iterate / Cancel); Iterate re-dispatches with feedback (numbered `02a-plan`, `02b-plan`, ...)
     3. Approve → TDD impl loop (Domain-tests RED → code GREEN → REFACTOR → write ATDD spec)
     4. Commit after task green (single commit per task by default)
@@ -208,12 +208,12 @@ CONTEXT.md                          # project glossary (grill-with-docs format)
 
 ## Branch / commit / merge model
 
-- **One branch per epic, not per task.** Branch naming: `epic/{epic_id}-{slug}` by default (pattern in `git-workflow.md`). Created once by `/002-implement` at the start of the epic loop. Every task in the epic commits onto this same branch.
+- **One branch per epic, not per task.** Branch naming: `epic/{epic_id}-{slug}` by default (pattern in `git-workflow.md`). Created once by `/001-plan` at planning time (Phase 0.5) and committed against in Phase 4 with the `plan(...)` commit. `/002-implement` and every later stage operate on the existing branch — they never create. Every task in the epic stacks commits onto this same branch.
 - **Commits per stage, not just per task.** Each task produces an **impl commit** from the implementer (`feat(scope): <title> (T-NNN)`). Each `/003-verify-dod` self-heal iteration that succeeds produces one `fix(verify): T-NNN <summary>` commit. Each `/004-code-review` self-heal iteration that succeeds produces one `fix(review): T-NNN <summary>` commit. All commits stack linearly on the epic branch; never amend, never force-push.
 - **Slug derivation.** `{slug}` in `branch_name_pattern` substitutes from `epic.slug` if explicit; otherwise auto-derived from `epic.title` via kebab-case (lowercase, alphanumerics + dashes, collapse runs) at branch-creation time.
 - **One merge request per epic.** `/006-merge <epic-id>` opens a single MR/PR with the cumulative epic-branch diff against `<base>`. Title: `epic(E-NNN): <epic title>`. Body aggregates every task's acceptance criteria + ATDD specs + gate/review status. Solo preset (`pr_required: false`) → no-op (optional epic tag at HEAD).
 - **No per-task PRs.** The earlier per-task branch + per-task PR model is replaced: a 10-task epic produces 1 branch and 1 PR, not 10 branches and 10 PRs. `depends_on` ordering is naturally resolved by epic-loop iteration — later tasks see earlier tasks' commits already on the branch.
-- **Resume.** A prior `/002-implement <epic-id>` invocation that created the epic branch + halted mid-epic resumes by reusing the existing branch (no base pull, no re-create); subsequent tasks commit on top.
+- **Resume.** A prior `/001-plan <epic-id>` created the epic branch; subsequent `/002-implement <epic-id>` invocations (including resumes of a halted mid-epic batch) reuse it without base pull and without re-create. Subsequent tasks commit on top.
 
 ## Relationships
 
