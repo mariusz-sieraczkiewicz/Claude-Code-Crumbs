@@ -76,7 +76,19 @@
     },
     "extras": {
       "type": "object",
-      "additionalProperties": true
+      "description": "Escape hatch for stack-specific quirks. Propagated verbatim to every subagent. Documented conventions (none required, all optional): `concurrent_unsafe_gates: [<gate_name>, ...]` — gates that cannot run in parallel (e.g. simulator boot, port binding, single build cache); /003-verify-dod epic mode runs them once sequentially after the parallel verifier wave and folds their findings into the terminal task's per-task artifact. `bash_buffering_warning`, `user_ping_interval_minutes`, `git_host`, `upstream_remote`, `upstream_repo` are other known consumers in /003/004/006/007. Any other keys pass through unmodified.",
+      "additionalProperties": true,
+      "properties": {
+        "concurrent_unsafe_gates": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "bash_buffering_warning": { "type": "string" },
+        "user_ping_interval_minutes": { "type": "integer" },
+        "git_host": { "type": "string" },
+        "upstream_remote": { "type": "string" },
+        "upstream_repo": { "type": "string" }
+      }
     }
   }
 }

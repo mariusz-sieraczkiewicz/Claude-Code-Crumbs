@@ -68,6 +68,7 @@ require_cla: true
 auto_invoke_verify: true
 auto_fix_on_verify_fail: true   # /003-verify-dod findings auto-dispatch feedback-implementer (loop max 3); false = print findings, contributor runs /005-implement-feedback manually
 auto_fix_on_review_fail: true   # /004-code-review Violations auto-dispatch feedback-implementer (loop max 3); false = print Violations and exit read-only — useful when maintainer wants to gate fixes manually
+require_plan_approval: false   # default: contributor runs the whole epic without prompting. Flip to true if you want a per-task plan checkpoint (useful for first-time contributors).
 branch_name_pattern: "feature/{epic_id}-{slug}"   # OSS convention: feature/ prefix, contributors fork
 ```
 

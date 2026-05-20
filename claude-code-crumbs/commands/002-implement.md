@@ -1,15 +1,17 @@
 ---
-description: Implement an epic (default) or a single task. Epic mode iterates every pending task with a per-task plan checkpoint, then auto-invokes /003-verify-dod and /004-code-review. Task mode runs the single-task TDD chain.
+description: Implement an epic (default) or a single task. Epic mode iterates every pending task and auto-invokes /003-verify-dod then /004-code-review at the end. The per-task plan checkpoint (Phase 1.5) is gated by the `require_plan_approval` toggle in git-workflow.md (default `false` — runs every task to completion without prompting; flip `true` to restore the sielappkowo Approve/Iterate/Cancel discipline). Task mode runs the single-task TDD chain.
 argument-hint: <epic-id> | <task-id>
 ---
 
 Implement the work for **$ARGUMENTS**. The command dispatches on argument shape:
 
-- **`<epic-id>`** (matches `^E-`) → **epic mode** (default). Iterate every `status: pending` task in `epic-{id}-tasks.yaml` in dependency order. Each task runs the full per-task flow below (Phase 0 → Phase 6), with a mandatory **Phase 1.5 plan checkpoint** before TDD execution. When the epic loop finishes (every task at `status: done`), auto-invoke `/003-verify-dod <epic-id>` and — gated by the `auto_invoke_review` toggle — `/004-code-review <epic-id>`.
+- **`<epic-id>`** (matches `^E-`) → **epic mode** (default). Iterate every `status: pending` task in `epic-{id}-tasks.yaml` in dependency order. Each task runs the full per-task flow below (Phase 0 → Phase 6). Phase 1.5 (per-task plan checkpoint) runs only when `require_plan_approval: true` in `git-workflow.md` (default `false` — Phase 1.5 is skipped and the implementer goes straight to full-TDD Phase 2). When the epic loop finishes (every task at `status: done`), auto-invoke `/003-verify-dod <epic-id>` and — gated by the `auto_invoke_review` toggle — `/004-code-review <epic-id>`.
 - **`<task-id>`** (matches `^T-`) → **single-task mode** (legacy). Runs the single-task flow (Phase 0 → Phase 6) for that one task only. No auto-chain at epic granularity. This preserves the legacy `/002-implement <task-id>` contract for resume scenarios and ad-hoc task re-runs.
 - Anything else → abort with: `Argument "<value>" is neither an epic id (E-…) nor a task id (T-…). Run /001-plan first or supply a valid id.`
 
-The per-task flow dispatches the `implementer` subagent in two phases: first **plan-only** (Phase 1.5, written as a `phase: "impl-plan"` artifact and presented to the user for approval), then **full TDD** (Phase 2, written as a `phase: "impl"` artifact). The plan checkpoint is non-negotiable — both modes go through it.
+The per-task flow dispatches the `implementer` subagent in **one or two phases** depending on the `require_plan_approval` toggle:
+- **`require_plan_approval: true`** — two phases: first **plan-only** (Phase 1.5, written as a `phase: "impl-plan"` artifact and presented to the user for Approve/Iterate/Cancel via `AskUserQuestion`), then **full TDD** (Phase 2, written as a `phase: "impl"` artifact). The plan checkpoint is the human-in-the-loop gate restoring the sielappkowo "Present plan, iterate until accepted" discipline.
+- **`require_plan_approval: false`** (default) — single phase: the implementer is dispatched in **full TDD** mode directly (Phase 2), no plan-only stage, no prompt. The epic loop iterates every task to completion without user interaction.
 
 ## Mode dispatch
 
@@ -57,7 +59,7 @@ The per-phase sections below restate this with a one-line pointer back here; the
 **Epic-mode outcome discriminator.** Every halt branch and the success branch print a final summary line of the form `epic_outcome: <value>`. The values are:
 
 - `done` — every task reached `status: done` AND the epic-level `/003` (and `/004` if enabled) returned `status: ok`.
-- `cancelled` — user picked **Cancel** at Phase 1.5.
+- `cancelled` — user picked **Cancel** at Phase 1.5 (only reachable when `require_plan_approval: true`).
 - `halted_too_big` — implementer returned `status: too_big_proposal` at Phase 3 of some task.
 - `halted_blocked` — implementer returned `status: blocked` at Phase 3 of some task.
 - `halted_verify` — `/003-verify-dod` returned `status: fail` after exhausting its own self-heal cap.
@@ -185,13 +187,17 @@ Branch on the highest-numbered artifact present:
 - If `02-impl.json` exists with `status: "ok"` but no `03-verify.json` → in task mode, resume by invoking `/003-verify-dod` (skip the implementer phase) and continue from Phase 4; in epic mode, the per-task `/003`/`/004` slots are no-ops (the epic-level auto-chain runs at the end), so mark the task `done` and continue the epic loop.
 - If `02-impl.json` exists with `status: "too_big_proposal"` → halt with the prior `payload.reason` and `payload.suggested_split`; suggest `/001-plan --resplit ${TASK_ID}`.
 - If `02-impl.json` exists with `status: "blocked"` → halt with the prior blockers summary from `payload.reason`.
+<!-- FREEZE:IF require_plan_approval -->
 - If `02X-plan.json` artifacts exist (Phase 1.5 plan-only history) but no `02-impl.json` → resume at Phase 1.5: re-present the most recent plan to the user via `AskUserQuestion(Approve / Iterate / Cancel)` (same wording as the original Phase 1.5 Step 2). Branch on the user's choice:
   - **Approve** → record the re-presented plan path and continue to Phase 2.
   - **Iterate** → collect verbatim feedback and re-dispatch the implementer in `plan-only` mode with `payload.user_feedback` set; the new plan is written to the next-letter artifact (e.g. `02c-plan.json`). Then re-present (loop).
   - **Cancel** → set `epic_outcome: cancelled` and exit; the orchestrator's cleanup releases the task (and, in epic mode, epic) lock via the `finally` block.
 
   Do not re-dispatch a fresh plan unless the user picks **Iterate**.
-- If only `01-plan.json` exists (or no `NN-*.json` files at all) → run the per-task flow normally (Phase 1 → Phase 1.5 plan checkpoint → Phase 2).
+<!-- FREEZE:ELSE -->
+- If `02X-plan.json` artifacts exist but `require_plan_approval: false` is now active → ignore them (stale from a prior config). Continue as if only `01-plan.json` were present (run Phase 1 → Phase 2 directly).
+<!-- FREEZE:ENDIF -->
+- If only `01-plan.json` exists (or no `NN-*.json` files at all) → run the per-task flow normally (Phase 1 → [Phase 1.5 plan checkpoint if `require_plan_approval: true`] → Phase 2).
 
 In all "resume" paths above, the task status in `epic-{id}-tasks.yaml` is set to `in_progress` (idempotent re-set; no-op if already `in_progress`). On any halt path inside Phase 0.5, the Task lock acquired in Phase 0 MUST be released via `rm -rf "$LOCK_DIR"` before exit.
 
@@ -225,7 +231,11 @@ The remainder of this section applies ONLY when `allow_commit_to_main: false`:
 
 ### Phase 1.5 — Plan checkpoint (plan-only implementer dispatch + user approval)
 
+<!-- FREEZE:IF require_plan_approval -->
+
 The plan checkpoint is the human-in-the-loop gate between branch creation and full TDD execution. It restores the sielappkowo "Present plan, iterate until accepted" discipline inside the crumbs JSON-artifact contract.
+
+This phase runs only when `require_plan_approval: true` in `.claude/ruleset/git-workflow.md`. When the toggle is `false` (default for solo/small-team/oss), Phase 1.5 is skipped entirely and control jumps to Phase 2 (full-TDD dispatch).
 
 **Goal.** Before any RED test is written or any production code is touched, the implementer produces a written plan (files to touch + RED test sketch + GREEN shape + REFACTOR notes), the user reviews it, and the user either **Approves**, requests **Iterate** (with feedback), or **Cancels**. Approval is the trigger for Phase 2.
 
@@ -246,7 +256,7 @@ The plan artifact contract:
 - **Schema.** Conforms to `schemas/run-phase.schema.json` with `phase: "impl-plan"`, `agent: "implementer"`, `status: "ok"`. The `phase` value `impl-plan` is itself the discriminator — there is no `sub_mode` field. Required `payload` fields (per the schema's `impl-plan` branch):
   - `payload.iteration: <integer>` — 1-based iteration counter (1 for `02a-plan.json`, 2 for `02b-plan.json`, 3 for `02c-plan.json`, …). Filename letter and iteration integer are kept in sync by the orchestrator; the schema only validates the integer.
   - `payload.files_to_touch: [<string>, …]` — array of file paths the implementer intends to create or edit. One path per element. (Per-file intent is communicated via the per-file `red_sketch`/`green_shape` prose, not as a structured per-element record.)
-  - `payload.red_sketch: <string>` — the failing Domain-test sketch, scoped to the first `domain_scenario` on the task. Includes the World wiring, the Step library calls, and the assertion that will go red.
+  - `payload.red_sketch: <string>` — the failing Domain-test sketch, scoped to the first acceptance criterion on the task. Includes the World wiring, the Step library calls, and the assertion that will go red.
   - `payload.green_shape: <string>` — the minimal production-code shape that will make RED go green (interfaces, function signatures, data flow). NO implementation bodies.
   - `payload.refactor_notes: <string>` — known refactor moves anticipated after GREEN (extract function, push concept into domain model, etc.). Empty string is acceptable for trivial tasks.
   - `payload.user_feedback: <string>` — OPTIONAL. For iterations 2 and later, set to the verbatim feedback text from the previous `AskUserQuestion` Iterate option. Omit on iteration 1.
@@ -297,6 +307,12 @@ If `payload.open_questions` is non-empty, the user is strongly encouraged to pic
 
 The approved plan path is the SINGLE input passed to Phase 2 below (as a `--- approved plan ---` block alongside the existing injection set). Phase 2 does not re-plan; it executes.
 
+<!-- FREEZE:ELSE -->
+
+**Phase 1.5 is disabled** by the active `require_plan_approval: false` toggle. The implementer is dispatched directly in full-TDD mode (Phase 2 below) with no plan-only stage and no `02X-plan.json` artifacts. The Phase 2 injection set omits the `--- approved plan ---` block; the implementer authors its own internal plan as part of the TDD discipline. Cancel/Iterate user paths do not exist under this configuration; the epic loop iterates every pending task to completion or the first non-recoverable halt (`too_big_proposal`, `blocked`, verify/review loop-limit).
+
+<!-- FREEZE:ENDIF -->
+
 ### Phase 2 — Dispatch implementer subagent (full TDD)
 
 Use the **Task tool** with `subagent_type: "implementer"`. Inject the following into the subagent prompt body (verbatim, no `@`-includes):
@@ -305,7 +321,7 @@ Use the **Task tool** with `subagent_type: "implementer"`. Inject the following 
 2. **Business scenarios (epic-level)** — paste the entire `business_scenarios` Gherkin block-scalar from the matching epic entry in `epics.yaml` verbatim under a header `--- Business Scenarios (epic-level) ---`. The implementer uses this to author the task's `atdd_spec` happy-path file; it is not a per-task DoD source (the DoD bar is `acceptance_criteria` on the task).
 3. **Verbatim ruleset SUBSET** — inject the ruleset **subset** via `scripts/inject-ruleset.sh --rules <comma-separated-slugs>` where slugs = the planner's `01-plan.json.payload.rules_in_scope` for this task ∪ the mandatory core `{architecture, testing, code-style, git-workflow}`. Capture the script's stdout via the Bash tool and inline it verbatim into the implementer's prompt. The script handles path resolution (honours `paths.ruleset` from `stack.yaml`, falls back to `.claude/ruleset/`), alphabetical ordering of `*.md` files, the `--- <basename> ---` header per file, and the subset filter (mandatory core is always included regardless of `--rules`). Do not re-implement the read+concatenate logic inline. Do not summarise, do not omit any rule in the subset. The remaining rules outside the subset are the reviewer's concern (`/004`), not the implementer's — they are the holistic gate that sweeps the full 18.
 4. **`stack.yaml.extras`** — paste the `extras` mapping verbatim under a header `--- stack.yaml.extras ---`. This is the escape hatch for stack-specific quirks (e.g. `bash_buffering_warning`, `user_ping_interval_minutes`).
-5. **Approved plan** — paste the contents of the approved plan artifact (e.g. `02b-plan.json` from Phase 1.5) verbatim under a header `--- approved plan ---`. The implementer treats this as binding: file set, RED sketch, GREEN shape, REFACTOR notes, and ATDD spec shape are pre-agreed with the user. Deviations are allowed only when the implementer hits an issue the plan missed; in that case the implementer emits `status: blocked` with a `payload.reason` describing the gap, and the flow halts back to the user.
+5. **Approved plan** (only when `require_plan_approval: true`) — paste the contents of the approved plan artifact (e.g. `02b-plan.json` from Phase 1.5) verbatim under a header `--- approved plan ---`. The implementer treats this as binding: file set, RED sketch, GREEN shape, REFACTOR notes, and ATDD spec shape are pre-agreed with the user. Deviations are allowed only when the implementer hits an issue the plan missed; in that case the implementer emits `status: blocked` with a `payload.reason` describing the gap, and the flow halts back to the user. When `require_plan_approval: false` (default), this item is **omitted** from the injection set; the implementer authors its own internal plan as part of the TDD discipline (no prior `02X-plan.json` artifact exists).
 6. **Output contract** — instruct the implementer to write its result to `.claude/runs/{epic_id}/{task_id}/02-impl.json`, validated against `schemas/run-phase.schema.json`. The top-level `status` field must be one of `ok`, `too_big_proposal`, `blocked`. Required `payload` keys vary by status:
    - `ok` → `commit_sha`, `files_changed`, `domain_tests_added`, `atdd_spec_path`.
    - `too_big_proposal` → `reason` (prose), `suggested_split` (array of draft task titles, 2..n entries).
@@ -518,7 +534,7 @@ The `branch_name_pattern` is `epic/{epic_id}-{slug}` across all presets unless t
   - `in_progress` → `done` only on full success at Phase 6.
   - `in_progress` → `pending` on `too_big_proposal` (Phase 3) or on user **Cancel** at Phase 1.5.
   - `in_progress` stays `in_progress` on any hard halt — the user clears it manually once the underlying issue is resolved.
-- **Plan checkpoint is non-negotiable.** Phase 1.5 always runs before Phase 2. There is no toggle to skip it. The point of the checkpoint is to catch wrong assumptions before they become commits.
+- **Plan checkpoint is gated by `require_plan_approval`.** When `true`, Phase 1.5 runs before Phase 2 and the user must Approve/Iterate/Cancel each task's plan; the point is to catch wrong assumptions before they become commits (sielappkowo-style). When `false` (default), Phase 1.5 is skipped entirely — the implementer is dispatched in full-TDD mode directly and the epic loop iterates every task to completion without prompting.
 - **Plan artifacts are append-only.** `02a-plan.json`, `02b-plan.json`, … are never overwritten. If the user picks Iterate, the next letter is written; the previous letter remains as audit history.
 - **Never amend commits.** The implementer makes one commit per task; self-heal feedback rounds inside `/003` and `/004` produce additional commits stacked on top of the epic branch (one commit per fix iteration).
 - **Never force-push.** If history needs cleanup, leave it for `/006-merge` (which may squash on PR creation per `git-workflow.md`).

@@ -113,7 +113,7 @@ COMMIT_TO_MAIN_BLOCKED
 REVIEWERS_NEEDED
 <!-- FREEZE:ENDIF -->
 
-Branch pattern: <!-- FREEZE:VAL branch_name_pattern -->task/{task_id}-{slug}<!-- FREEZE:ENDVAL -->
+Branch pattern: <!-- FREEZE:VAL branch_name_pattern -->epic/{epic_id}-{slug}<!-- FREEZE:ENDVAL -->
 
 Missing key: <!-- FREEZE:VAL nonexistent_key -->fallback-text<!-- FREEZE:ENDVAL -->
 

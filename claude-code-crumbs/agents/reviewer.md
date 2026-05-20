@@ -83,10 +83,10 @@ Enforcement:
 
 ### Commit hygiene
 
-Every new commit on the task branch (`git log <base>..HEAD`) must follow Conventional Commits: `<type>(<optional scope>): <subject>`, where `<type>` is one of `feat | fix | refactor | test | docs | chore | perf | build | ci | revert`. Enforcement:
+Every new commit on the epic branch (`git log <base>..HEAD`) must follow Conventional Commits: `<type>(<optional scope>): <subject>`, where `<type>` is one of `feat | fix | refactor | test | docs | chore | perf | build | ci | revert`. Enforcement:
 - `Bash`: `git log <base>..HEAD --pretty=format:'%s'`.
 - For each subject not matching the regex, emit a Finding with `rule: "commit-hygiene"` and `location: "<sha>"`.
-- Merge commits on the task branch are themselves a Finding unless the injected `git-workflow.md` explicitly permits them.
+- Merge commits on the epic branch are themselves a Finding unless the injected `git-workflow.md` explicitly permits them.
 
 ### Vocabulary discipline
 

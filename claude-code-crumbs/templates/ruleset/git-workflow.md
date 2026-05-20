@@ -65,6 +65,7 @@ pr_required: true
 auto_invoke_verify: true
 auto_fix_on_verify_fail: true   # when /003-verify-dod finds gaps, auto-dispatch feedback-implementer (loop max 3); false = /003 prints findings and exits read-only (user runs /005-implement-feedback manually)
 auto_fix_on_review_fail: true   # when /004-code-review finds Violations, auto-dispatch feedback-implementer (loop max 3); false = /004 prints Violations and exits read-only
+require_plan_approval: false    # when true, /002-implement Phase 1.5 presents the per-task plan to the user (Approve/Iterate/Cancel) before TDD; when false (default), /002 dispatches the implementer in full-TDD mode directly and iterates every task to the end without prompting. Set true to restore the sielappkowo "review plan before each task" discipline.
 branch_name_pattern: "epic/{epic_id}-{slug}"
 ```
 

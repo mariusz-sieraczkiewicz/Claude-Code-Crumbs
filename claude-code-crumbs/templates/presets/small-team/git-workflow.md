@@ -65,6 +65,7 @@ pr_required: true
 auto_invoke_verify: true
 auto_fix_on_verify_fail: true   # when /003-verify-dod finds gaps, auto-dispatch feedback-implementer (loop max 3); false = /003 prints findings and exits read-only (user runs /005-implement-feedback manually)
 auto_fix_on_review_fail: true   # when /004-code-review finds Violations, auto-dispatch feedback-implementer (loop max 3); false = /004 prints Violations and exits read-only
+require_plan_approval: false    # default: /002-implement runs the whole epic to completion without prompting. Flip to true to restore the per-task Approve/Iterate/Cancel plan checkpoint.
 branch_name_pattern: "epic/{epic_id}-{slug}"
 ```
 

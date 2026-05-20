@@ -98,11 +98,11 @@ Solo preset: `/006-merge` only tags the commit; no PR is opened.
 
 ```
 <!-- FREEZE:IF preset == "enterprise" -->
-Branch naming: `task/{ticket_id}/{task_id}-{slug}` — ticket id is mandatory.
+Branch naming: `epic/{ticket_id}/{epic_id}-{slug}` — ticket id is mandatory.
 <!-- FREEZE:ELIF preset == "small-team" -->
-Branch naming: `task/{task_id}-{slug}`.
+Branch naming: `epic/{epic_id}-{slug}`.
 <!-- FREEZE:ELIF preset == "oss" -->
-Branch naming: `feat/{slug}` or `fix/{slug}`.
+Branch naming: `feature/{epic_id}-{slug}`.
 <!-- FREEZE:ELSE -->
 Branch naming: optional; commits go straight to `main`.
 <!-- FREEZE:ENDIF -->
@@ -119,7 +119,7 @@ At least <!-- FREEZE:VAL require_reviewers -->1<!-- FREEZE:ENDVAL --> reviewer a
 ### 4 — inline VAL with negation
 
 ```
-Default branch pattern: `<!-- FREEZE:VAL branch_name_pattern -->task/{task_id}-{slug}<!-- FREEZE:ENDVAL -->`.
+Default branch pattern: `<!-- FREEZE:VAL branch_name_pattern -->epic/{epic_id}-{slug}<!-- FREEZE:ENDVAL -->`.
 
 <!-- FREEZE:IF !allow_commit_to_main -->
 Direct commits to `main` are blocked at the platform level.

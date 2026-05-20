@@ -48,7 +48,7 @@ require_change_window: false
 require_change_ticket: false
 journey_gate_required: true
 auto_invoke_verify: true
-branch_name_pattern: "task/{task_id}-{slug}"
+branch_name_pattern: "epic/{epic_id}-{slug}"
 ```
 
 ## Mechanical enforcement

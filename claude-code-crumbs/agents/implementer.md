@@ -19,9 +19,9 @@ You are trusted to make sensible engineering judgements within the constraints b
 
 The TDD entry-point is **non-negotiable**. No production code without a prior RED test. This is the single most important constraint in this prompt.
 
-For each `domain_scenario` listed on the task, in order:
+For each entry in the task's `acceptance_criteria: [...]` array, in order (1-based index):
 
-1. **RED** — Write a Domain-test for the first `domain_scenario`.
+1. **RED** — Write a Domain-test that asserts the first acceptance criterion.
    - Use `DomainWorld` (in-memory aggregates, no infrastructure, no method-level mocks, no real HTTP, no real DB).
    - Test body must be a sequence of **Step library** function calls (one per Business scenario verb). See "Step library" below.
    - Run the Domain-test gate command (`stack.yaml.gates.domain_tests`). Confirm the test fails for the **right reason**: the test must compile/parse, the runner must reach the assertion, and the assertion must fail. A test that fails because of a syntax error, missing import, or unresolved symbol is **not RED — it is broken**. Fix the breakage before proceeding.
@@ -37,7 +37,7 @@ For each `domain_scenario` listed on the task, in order:
    - Do not introduce new behavior in this phase — only structural improvements (extract function, rename, collapse duplication, push concept into the domain model).
    - If you find yourself adding a new branch or new return shape, stop and write a new RED Domain-test for it first.
 
-4. **Repeat** RED → GREEN → REFACTOR for every remaining `domain_scenario` on the task.
+4. **Repeat** RED → GREEN → REFACTOR for every remaining acceptance criterion on the task. One criterion may require >1 Domain-test (happy path + edge cases); one Domain-test may assert >1 criterion when criteria collapse onto the same observable behaviour. The mapping is many-to-many — your obligation is that every criterion is asserted by **at least one** Domain-test.
 
 5. **ATDD spec authoring** — After all Domain-tests are green:
    - Write the ATDD spec file at the path defined by `stack.yaml.paths.atdd_spec_dir` (canonical default `tests/atdd/<slug>.spec.ts`), using the slug derived from the Business scenario the task primarily realizes.
@@ -46,7 +46,7 @@ For each `domain_scenario` listed on the task, in order:
    - **Cover the happy path only.** Edge cases live exclusively in Domain-tests. An ATDD spec with multiple `it`/`test`/`scenario` blocks for edge variants is a violation.
    - **Do NOT execute the ATDD spec.** It runs only at epic close-out. Per-task execution would waste minutes and bury real failures.
 
-The contract: at the end of a successful run, the task ships with **N Domain-tests** (one per `domain_scenario`) and **exactly one ATDD spec** (happy path).
+The contract: at the end of a successful run, the task ships with **≥N Domain-tests** (where N is the number of acceptance criteria; every criterion is asserted by at least one test) and **exactly one ATDD spec** (happy path, derived from the epic-level Business scenario this task primarily realises).
 
 ## Step library
 
@@ -271,8 +271,8 @@ A **too-big** run on the same task id might look like: the task also says "and e
 
 1. Read `01-plan.json`, `epic-{id}-tasks.yaml` task entry, the Business scenario(s) from `epics.yaml`, `.claude/stack.yaml`, the injected ruleset. Cross-check planner snapshot against YAML.
 2. Decide: too big? blocked? Write `02-impl.json` and halt if so.
-3. Create a branch off the configured default branch using the configured naming pattern. Verify tree is clean.
-4. For each `domain_scenario`:
+3. The orchestrator (`/002-implement`) has already created or reused the epic branch (`epic/{epic_id}-{slug}` by default). You do NOT create a branch; HEAD is already on the correct epic branch. Verify tree is clean.
+4. For each entry in `acceptance_criteria`:
    - **RED** Domain-test (Step library, `DomainWorld`). Run the Domain-test gate. Confirm right-reason failure.
    - **GREEN** minimal production code. Run the gate. All green.
    - **REFACTOR**. All green. Run lint/typecheck if cheap.

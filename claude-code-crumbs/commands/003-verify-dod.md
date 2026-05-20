@@ -60,7 +60,7 @@ After every per-task loop settles (success, blocked fix, or 3-iter exhaustion), 
 - Epic `status: ok` iff every per-task **final** `03-verify.json` (or `03c/03e/03g-verify.json` after self-heal) has `status: "ok"`.
 - Epic `status: fail` if any per-task final verify is `fail`.
 
-Write an epic-level summary artifact at `runs/{epic_id}/03-verify-epic.json`:
+Write an epic-level summary artifact at `.claude/runs/{epic_id}/03-verify-epic.json`:
 
 ```json
 {

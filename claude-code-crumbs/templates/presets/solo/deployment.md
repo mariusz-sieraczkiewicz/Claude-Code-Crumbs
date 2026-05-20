@@ -43,7 +43,7 @@ require_change_window: false
 require_change_ticket: false
 journey_gate_required: false
 auto_invoke_verify: true                  # gates still run even though review is skipped
-branch_name_pattern: "task/{task_id}-{slug}"   # informational only; allow_commit_to_main=true means usually no branch is created
+branch_name_pattern: "epic/{epic_id}-{slug}"   # informational only; allow_commit_to_main=true means usually no branch is created
 ```
 
 `journey_gate_required: false` reflects the lack of a staging env to run Journey smoke against. Run Journeys locally on the dev box before risky changes.

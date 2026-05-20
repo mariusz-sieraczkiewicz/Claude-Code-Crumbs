@@ -14,7 +14,7 @@ applyTo: "**/*"
 - `main` is the production-tracking branch. Strictly protected.
 - All epic branches: `epic/{ticket_id}/{epic_id}-{slug}`, e.g. `epic/CHG-12345/E-003-subscription-cancellation`. **Ticket id in branch name is mandatory** — this is the audit anchor. The canonical shape is enforced by the `branch_name_pattern` toggle below; no other shapes are permitted. One branch per epic; every task in the epic commits onto the same branch.
 - Release branches: `release/v<major>.<minor>` cut from `main` for staged production rollouts.
-- Hotfix branches follow the same `task/{ticket_id}/{task_id}-{slug}` shape, cut from the current `release/` branch; merged to `release/` and forward-merged to `main`.
+- Hotfix branches follow the same `epic/{ticket_id}/{epic_id}-{slug}` shape, cut from the current `release/` branch; merged to `release/` and forward-merged to `main`. Hotfix epics typically carry a single task but the branch convention is identical.
 - Long-lived branches outside the above set require an ADR.
 
 ## Commit conventions
@@ -86,6 +86,7 @@ block_self_approval: true
 auto_invoke_verify: true
 auto_fix_on_verify_fail: false   # compliance: when /003-verify-dod or /004-code-review surfaces gate findings, enterprise compliance forbids automated remediation. Remediation path is manual: a human (developer or review-board delegate) edits the working tree to address each finding, then re-runs /003-verify-dod or /004-code-review to confirm closure. This preserves the audit trail for change-management review.
 auto_fix_on_review_fail: false   # compliance: same rationale as auto_fix_on_verify_fail — gate findings from /004-code-review are remediated manually by a human editing the working tree and re-running /004-code-review to confirm closure; no automated fixer is permitted on the read-only path.
+require_plan_approval: true   # compliance: every task plan is reviewed by a human before TDD execution. /002-implement Phase 1.5 presents the plan via AskUserQuestion; Approve advances to TDD, Iterate re-dispatches the planner with feedback, Cancel halts the epic. Enterprise defaults to true because the per-task plan IS the change-management evidence; running tasks to completion without explicit per-task approval would void the audit trail.
 # Note on /005-implement-feedback under enterprise:
 # /005-implement-feedback is reserved for epic-level user feedback against an already-done epic (new tasks appended, new ATDD round). It is NOT a gate-finding fixer and must not be invoked for that purpose.
 branch_name_pattern: "epic/{ticket_id}/{epic_id}-{slug}"   # nested under change-management ticket id

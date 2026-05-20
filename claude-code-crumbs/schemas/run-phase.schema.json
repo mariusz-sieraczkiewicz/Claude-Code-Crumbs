@@ -122,7 +122,12 @@
     {
       "if": { "properties": { "phase": { "const": "plan" } }, "required": ["phase"] },
       "then": { "properties": { "agent": { "const": "planner" } } },
-      "else": { "required": ["task_id"] }
+      "else": {
+        "anyOf": [
+          { "required": ["task_id"] },
+          { "properties": { "payload": { "type": "object", "properties": { "scope": { "const": "epic" } }, "required": ["scope"] } } }
+        ]
+      }
     },
     {
       "if": { "properties": { "phase": { "const": "impl" } }, "required": ["phase"] },

@@ -57,6 +57,7 @@ tag_task_commits: true
 auto_invoke_verify: true                  # gates still run even though review is skipped
 auto_fix_on_verify_fail: true             # solo dev wants self-heal: /003 findings auto-dispatch feedback-implementer (loop max 3); set false to print findings and run /005-implement-feedback manually
 auto_fix_on_review_fail: true             # when /004 is run manually and returns Violations, auto-dispatch feedback-implementer (loop max 3); set false to print Violations and exit read-only
+require_plan_approval: false              # default: solo dev wants /002-implement to run every task in the epic to completion without prompting. Flip to true to restore the per-task Approve/Iterate/Cancel checkpoint before TDD execution.
 branch_name_pattern: "epic/{epic_id}-{slug}"   # informational only; allow_commit_to_main=true means usually no branch is created
 ```
 

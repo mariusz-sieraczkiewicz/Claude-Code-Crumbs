@@ -44,7 +44,7 @@ After every per-task loop settles, aggregate:
 - Epic `status: ok` iff every per-task **final** `04-review.json` (or `04c/04e/04g-review.json` after self-heal) has `status: "ok"`.
 - Epic `status: fail` if any per-task final review is `fail`.
 
-Write an epic-level summary artifact at `runs/{epic_id}/04-review-epic.json`:
+Write an epic-level summary artifact at `.claude/runs/{epic_id}/04-review-epic.json`:
 
 ```json
 {
@@ -158,7 +158,7 @@ When `04-review.json.status == "fail"` and `auto_fix_on_review_fail: true`, disp
 6. **Prior phase artifact paths** — `01-plan.json`, `02-impl.json`, `03-verify.json`, every `05X-feedback-impl.json`, and **every prior in-loop artifact** for this `/004` run (`04-review.json`, `04b-fix.json`, `04c-review.json`, …). The feedback-implementer reads them itself; paths only.
 7. **Commit contract.** When the fix succeeds (`status: "ok"`), the feedback-implementer makes **one commit** on the current epic branch (or `main` under solo). Commit message format: `fix(review): <task-id> <one-line summary>` (Conventional Commits scope = `review`; body MAY list the rule slugs addressed). Stage only files modified during this fix iteration. Never amend. The commit stacks on top of the prior task impl commit, any earlier `fix(verify): ...` commits from `/003` self-heal, and any earlier `fix(review): ...` commits from prior `/004` iterations in this epic. Skip the commit step entirely under `status: "blocked"` (broken fixes are not committed).
 8. **Output contract** — instruct the subagent to write its result to `.claude/runs/{epic_id}/{task_id}/04b-fix.json` on iteration 1, `04d-fix.json` on iteration 2, `04f-fix.json` on iteration 3. Validate against `schemas/run-phase.schema.json`. Top-level `status` ∈ `{ "ok", "blocked" }` (per the schema's `phase: "feedback-impl"` constraint). Payload shape:
-   - `status: "ok"` → `payload.files_changed` (array of paths the subagent modified), `payload.violations_addressed` (subset of input findings the subagent claims to have fixed), `payload.commit_sha` (the new sha — REQUIRED under `status: "ok"`).
+   - `status: "ok"` → `payload.files_changed` (array of paths the subagent modified), `payload.violations_addressed` (subset of input findings the subagent claims to have fixed), `payload.commits_made` (array with exactly one sha — REQUIRED under `status: "ok"`; mirrors `agents/feedback-implementer.md` canonical shape and matches /003 Phase 2 dispatch).
    - `status: "blocked"` → `payload.reason` (string explaining why no fix could be produced — e.g. ambiguous Violation, edit conflict, missing context). No commit. Treat this as a terminal halt for the loop; do not advance to Phase 3 on a `blocked` fix.
 
 The feedback-implementer is **the only writer of source code in this loop.** The main thread never edits files directly between Phase 1 and Phase 3.
@@ -292,7 +292,7 @@ These checks compose with — they do not replace — the per-Rule walkthrough. 
 - **Task not found** → abort at Phase 0 with the path and id.
 - **Ruleset incomplete** (fewer than 18 files in `.claude/ruleset/`) → abort at Phase 0 with the list of missing files.
 - **`03-verify.json` missing or `status != "ok"`** → abort at Phase 0 with `Run /003-verify-dod first.` (preserved verbatim under both `auto_fix_on_review_fail` toggle branches).
-- **Wrong branch** (not on the task branch under non-solo presets) → abort at Phase 0 with the expected vs actual branch.
+- **Wrong branch** (not on the epic branch under non-solo presets) → abort at Phase 0 with the expected vs actual branch.
 - **Schema validation fails** on any `04*.json` → halt with the artifact path and the validator error.
 - **Subagent invocation error** (Task tool failure, ruleset directory unreadable, diff command fails) → halt with the underlying error and the offending path. Do not retry silently.
 - **Feedback-implementer halts** (`04X-fix.json.status == "blocked"`) → terminal halt for the loop; surface the `payload.reason` and instruct the user to manually edit the working tree and re-run `/004-code-review`. Do not advance to the next re-review.
@@ -339,7 +339,7 @@ Under `auto_fix_on_review_fail: true`, re-running on the same task between epic-
 
 Given task `T-014` in epic `E-003` under the `small-team` preset (`auto_fix_on_review_fail: true`):
 
-1. **Phase 0** — locate `docs/planning/epic-003-tasks.yaml`; find `id: T-014`. Confirm 18 files in `.claude/ruleset/`. Read `.claude/runs/E-003/T-014/03-verify.json` — `status: "ok"`. Current branch is `task/T-014-cancel-subscription`. `default_branch: main`. `auto_fix_on_review_fail: true`. Proceed.
+1. **Phase 0** — locate `docs/planning/epic-003-tasks.yaml`; find `id: T-014`. Confirm 18 files in `.claude/ruleset/`. Read `.claude/runs/E-003/T-014/03-verify.json` — `status: "ok"`. Current branch is `epic/E-003-subscription-cancellation`. `default_branch: main`. `auto_fix_on_review_fail: true`. Proceed.
 2. **Phase 1** — reviewer dispatched. Writes `04-review.json` with `status: "fail"`, two Violations under `accessibility.md` and `observability.md`, one Refactoring Suggestion against `code-style.md`.
 3. **Phase 2 (iteration 1)** — feedback-implementer dispatched with the two Violations (the Refactoring Suggestion is withheld). Subagent edits `src/billing/CancelButton.svelte` and `src/billing/cancel.ts`, commits, writes `04b-fix.json` with `status: "ok"` and `files_changed: [...]`.
 4. **Phase 3 (iteration 1)** — reviewer re-dispatched against the refreshed diff. Writes `04c-review.json` with `status: "ok"`, 0 Violations. Loop exits.

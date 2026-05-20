@@ -92,7 +92,7 @@ Print a tight summary:
 - Business scenario count
 - Task count
 - File paths written (`docs/planning/epics.yaml`, `docs/planning/epic-{id}-tasks.yaml`, `runs/{epic_id}/01-plan.json`, `docs/planning/SCENARIOS.md`)
-- Next-step suggestion: `/002-implement T-001` for single-task execution.
+- Next-step suggestion: `/002-implement <epic-id>` (default — runs every pending task in the epic). The legacy single-task form `/002-implement T-001` remains available for ad-hoc re-runs but is not the default.
 
 ## Workflow (Re-split mode)
 
@@ -197,7 +197,7 @@ Print:
 - Reason (one line from `02-impl.json`)
 - Number of new tasks and their ids
 - Archive path
-- Next-step suggestion: `/002-implement T-<first-new-id>`.
+- Next-step suggestion: `/002-implement <epic-id>` (re-enters epic loop; the newly resplit tasks are picked up automatically as the next `pending` entries in the dependency-ordered iteration). For an ad-hoc single-task run, `/002-implement T-<first-new-id>` remains valid.
 
 ## Discipline
 

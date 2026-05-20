@@ -26,7 +26,7 @@ The following gates are wired into `stack.yaml.gates` and run automatically duri
 5. **No method-level mocks in Domain-tests.** Domain-tests use in-memory repositories, in-memory event buses, and stub external systems at their public boundary. Mocking a method on a domain object under test (`jest.spyOn(order, 'cancel')`, equivalent in Swift/Kotlin) is a violation — it tests the mock, not the behavior. Vertex Testing principle: instantiate the real domain object graph.
 6. **ATDD spec is the executable form, not a re-write.** Each ATDD spec body MUST be a near-verbatim sequence of Step library calls matching the Gherkin order of its Business scenario. Reordering, additional assertions outside the scenario's Then-clauses, or extra setup that changes the meaning are violations.
 7. **Journey composition.** Journeys MUST be authored as ordered sequences of step calls drawn from existing Business scenarios. A Journey that introduces a new step (not present in any scenario) is a violation — the step belongs to a scenario first.
-8. **TDD entry-point.** No production code change without a prior failing test (Domain-test in the inner loop; ATDD spec at planning time). `reviewer` MUST check the commit ordering inside the task branch (or the diff structure if squashed) and flag implementation-before-test.
+8. **TDD entry-point.** No production code change without a prior failing test (Domain-test in the inner loop; ATDD spec at planning time). `reviewer` MUST check the commit ordering inside the epic branch (or the diff structure if squashed) and flag implementation-before-test.
 9. **No skipped tests, no `.only`, no commented-out tests.** Any `xit`/`xdescribe`/`it.skip`/`fdescribe`/`it.only`/`fit`/Swift `XCTSkip` without a tracked ticket reference in the same diff is a violation.
 10. **One ATDD spec per task.** The task's `atdd_spec:` field in `epic-{id}-tasks.yaml` MUST point to exactly one file. Multiple ATDD specs per task indicates the task is too big — `implementer` should have signaled `too_big_proposal`.
 
@@ -192,5 +192,5 @@ Violations: the step is no longer world-agnostic. Push both behaviors into the r
 - `error-handling.md` — typed errors and boundary translation determine what assertions Domain-tests make on failure paths.
 - `data-access.md` — protocol-per-aggregate is what enables in-memory repositories for `DomainWorld`; without it, Domain-tests cannot avoid infrastructure.
 - `documentation.md` — Business scenarios are the lighthouse; their authorship cadence and SCENARIOS.md sync are documented there.
-- `git-workflow.md` — per-task branch lifecycle defines when Domain-tests run (every commit) vs ATDD specs (epic-end) vs Journeys (promotion).
+- `git-workflow.md` — epic branch lifecycle (one branch per epic; per-task impl + self-heal commits stack on it) defines when Domain-tests run (every commit) vs ATDD specs (epic-end) vs Journeys (promotion).
 - See ADR-0001 in the canonical layout (`docs/adr/0001-shared-step-library-with-world-pattern.md`) for the full rationale behind Step library + World pattern.

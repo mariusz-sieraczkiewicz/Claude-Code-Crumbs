@@ -8,7 +8,7 @@ A universal, stack-agnostic Claude Code workflow plugin: TDD entry-point, a five
 
 The value is in the discipline. Every task starts with a failing **domain test** (TDD entry-point). Every task ends behind a Definition-of-Done gate that runs every check declared in `stack.yaml.gates` with **zero tolerance** — any non-zero exit, any rule violation, is a blocker. Code reviews read your project-specific ruleset verbatim. Findings loop back through a feedback subagent, capped at three iterations before halting for human input. Business scenarios are written in domain-oriented Gherkin (UI-ignorant) and indexed flat into `docs/planning/SCENARIOS.md`.
 
-The plugin is intentionally **lightweight**: it owns the workflow surface (commands, subagents, schemas, ruleset). It does not own your deploy pipeline (`/007-promote` triggers an existing platform workflow), does not auto-merge (`/006-merge` opens a PR and stops), and does not edit code outside of a task branch.
+The plugin is intentionally **lightweight**: it owns the workflow surface (commands, subagents, schemas, ruleset). It does not own your deploy pipeline (`/007-promote` triggers an existing platform workflow), does not auto-merge (`/006-merge` opens a PR and stops), and does not edit code outside of an epic branch.
 
 ## Quick start
 
