@@ -1,22 +1,25 @@
 ---
-description: Open a merge/pull request for a completed task. Uses conventions from ruleset/git-workflow.md.
-argument-hint: <task-id>
+description: Open a merge/pull request for a completed epic. Uses conventions from ruleset/git-workflow.md.
+argument-hint: <epic-id>
 ---
 
 # /006-merge
 
-Open a merge/pull request (MR/PR) for a completed task using conventions defined in `.claude/ruleset/git-workflow.md`. No dedicated subagent — the main thread orchestrates `gh` or `glab` directly.
+Open a merge/pull request (MR/PR) for a completed epic using conventions defined in `.claude/ruleset/git-workflow.md`. No dedicated subagent — the main thread orchestrates `gh` or `glab` directly.
 
 This command **only opens** the MR/PR. It never auto-merges, never `--force` pushes, and never amends commits. Merge timing is a human or platform-automation decision.
 
+**Scope.** One PR per epic, not per task. The PR's diff is the epic branch against `<base>` — every commit produced across the epic's tasks (impl commits per task + `fix(verify)` + `fix(review)` commits from self-heal) lands in this single PR. Per-task review fatigue (N PRs per epic) is replaced by one epic-level review.
+
 ## Inputs
 
-- `<task-id>` — argument (e.g. `T-001`). Required.
-- `docs/planning/epic-{id}-tasks.yaml` — locate the task entry. The task MUST have `status: done`.
+- `<epic-id>` — argument (e.g. `E-001`). Required.
+- `docs/planning/epics.yaml` — locate the epic entry. The epic MUST have every task with `status: done`. If any task is `pending`/`in_progress`/`blocked`, abort: `Epic <id> has incomplete tasks: <list>. Run /002-implement <epic-id> first.`
+- `docs/planning/epic-{id}-tasks.yaml` — read every task entry for body composition (titles + acceptance criteria + atdd_spec paths).
 - `.claude/ruleset/git-workflow.md` — parse the YAML toggle block. Relevant keys:
   - `pr_required` (bool) — if `false`, skip MR creation (solo preset).
   - `allow_commit_to_main` (bool) — informational; not enforced here.
-  - `pr_title_pattern` (string) — default `"<type>(T-NNN): <title>"`.
+  - `pr_title_pattern` (string) — default `"epic(E-NNN): <title>"`.
   - `pr_body_template` (string or multi-line) — default below.
   - `base_branch` (string) — default `main`.
   - `default_reviewers` (list) — comma-joined for `--reviewer`.
@@ -34,7 +37,7 @@ This command **only opens** the MR/PR. It never auto-merges, never `--force` pus
 <!-- FREEZE:IF preset == "oss" -->
 - `.claude/stack.yaml` — `extras.upstream_remote` (default `upstream`) and `extras.upstream_repo` (optional `owner/repo`) for OSS fork→upstream PR routing.
 <!-- FREEZE:ENDIF -->
-- `runs/{epic_id}/{task_id}/` — context for body composition (final findings, commit summary, gate results).
+- `runs/{epic_id}/` — context for body composition. Reads epic-level summary artifacts (`03-verify-epic.json`, `04-review-epic.json`) plus per-task artifacts under each `{task_id}/` subdir (final `0X-verify.json` / `0X-review.json` for counts).
 - Local git state: `git rev-parse --abbrev-ref HEAD`, `git remote get-url origin`, `git log <base>..HEAD`.
 
 The active preset variant of `git-workflow.md` is in `.claude/ruleset/`:
@@ -59,13 +62,13 @@ Honour whatever toggles the user has customised.
 
 > **Step ordering is load-bearing.** The `pr_required: false` short-circuit (step 2) MUST run BEFORE any host/remote/network operation (steps 3+). Solo + no-remote setups have no `origin`; running host detection first surfaces a confusing `Cannot resolve host` error instead of the clean `Solo preset — no MR required` exit. Do not reorder.
 
-1. **Task exists and done.** Load the task entry from `epic-{id}-tasks.yaml` (the `{id}` comes from the task's epic linkage). If the task is missing → abort: `Task <id> not found in any epic-*-tasks.yaml.` If `status != done` → abort: `Task must be /002-implement-complete (status: done) before merging.`
+1. **Epic exists and every task done.** Load `epics.yaml` and confirm `<epic-id>` is present. Load `epic-{id}-tasks.yaml`. For every task entry, verify `status: done`. If any task has any other status → abort: `Epic <epic-id> has incomplete tasks: <comma-separated task ids and their statuses>. Run /002-implement <epic-id> first.` Capture the resolved `epic_id` from the file's name.
 <!-- FREEZE:IF !pr_required -->
 2. **`pr_required` toggle short-circuit (runs BEFORE any remote/host/network operation).** Read the `pr_required` toggle from `.claude/ruleset/git-workflow.md`. If `pr_required: false`:
 <!-- FREEZE:IF tag_task_commits -->
-   - If the toggle block also has `tag_task_commits: true` (solo preset default): run `git tag "${EPIC_ID}/${TASK_ID}" HEAD` (substitute the literal epic id and task id resolved in step 1, e.g. `git tag E-007/T-014 HEAD`). If the tag already exists (`git rev-parse --verify "${EPIC_ID}/${TASK_ID}" >/dev/null 2>&1`), skip the tag creation silently. Print: `Solo preset — tagged HEAD as <epic_id>/<task_id>. No MR required.` Exit 0.
+   - If the toggle block also has `tag_task_commits: true` (solo preset default): run `git tag "${EPIC_ID}" HEAD` (substitute the literal epic id, e.g. `git tag E-007 HEAD`). If the tag already exists (`git rev-parse --verify "${EPIC_ID}" >/dev/null 2>&1`), skip the tag creation silently. Print: `Solo preset — tagged HEAD as <epic_id>. No MR required.` Exit 0.
 <!-- FREEZE:ELSE -->
-   - Print `Solo preset — /006-merge is a no-op for this task. Task complete on main.` Exit 0.
+   - Print `Solo preset — /006-merge is a no-op for this epic. Epic complete on main.` Exit 0.
 <!-- FREEZE:ENDIF -->
 
    This short-circuit ensures solo + no-remote runs never reach host detection. Do NOT push, do NOT call `gh`/`glab`, do NOT touch the network on the solo path.
@@ -178,29 +181,49 @@ If push fails (non-fast-forward, rejected, network) → abort and surface the ra
 
 ### Phase 2 — Compose PR title and body
 
-**Title.** Render `pr_title_pattern`. Default `"<type>(T-NNN): <title>"`. Substitutions:
-- `<type>` — derived from the task's primary commit message (typically `feat`, `fix`, `chore`, `refactor`). Read from `git log <base>..HEAD --format=%s` and pick the type prefix of the most recent commit; fall back to `feat` if none parseable.
-- `T-NNN` — the task id.
-- `<title>` — the task's `title` field from `epic-{id}-tasks.yaml`.
+**Title.** Render `pr_title_pattern`. Default `"epic(E-NNN): <title>"`. Substitutions:
+- `E-NNN` — the epic id.
+- `<title>` — the epic's `title` field from `epics.yaml`.
 
 **Body.** Render `pr_body_template`. Default template:
 
 ```
 ## Summary
-- <task title>
-- Epic: E-NNN
-- Acceptance criteria: <list from epic-{id}-tasks.yaml task.acceptance_criteria, one per bullet>
+- <epic title>
+- Epic id: E-NNN
+- Tasks: <N> tasks delivered (T-001, T-002, ..., T-N)
+
+## Tasks
+
+### T-001 — <task title>
+Acceptance criteria:
+- <criterion 1>
+- <criterion 2>
+ATDD spec: <task.atdd_spec>
+
+### T-002 — <task title>
+Acceptance criteria:
+- <criterion 1>
+ATDD spec: <task.atdd_spec>
+
+<... one section per task in epic-{id}-tasks.yaml ...>
+
+## Business scenarios
+
+<verbatim Gherkin block-scalar from epics.yaml.business_scenarios>
 
 ## Tests
-- Domain-tests: <count from 03-verify.json or grep on diff>
-- ATDD spec: <path from task.atdd_spec> (executed at epic close-out)
+- Domain-tests: <count from sum of every task's 03-verify.json>
+- ATDD specs delivered: <count of task.atdd_spec entries; executed at epic close-out>
 
 ## Gates
-- All gates from .claude/stack.yaml.gates passed.
-- Code review passed (0 findings).
+- All gates from .claude/stack.yaml.gates passed for every task (epic-level 03-verify-epic.json: ok).
+- Code review passed for every task (epic-level 04-review-epic.json: ok).
 
-## Notes
-<optional — from task.notes if present; omit section if empty>
+## Commits
+- Implementation: <N> impl commits, one per task.
+- Verify fixes: <N> fix(verify) commits across all tasks (from /003 self-heal).
+- Review fixes: <N> fix(review) commits across all tasks (from /004 self-heal).
 ```
 
 <!-- FREEZE:IF preset == "enterprise" -->
@@ -220,7 +243,7 @@ If push fails (non-fast-forward, rejected, network) → abort and surface the ra
 - Compliance: @<compliance>
 ```
 
-Parse `<ticket-id>` from the branch name (e.g. `task/T-001-CM-12345-something` → `CM-12345`) or from any commit message body. The pattern is preset-defined (default: `[A-Z]+-\d+`). If no match → abort: `Enterprise preset requires a change-management ticket id (pattern: <pattern>) in branch name or commit messages.`
+Parse `<ticket-id>` from the branch name (e.g. `epic/CM-12345/E-001-subscription-cancellation` → `CM-12345`) or from the epic entry's `cm_ticket:` field in `epics.yaml`. The pattern is preset-defined (default: `[A-Z]+-\d+`). If no match → abort: `Enterprise preset requires a change-management ticket id (pattern: <pattern>) in branch name or epics.yaml cm_ticket field.`
 <!-- FREEZE:ENDIF -->
 
 <!-- FREEZE:IF preset == "oss" -->
@@ -275,9 +298,9 @@ GLAB_HOST="$HOST" glab mr create \
 
 Omit `--reviewer` if `default_reviewers` is empty OR if `require_codeowners_review: true` for the active preset (enterprise OR oss — CODEOWNERS handles assignment server-side). Omit `--label` if `pr_labels` is empty. Capture stdout — both tools print the resulting URL. Print the URL verbatim.
 
-### Phase 4 — Update task entry
+### Phase 4 — Update epic entry
 
-Append `pr_url: <url>` to the task entry in `epic-{id}-tasks.yaml`. Preserve the existing `status: done`. **Do not** introduce a post-done state — `/006-merge` does not advance the task lifecycle beyond `done`.
+Append `pr_url: <url>` to the epic entry in `epics.yaml`. Preserve the existing epic `status` (epics use a different status field semantic than tasks; do not flip it from this command). **Do not** introduce a post-done state — `/006-merge` does not advance the epic lifecycle beyond what `/002-implement` set.
 
 ### Phase 5 — Summary
 
@@ -290,8 +313,8 @@ Base:  <base_branch>
 ```
 
 Then a next-step hint:
-- If more pending tasks remain in the epic → suggest `/002-implement T-NNN`.
-- If this was the last task in the epic → suggest `/003-verify-dod T-LAST --epic-close` to run ATDD specs, then `/007-promote` if `stack.yaml.promote` is configured.
+- Suggest `/003-verify-dod <epic-id> --epic-close` if ATDD specs have not yet been executed against near-real infrastructure (the per-task `/003` runs during the epic skip ATDD specs by default).
+- Then suggest `/007-promote` if `stack.yaml.promote` is configured.
 <!-- FREEZE:ENDIF -->
 
 ## Discipline
@@ -300,13 +323,13 @@ Then a next-step hint:
 - **Never bypass `git-workflow.md`.** If the user customised the preset's toggles, honour them. Do not silently substitute defaults when a key is present.
 - **Never auto-merge.** No `gh pr merge`, no `glab mr merge`, no squash, no rebase. `/006-merge` opens the MR. Merging is a human or platform decision.
 - **Never amend.** This command never touches commit content. DCO/signing failures surface as aborts with manual fix instructions.
-- **One MR per task.** If `pr_url` already exists on the task entry, surface it and exit rather than opening a duplicate.
+- **One MR per epic.** If `pr_url` already exists on the epic entry, surface it and exit rather than opening a duplicate.
 
 ## Failure modes
 
 | Condition | Action |
 |---|---|
-| Task not found or `status != done` | Abort with the message above. |
+| Epic not found OR any task has `status != done` | Abort with the message above. |
 | Branch mismatch with `branch_name_pattern` | Warn, proceed. |
 | Remote host unsupported | Abort: `Unsupported remote. Push branch and open MR manually.` |
 | `gh` or `glab` not installed | Abort with install hint URL. |

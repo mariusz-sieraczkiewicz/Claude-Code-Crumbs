@@ -68,7 +68,7 @@ require_cla: true
 auto_invoke_verify: true
 auto_fix_on_verify_fail: true   # /003-verify-dod findings auto-dispatch feedback-implementer (loop max 3); false = print findings, contributor runs /005-implement-feedback manually
 auto_fix_on_review_fail: true   # /004-code-review Violations auto-dispatch feedback-implementer (loop max 3); false = print Violations and exit read-only — useful when maintainer wants to gate fixes manually
-branch_name_pattern: "feature/{task_id}-{slug}"   # OSS convention: feature/ prefix, contributors fork
+branch_name_pattern: "feature/{epic_id}-{slug}"   # OSS convention: feature/ prefix, contributors fork
 ```
 
 ## Mechanical enforcement

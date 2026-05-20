@@ -49,6 +49,16 @@
         "closed_at": {
           "type": "string",
           "format": "date"
+        },
+        "slug": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+          "description": "Optional explicit slug for the epic. Used by /002-implement to substitute {slug} in branch_name_pattern (e.g. epic/E-007-subscription-cancellation). When omitted, /002-implement derives the slug from `title` via kebab-case at branch-creation time. Author explicitly only when auto-derivation produces something unwieldy."
+        },
+        "pr_url": {
+          "type": "string",
+          "format": "uri",
+          "description": "URL of the epic-level merge/pull request opened by /006-merge. Appended by /006-merge after a successful gh/glab PR-create call. Idempotency anchor — /006-merge refuses to open a second PR when this field is present."
         }
       }
     }

@@ -84,15 +84,18 @@ This subagent does not get to skip TDD just because the implementation already e
 
 ## Commits
 
-Commits go on the **same task branch** the implementer already created. Naming follows Conventional Commits and matches the **Rule** in `.claude/ruleset/git-workflow.md`:
+Commits go on the **same epic branch** the `/002-implement` orchestrator created (or `main` under the solo preset's `allow_commit_to_main: true`). The branch name follows `branch_name_pattern` in `.claude/ruleset/git-workflow.md` (default: `epic/{epic_id}-{slug}`). The branch is shared by every task in the epic and every fix iteration — your commit stacks on top of the prior task's impl commit and any earlier fix-iteration commits.
 
-- Verifier-driven fix (called from `/003` Phase 2): `fix(T-NNN): address <rule>` — e.g. `fix(T-014): address linter-no-any`.
-- Reviewer-driven fix (called from `/004` Phase 2): `refactor(T-NNN): address <rule>` — e.g. `refactor(T-014): address architecture-vertical-slice`.
-- Missing-test fix: `test(T-NNN): add <scenario>` — e.g. `test(T-014): add domain-test for invoice-pro-rata`.
-- Documentation fix surfaced by review: `docs(T-NNN): address <rule>`.
-- Build/config fix surfaced by gates: `chore(T-NNN): address <rule>`.
+You make **exactly one commit per dispatch** when `status: "ok"`. No commit under `status: "blocked"` (the working tree state is incomplete; downstream iterations or manual intervention finish the job). Naming follows Conventional Commits and the **Rule** in `.claude/ruleset/git-workflow.md`:
 
-One commit per **logical fix grouping**, NOT one commit per Finding. Group by file or by rule. Multiple Findings on the same file under the same rule → one commit. Multiple Findings spanning files but under one rule → still one commit if the diff is coherent.
+- Verifier-driven fix (called from `/003` Phase 2): `fix(verify): <task-id> <one-line summary>` — e.g. `fix(verify): T-014 add idempotency guard + Domain-test for repeat-cancel no-op`. The Conventional Commits scope is the literal string `verify` (not the task id). The task id appears in the subject body so the audit trail is greppable end-to-end.
+- Reviewer-driven fix (called from `/004` Phase 2): `fix(review): <task-id> <one-line summary>` — e.g. `fix(review): T-014 typed-error translation for billing.cancel`. Scope = literal `review`.
+
+The commit body MAY list the rule slugs addressed (e.g. `Rules: linter-no-any, architecture-vertical-slice`), bracketed by blank lines from the subject. Keep it under ~10 lines; verbose narrative goes in `payload.fixes_applied[].change_summary`, not the commit body.
+
+**Staging discipline.** Stage only files you modified during this fix iteration. Never `git add -A` / `git add .` — they sweep up unrelated working-tree changes (e.g. agent transient artifacts, IDE droppings). Explicit file-by-file staging. The implementer's prior commit and earlier fix commits are already part of HEAD; do not re-stage anything that is unchanged since they ran.
+
+**One commit per iteration, not per Finding.** The whole fix iteration produces a single commit even when it touches multiple files or addresses multiple Findings under multiple rules. The audit trail granularity is the iteration, not the rule — finer granularity belongs in `payload.fixes_applied[]`. This matches the `03b-fix.json` / `04b-fix.json` artifact-per-iteration shape: one commit = one fix artifact.
 
 Never amend prior commits. Always append new commits. Never force-push (see `ruleset/git-workflow.md`).
 
@@ -129,8 +132,7 @@ Validated against `schemas/run-phase.schema.json`. Schema-conformant shape:
       }
     ],
     "commits_made": [
-      "fix(T-014): address linter-no-any",
-      "test(T-014): add domain-test for invoice-pro-rata"
+      "<40-char sha of the single commit for this fix iteration>"
     ]
   }
 }

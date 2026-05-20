@@ -57,7 +57,7 @@ tag_task_commits: true
 auto_invoke_verify: true                  # gates still run even though review is skipped
 auto_fix_on_verify_fail: true             # solo dev wants self-heal: /003 findings auto-dispatch feedback-implementer (loop max 3); set false to print findings and run /005-implement-feedback manually
 auto_fix_on_review_fail: true             # when /004 is run manually and returns Violations, auto-dispatch feedback-implementer (loop max 3); set false to print Violations and exit read-only
-branch_name_pattern: "task/{task_id}-{slug}"   # informational only; allow_commit_to_main=true means usually no branch is created
+branch_name_pattern: "epic/{epic_id}-{slug}"   # informational only; allow_commit_to_main=true means usually no branch is created
 ```
 
 `auto_invoke_review: false` — solo dev opts out of automatic `/004-code-review` after `/002-implement`. Run it manually when you want a second pair of (LLM) eyes.

@@ -197,30 +197,31 @@ In all "resume" paths above, the task status in `epic-{id}-tasks.yaml` is set to
 
 ### Phase 1 — Branch
 
+**Branch model.** One branch per **epic** (not per task). The branch is created once at the start of the `/002-implement` invocation (epic-mode outer Phase 1, or task-mode first-task entry) and reused for every task in the epic. Each task contributes one or more commits on the same branch (impl commit from the implementer; subsequent verify-fix and review-fix commits from the feedback-implementer during `/003` and `/004` self-heal). The merge happens once at epic close via `/006-merge <epic-id>`.
+
 **Branch handling dispatch.** Read `allow_commit_to_main` from the YAML toggle block. The toggle determines whether `branch_name_pattern` is even consulted:
 
-- If `allow_commit_to_main: true` → SKIP branch creation entirely. Do NOT read `branch_name_pattern` (it is irrelevant when commits land on the default branch). The implementer commits directly to `main` (or the configured default branch). Jump to Phase 1.5.
-- If `allow_commit_to_main: false` (default) → read `branch_name_pattern` and compute the branch name as described below, then check out a new branch.
+- If `allow_commit_to_main: true` (solo preset) → SKIP branch creation entirely. Do NOT read `branch_name_pattern`. Implementer + feedback-implementer commit directly to `main` (or the configured default branch). Jump to Phase 1.5.
+- If `allow_commit_to_main: false` (default) → read `branch_name_pattern` and compute the **epic branch** name as described below, then check out it (or create from base if it does not exist).
 
 The remainder of this section applies ONLY when `allow_commit_to_main: false`:
 
-- Read `branch_name_pattern` from the YAML toggle block in `.claude/ruleset/git-workflow.md`. Default: <!-- FREEZE:VAL branch_name_pattern -->`task/{task_id}-{slug}`<!-- FREEZE:ENDVAL -->. Recognised substitution keys: `{task_id}`, `{slug}`, `{ticket_id}`.
-  1. Substitute `{task_id}` with the actual id and `{slug}` with the task's `slug` field (or a kebab-cased `title` fallback).
+- Read `branch_name_pattern` from the YAML toggle block in `.claude/ruleset/git-workflow.md`. Default: <!-- FREEZE:VAL branch_name_pattern -->`epic/{epic_id}-{slug}`<!-- FREEZE:ENDVAL -->. Recognised substitution keys: `{epic_id}`, `{slug}`, `{ticket_id}`.
+  1. Substitute `{epic_id}` with the resolved epic id (e.g. `E-003`).
+  2. **Resolve `{slug}`** — read the epic entry from `docs/planning/epics.yaml`. Prefer the explicit `slug:` field if present; otherwise derive from `title:` via kebab-case (lowercase, strip non-alphanumerics, collapse runs of `-`). Example: title `"Subscription cancellation"` → slug `subscription-cancellation`. If the derived slug is empty (title is non-Latin / pure punctuation), abort: `Cannot derive {slug} for epic <epic-id> from title "<...>". Add an explicit slug: field to the epic entry in epics.yaml.`
 <!-- FREEZE:IF require_ticket_reference -->
-  2. **Resolve `{ticket_id}`** (only required when the pattern contains the placeholder; enterprise default `task/{ticket_id}/{task_id}-{slug}`):
-     a. Read `task.cm_ticket` from the current task entry in `epic-{id}-tasks.yaml`.
-     b. If absent, fall back to `epic.cm_ticket` from the matching epic entry in `epics.yaml`.
-     c. If still absent AND the pattern contains `{ticket_id}`:
-        - If `git-workflow.md.require_ticket_reference: true` → ABORT with: `Task T-NNN has no cm_ticket and parent epic has none either. Add one via /001-plan or edit epic-NNN-tasks.yaml. (Enterprise preset requires CM ticket per task or epic.)`
-        - Else → substitute `{ticket_id}` with the empty string and emit a visible warning (non-enterprise edge case where the pattern references the placeholder but no ticket is mandated).
-     d. **Validate against `ticket_prefixes`** from `git-workflow.md` (if the key is present): the resolved `<id>` must start with one of the configured prefixes (e.g. `CHG-`, `CM-`, `JIRA-`, `INC-`). Reject anything starting with `T-` — the plugin's own task-id namespace is reserved and must never be reused as a ticket id. On mismatch → ABORT with the resolved id, the allowed prefixes, and the source (task vs epic) from which the id was read.
+  3. **Resolve `{ticket_id}`** (only required when the pattern contains the placeholder; enterprise default `epic/{ticket_id}/{epic_id}-{slug}`):
+     a. Read `epic.cm_ticket` from the matching epic entry in `epics.yaml`.
+     b. If absent AND the pattern contains `{ticket_id}`:
+        - If `git-workflow.md.require_ticket_reference: true` → ABORT with: `Epic E-NNN has no cm_ticket. Add one via /001-plan or edit epics.yaml. (Enterprise preset requires CM ticket per epic.)`
+        - Else → substitute `{ticket_id}` with the empty string and emit a visible warning.
+     c. **Validate against `ticket_prefixes`** from `git-workflow.md` (if the key is present): the resolved `<id>` must start with one of the configured prefixes (e.g. `CHG-`, `CM-`, `JIRA-`, `INC-`). Reject anything starting with `E-` or `T-` — the plugin's own id namespace is reserved and must never be reused as a ticket id. On mismatch → ABORT with the resolved id, the allowed prefixes, and the source (epic) from which the id was read.
 <!-- FREEZE:ENDIF -->
 - Determine the default base branch (`main` unless `stack.yaml.paths.default_branch` overrides).
-- **Branch collision check.** Before syncing, run `git show-ref --verify --quiet refs/heads/<computed-branch-name>`. If the branch exists:
-  - If `HEAD` already points at that branch (`git rev-parse --abbrev-ref HEAD` equals the computed name) AND any commit on that branch carries the current task id OR the resolved ticket id in its subject (per the enterprise convention `feat(scope): description [TICKET-ID]`, the task id is not in the Conventional-Commits scope) — match via `git log --oneline --grep="$TASK_ID\|$TICKET_ID" <branch>` — treat this as a **resume**: skip base checkout, skip branch creation, continue at Phase 1.5.
-  - Otherwise → abort: `Branch <computed-branch-name> exists but does not appear to be a resume from a prior /002-implement run. Inspect manually before retrying.`
-- Run `git checkout <base>` then `git pull --ff-only` to sync.
-- Create and check out the new branch: `git checkout -b <computed-branch-name>`.
+- **Epic branch check.** Run `git show-ref --verify --quiet refs/heads/<computed-branch-name>`. Two cases:
+  - **Branch exists** → this is a **resume** (a prior `/002-implement <epic-id>` run created it; later tasks reuse it). Run `git checkout <computed-branch-name>`. Do NOT pull from base — that would drag in main-branch changes mid-epic and risk conflicts with the in-progress epic work; rebases against base are owned by the user before opening the PR. Skip the `git checkout -b` step. Continue at Phase 1.5.
+  - **Branch does NOT exist** → this is a **fresh epic start**. Run `git checkout <base>` then `git pull --ff-only` to sync. Then create and check out the epic branch: `git checkout -b <computed-branch-name>`.
+- The branch persists across the entire epic loop. Subsequent tasks in the same epic loop iteration find the branch already checked out (HEAD on the epic branch) and skip both the create and the checkout step — they simply commit on top.
 
 ### Phase 1.5 — Plan checkpoint (plan-only implementer dispatch + user approval)
 
@@ -334,7 +335,7 @@ The implementer is expected to:
 - Run the **TDD entry-point** loop per `.claude/ruleset/testing.md`: Domain-test RED → minimal production code GREEN → REFACTOR. Repeat per acceptance until the task is fully green.
 - Produce **one ATDD spec** at `tests/atdd/<slug>.spec.ts` (path may differ per `stack.yaml.paths.atdd_dir`). The spec is **authored only** during the task — it is **not executed per-task**. It will be executed at epic close-out.
 - Produce **one or more Domain-tests** covering happy path + edge cases.
-- Make **one commit** on the task branch (or on `main` if the solo preset is active). Commit message follows `.claude/ruleset/git-workflow.md` conventions (Conventional Commits by default). Never amend.
+- Make **one commit** on the epic branch (or on `main` if the solo preset is active). The commit covers only this task's files. Commit message follows `.claude/ruleset/git-workflow.md` conventions (Conventional Commits by default); the scope should include the task id, e.g. `feat(billing): cancel subscription (T-014)`. Never amend. Each subsequent task's implementer commit stacks on top of the previous one — the epic branch grows linearly through the epic loop.
 <!-- FREEZE:IF require_signed_commits -->
 - Sign the commit if `require_signed_commits: true` is set in the toggle block.
 <!-- FREEZE:ENDIF -->
@@ -445,7 +446,7 @@ require_signed_commits: true | false   # default false
 <!-- FREEZE:IF require_dco_signoff -->
 require_dco_signoff: true | false      # default false (true for oss preset)
 <!-- FREEZE:ENDIF -->
-branch_name_pattern: "task/{task_id}-{slug}"
+branch_name_pattern: "epic/{epic_id}-{slug}"
 ```
 
 Notes:
@@ -492,7 +493,7 @@ The active preset populates the toggle block at bootstrap as follows. After boot
 | `require_signed_commits`  | true       |
 <!-- FREEZE:ENDIF -->
 
-The `branch_name_pattern` is `task/{task_id}-{slug}` across all presets unless the project overrides.
+The `branch_name_pattern` is `epic/{epic_id}-{slug}` across all presets unless the project overrides (enterprise typically adds the ticket prefix: `epic/{ticket_id}/{epic_id}-{slug}`).
 
 ## Failure modes
 
@@ -519,7 +520,7 @@ The `branch_name_pattern` is `task/{task_id}-{slug}` across all presets unless t
   - `in_progress` stays `in_progress` on any hard halt — the user clears it manually once the underlying issue is resolved.
 - **Plan checkpoint is non-negotiable.** Phase 1.5 always runs before Phase 2. There is no toggle to skip it. The point of the checkpoint is to catch wrong assumptions before they become commits.
 - **Plan artifacts are append-only.** `02a-plan.json`, `02b-plan.json`, … are never overwritten. If the user picks Iterate, the next letter is written; the previous letter remains as audit history.
-- **Never amend commits.** The implementer makes one commit; self-heal feedback rounds inside `/003` and `/004` produce additional commits stacked on top.
+- **Never amend commits.** The implementer makes one commit per task; self-heal feedback rounds inside `/003` and `/004` produce additional commits stacked on top of the epic branch (one commit per fix iteration).
 - **Never force-push.** If history needs cleanup, leave it for `/006-merge` (which may squash on PR creation per `git-workflow.md`).
 <!-- FREEZE:IF require_signed_commits -->
 - **Honour `require_signed_commits`** from the chosen preset. If true, every commit (implementer + feedback rounds) is signed.
@@ -527,7 +528,7 @@ The `branch_name_pattern` is `task/{task_id}-{slug}` across all presets unless t
 - **Honour `branch_name_pattern`.** Do not improvise branch names; the pattern is the contract.
 - **Filesystem-only subagent comms.** Never rely on in-memory state between subagent invocations — the main thread reads artifacts from `.claude/runs/{epic_id}/{task_id}/` after each subagent returns. Ruleset content is verbatim-injected into the prompt body, never via `@`-include (per CONTEXT.md "Ruleset injection").
 - **Append-only runs history.** Never overwrite or delete prior phase artifacts within a task run. Plan iterations get letter suffixes (`02a`, `02b`, `02c`). Self-heal rounds inside `/003` and `/004` get letter suffixes (`03b`, `03c`, `04b`, `04c`) and are governed by those commands.
-- **Single commit per task by default.** The implementer produces one commit per task. Self-heal rounds inside `/003`/`/004` add commits on top — they do not amend or squash. Squashing (if desired) is a `/006-merge` concern, governed by `git-workflow.md`.
+- **One commit per stage.** The implementer produces one commit per task (impl stage). Self-heal rounds inside `/003`/`/004` each add one commit per fix iteration (`fix(verify): T-NNN <summary>`, `fix(review): T-NNN <summary>`). All commits stack on the epic branch; no amend, no squash. Squashing (if desired) is a `/006-merge` concern, governed by `git-workflow.md`. Epic branch grows monotonically through the whole epic loop.
 - **Zero tolerance on Findings.** Any finding from `/003` or `/004` blocks DoD. No severity tiers, no overrides. The self-heal loops inside those commands address every finding; they never argue with them.
 
 ## Vocabulary discipline
@@ -612,7 +613,7 @@ Given epic `E-003` with three pending tasks `T-014`, `T-015`, `T-016` (each depe
 Given task `T-014` belonging to epic `E-003`:
 
 1. **Phase 0** — `/002-implement T-014` locates `docs/planning/epic-003-tasks.yaml`, finds entry `id: T-014, status: pending, slug: cancel-subscription, acceptance_criteria: ["SubscriptionService.cancel(...) persists status=cancelled and emits SubscriptionCancelled event", "Calling cancel on already-cancelled subscription is a no-op"]`. Flips status to `in_progress`. Acquires `.claude/runs/.lock-E-003-T-014/`. Creates `.claude/runs/E-003/T-014/`.
-2. **Phase 1** — Branch pattern `task/{task_id}-{slug}` resolves to `task/T-014-cancel-subscription`. Checked out from `main`.
+2. **Phase 1** — Branch pattern `epic/{epic_id}-{slug}` resolves to `epic/E-003-subscription-cancellation` (slug derived from epic title "Subscription cancellation"). Branch does not exist → checked out from `main` as fresh epic start. (If the user is re-running `/002-implement E-003` to resume an interrupted batch, the branch already exists → reuse without pulling base.)
 3. **Phase 1.5** — `implementer` (plan-only) writes `02a-plan.json` with file list, RED sketch, GREEN shape, REFACTOR notes, ATDD spec shape. User picks **Approve**.
 4. **Phase 2** — `implementer` (full) receives task YAML, the Gherkin block for `User cancels subscription`, ruleset subset verbatim, `stack.yaml.extras`, and the approved `02a-plan.json`. Writes Domain-tests in `tests/domain/cancel-subscription.test.ts`, production code in `src/billing/cancel.ts`, an ATDD spec in `tests/atdd/cancel-subscription.spec.ts`, commits with message `feat(billing): cancel subscription (T-014)`, writes `02-impl.json` with `status: ok`.
 5. **Phase 4** — `/003-verify-dod T-014` runs `stack.yaml.gates`. All pass → `03-verify.json` status `ok`.

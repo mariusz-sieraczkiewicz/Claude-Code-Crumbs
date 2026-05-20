@@ -114,7 +114,7 @@ The orchestration pattern used by `/001`..`/005` commands. Each command spawns a
 - `/001-plan` — epic decomposition + BS authoring (replaces mentora `plan-tasks`)
 - `/002-implement` — **dual-mode orchestrator** (replaces `plan-and-implement` + the deleted batch conductor). Dispatches on arg shape:
   - **Epic-default mode** (`<epic-id>`): iterates all `status: pending` tasks in dependency order; each task gets its own `implementer` subagent dispatch. Per task:
-    1. Starts a new branch (naming convention in `git-workflow.md`)
+    1. Creates the **epic branch** if it does not exist (`epic/{epic_id}-{slug}` by default, naming convention in `git-workflow.md`). Reuses the existing epic branch on resume or when subsequent tasks in the loop run on the already-checked-out branch. One branch per epic; every task in the epic commits onto the same branch (impl commit per task + later `fix(verify)` / `fix(review)` commits from `/003`/`/004` self-heal).
     2. **Plan checkpoint** (Phase 1.5) — plan-only `implementer` dispatch + `AskUserQuestion` (Approve / Iterate / Cancel); Iterate re-dispatches with feedback (numbered `02a-plan`, `02b-plan`, ...)
     3. Approve → TDD impl loop (Domain-tests RED → code GREEN → REFACTOR → write ATDD spec)
     4. Commit after task green (single commit per task by default)
@@ -125,7 +125,7 @@ The orchestration pattern used by `/001`..`/005` commands. Each command spawns a
 - `/003-verify-dod` — DoD gate with **self-healing loop** (also invokable standalone). Phase 1 detect → Phase 2 fix (dispatch `feedback-implementer` with findings → `03b-fix.json`) → Phase 3 re-verify (dispatch `verifier` → `03c-verify.json`) → Loop Phase 2 → Phase 3 **max 3 iterations** (subsequent iterations numbered `03d/03e/03f/03g`). Self-heal gated by `auto_fix_on_verify_fail` toggle (default true for solo/small-team/oss; false for enterprise → read-only fallback + suggest `/005`). Fail after 3 iterations escalates to user.
 - `/004-code-review` — review gate with **self-healing loop** (also invokable standalone). Same Phase shape as `/003`, artifacts numbered `04b-fix.json` / `04c-review.json`, gated by `auto_fix_on_review_fail` toggle (same default split).
 - `/005-implement-feedback` — **epic-level user feedback flow**. Args `<epic-id> [feedback-text]`. Step 0 gather feedback (interactive if `$2` empty) → Step 1 clarify + research (PRD epic section, `epic-{id}-tasks.yaml`, relevant ruleset) → Step 2 plan new tasks appended to `epic-{id}-tasks.yaml` (no renumbering of done tasks) → Step 3 ATDD implementation of new tasks (delegates to `/002-implement` semantics scoped to new task IDs) → Step 4 `/003-verify-dod` semantics scoped to new tasks → Step 5 `/004-code-review` semantics on uncommitted diff from new tasks → Step 6 **gatekeeper audit** subagent (zero-tolerance verification of draft completion report). Final status `COMPLETE` or `NEEDS_ATTENTION`. NOT a finding-fixer.
-- `/006-merge` — opens MR/PR (separate command, user-invoked after `/002` proposes it). **Applies conventions from `.claude/ruleset/git-workflow.md`**: PR title format, description template, base branch, reviewers, labels. Invokes `gh pr create` / `glab mr create` accordingly.
+- `/006-merge` — opens **one MR/PR per epic** (argument `<epic-id>`, not per task). User-invoked after `/002` proposes it (epic loop completes + `/003` + `/004` both pass). **Applies conventions from `.claude/ruleset/git-workflow.md`**: PR title format (default `epic(E-NNN): <title>`), description template (aggregates every task's acceptance criteria + ATDD specs + gate/review status from `runs/{epic_id}/03-verify-epic.json` and `04-review-epic.json`), base branch, reviewers, labels. Invokes `gh pr create` / `glab mr create`. Solo preset (`pr_required: false`) → no-op, optionally tags the epic id at HEAD.
 - `/007-promote` — *(lightweight)* triggers a **pre-existing platform workflow** (e.g. `gh workflow run promote-staging.yml`, GitLab pipeline). Plugin reads target workflow from `stack.yaml.promote`. Plugin does **not** orchestrate the promotion itself; the platform (GitHub Actions / GitLab CI) owns the actual deploy logic. Optional command — skipped if `stack.yaml.promote` is empty.
 
 **Too-big detection** (`/002` → `/001` re-split):
@@ -205,6 +205,15 @@ docs/
   stack.yaml                        # stack-adaptation config (path overrides, test cmds, gate commands)
 CONTEXT.md                          # project glossary (grill-with-docs format)
 ```
+
+## Branch / commit / merge model
+
+- **One branch per epic, not per task.** Branch naming: `epic/{epic_id}-{slug}` by default (pattern in `git-workflow.md`). Created once by `/002-implement` at the start of the epic loop. Every task in the epic commits onto this same branch.
+- **Commits per stage, not just per task.** Each task produces an **impl commit** from the implementer (`feat(scope): <title> (T-NNN)`). Each `/003-verify-dod` self-heal iteration that succeeds produces one `fix(verify): T-NNN <summary>` commit. Each `/004-code-review` self-heal iteration that succeeds produces one `fix(review): T-NNN <summary>` commit. All commits stack linearly on the epic branch; never amend, never force-push.
+- **Slug derivation.** `{slug}` in `branch_name_pattern` substitutes from `epic.slug` if explicit; otherwise auto-derived from `epic.title` via kebab-case (lowercase, alphanumerics + dashes, collapse runs) at branch-creation time.
+- **One merge request per epic.** `/006-merge <epic-id>` opens a single MR/PR with the cumulative epic-branch diff against `<base>`. Title: `epic(E-NNN): <epic title>`. Body aggregates every task's acceptance criteria + ATDD specs + gate/review status. Solo preset (`pr_required: false`) → no-op (optional epic tag at HEAD).
+- **No per-task PRs.** The earlier per-task branch + per-task PR model is replaced: a 10-task epic produces 1 branch and 1 PR, not 10 branches and 10 PRs. `depends_on` ordering is naturally resolved by epic-loop iteration — later tasks see earlier tasks' commits already on the branch.
+- **Resume.** A prior `/002-implement <epic-id>` invocation that created the epic branch + halted mid-epic resumes by reusing the existing branch (no base pull, no re-create); subsequent tasks commit on top.
 
 ## Relationships
 

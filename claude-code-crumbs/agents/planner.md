@@ -110,6 +110,7 @@ In fresh mode, additionally:
      goal: Allow paid users to cancel and retain access until end of period
      status: pending
      cm_ticket: CHG-12345   # required when git-workflow.md has require_ticket_reference: true; otherwise omit
+     slug: subscription-cancellation   # optional. Used by /002-implement to resolve {slug} in branch_name_pattern. When omitted, slug is derived from `title` via kebab-case at branch-creation time. Author it explicitly only when the auto-derivation produces something unwieldy (e.g. title is non-Latin or starts with a number).
      business_scenarios: |
        ## Scenario: User cancels an active subscription
        Given the user has an active paid subscription

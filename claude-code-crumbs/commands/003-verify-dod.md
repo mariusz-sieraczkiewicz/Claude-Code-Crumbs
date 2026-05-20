@@ -239,15 +239,16 @@ Use the Task tool with `subagent_type: "feedback-implementer"` (canonical payloa
 The feedback-implementer's contract (defined in its subagent prompt) is:
 
 1. Read the findings file. For each finding, edit source files to address the root cause. Strict ATDD-E2E: if the finding is a missing/failing test, write/fix the test first (RED), then the implementation (GREEN).
-2. After all fixes, re-run the failing gate commands locally (subset of `stack.yaml.gates` whose names appear in `findings[].rule`) to confirm exit 0. If any still fail, the fix is incomplete — emit `status: "blocked"` with `payload.reason` populated.
-3. Write the target artifact (`03b-fix.json` / `03d-fix.json` / `03f-fix.json`) with (canonical payload shape: `agents/feedback-implementer.md`):
+2. After all fixes, re-run the failing gate commands locally (subset of `stack.yaml.gates` whose names appear in `findings[].rule`) to confirm exit 0. If any still fail, the fix is incomplete — emit `status: "blocked"` with `payload.reason` populated AND skip the commit step below (do not commit broken fixes).
+3. **Commit the fix.** When `status: "ok"` (gates re-pass locally), make **one commit** on the current epic branch (or `main` under solo). Commit message format: `fix(verify): <task-id> <one-line summary of the change>` (Conventional Commits scope = `verify`; the body MAY list the rule slugs addressed). Stage only files modified during this fix iteration. Never amend. The new commit stacks on top of the prior task impl commit and any earlier `fix(verify): ...` / `fix(review): ...` commits in this epic. Record the resulting sha in `payload.commits_made[0]`. Skip the commit step entirely under `status: "blocked"` (no clean state to capture).
+4. Write the target artifact (`03b-fix.json` / `03d-fix.json` / `03f-fix.json`) with (canonical payload shape: `agents/feedback-implementer.md`):
    - `phase: "feedback-impl"`, `agent: "feedback-implementer"`, `task_id`, `epic_id`, `status: "ok" | "blocked"`, `started_at`, `finished_at`.
    - `payload.fixes_applied`: array of `{finding_id, file, change_summary}` entries describing each touched file.
-   - `payload.commits_made` (optional): array of commit identifiers if the implementer staged commits during the fix.
+   - `payload.commits_made`: array with exactly one sha when `status: "ok"`; empty array when `status: "blocked"`.
    - `payload.reason`: single-paragraph explanation (required when `status: "blocked"`).
    - `payload.unresolved_rules` (optional): array of rule slugs the implementer could not address.
    - `payload.iteration`: the iteration index (1, 2, or 3) for forensic tracing.
-4. Do **not** invoke `/003-verify-dod` recursively. Do **not** invoke any other slash command. The next Phase (re-verify) is dispatched by **this** command, not by the subagent.
+5. Do **not** invoke `/003-verify-dod` recursively. Do **not** invoke any other slash command. The next Phase (re-verify) is dispatched by **this** command, not by the subagent.
 
 After the feedback-implementer returns, **validate the new `03X-fix.json` against the schema** (shared helper above). Then branch:
 

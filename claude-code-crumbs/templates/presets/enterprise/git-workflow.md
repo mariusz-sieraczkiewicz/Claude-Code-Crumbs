@@ -12,7 +12,7 @@ applyTo: "**/*"
 ## Branching
 
 - `main` is the production-tracking branch. Strictly protected.
-- All task branches: `task/{ticket_id}/{task_id}-{slug}`, e.g. `task/CHG-12345/T-014-rate-limit-middleware`. **Ticket id in branch name is mandatory** — this is the audit anchor. The canonical shape is enforced by the `branch_name_pattern` toggle below; no other shapes are permitted.
+- All epic branches: `epic/{ticket_id}/{epic_id}-{slug}`, e.g. `epic/CHG-12345/E-003-subscription-cancellation`. **Ticket id in branch name is mandatory** — this is the audit anchor. The canonical shape is enforced by the `branch_name_pattern` toggle below; no other shapes are permitted. One branch per epic; every task in the epic commits onto the same branch.
 - Release branches: `release/v<major>.<minor>` cut from `main` for staged production rollouts.
 - Hotfix branches follow the same `task/{ticket_id}/{task_id}-{slug}` shape, cut from the current `release/` branch; merged to `release/` and forward-merged to `main`.
 - Long-lived branches outside the above set require an ADR.
@@ -88,7 +88,7 @@ auto_fix_on_verify_fail: false   # compliance: when /003-verify-dod or /004-code
 auto_fix_on_review_fail: false   # compliance: same rationale as auto_fix_on_verify_fail — gate findings from /004-code-review are remediated manually by a human editing the working tree and re-running /004-code-review to confirm closure; no automated fixer is permitted on the read-only path.
 # Note on /005-implement-feedback under enterprise:
 # /005-implement-feedback is reserved for epic-level user feedback against an already-done epic (new tasks appended, new ATDD round). It is NOT a gate-finding fixer and must not be invoked for that purpose.
-branch_name_pattern: "task/{ticket_id}/{task_id}-{slug}"   # nested under change-management ticket id
+branch_name_pattern: "epic/{ticket_id}/{epic_id}-{slug}"   # nested under change-management ticket id
 ```
 
 ## Mechanical enforcement
