@@ -78,8 +78,9 @@ Epic mode is a thin loop around the per-task flow. The loop body IS the per-task
    - If `/003-verify-dod` returns `status: fail` (after its own self-heal cap has been exhausted) → halt epic mode with the verifier findings; do NOT invoke `/004`. Emit `epic_outcome: halted_verify`. The user re-runs after fixing or runs `/005-implement-feedback <epic-id>` for a fresh feedback round.
    - If `/004-code-review` returns `status: fail` (after its own self-heal cap has been exhausted) → halt epic mode with the reviewer findings. Emit `epic_outcome: halted_review`.
    - If `auto_invoke_review: false` → skip the `/004` call and print: `Auto-review disabled by toggle. Run /004-code-review <epic-id> manually.`
-   - On success (every step ok) → emit `epic_outcome: done`.
-5. **Lock release**: the epic lock is released on success (after the auto-chain returns) AND on every halt/abort branch.
+   - On success (every step ok) → run the **hard gate check** (see below), then emit `epic_outcome: done`.
+5. **Hard gate check** (mandatory, non-bypassable): Before emitting `epic_outcome: done`, invoke `Bash("scripts/verify-gate-artifacts.sh --epic " + EPIC_ID)`. This is a **tool call**, not an instruction — the script physically checks whether `03-verify-epic.json` and `04-review-epic.json` exist on disk with `status: "ok"`. If the script exits non-zero, the epic halts with `epic_outcome: halted_verify` regardless of what the LLM believes happened. This prevents the orchestrator from claiming success when `/003` or `/004` were skipped or failed silently.
+6. **Lock release**: the epic lock is released on success (after the auto-chain returns) AND on every halt/abort branch.
 
 ### Epic mode pseudo-code
 
@@ -109,6 +110,12 @@ try:
             print("epic_outcome: halted_review"); return
     else:
         inform("Auto-review disabled by toggle. Run /004-code-review <epic-id> manually.")
+    # HARD GATE: verify artifacts exist before declaring success.
+    # This is a Bash tool call, not an instruction — the script exits non-zero if missing.
+    gate_check = Bash("scripts/verify-gate-artifacts.sh --epic " + EPIC_ID)
+    if gate_check.exit_code != 0:
+        print("epic_outcome: halted_verify")  # artifacts missing despite claims
+        return
     print("epic_outcome: done")
 finally:
     release_epic_lock(EPIC_ID)

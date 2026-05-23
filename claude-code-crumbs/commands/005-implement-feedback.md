@@ -102,6 +102,10 @@ For each id in `new_task_ids`, invoke `/004-code-review <id>` and collect the pe
 
 Emit the review artifact: `.claude/runs/{epic_id}/_feedback/{round_id}/05d-review.json` — aggregated by this command from the per-task `/004` outcomes. Contents: per-finding outcome, aggregate verdict (`ok` or `fail`), references to any heal iterations inside `/004`.
 
+## Step 5.5 — Hard gate check (non-bypassable)
+
+**MANDATORY** before the gatekeeper audit. Invoke `Bash("scripts/verify-gate-artifacts.sh --epic ${EPIC_ID} --feedback-round ${ROUND_ID}")`. This is a **tool call**, not an instruction — the script physically checks whether `05c-verify.json` and `05d-review.json` exist on disk with `status: "ok"`. If the script exits non-zero, the feedback round **cannot proceed to Step 6** — halt with `NEEDS_ATTENTION` and the missing artifact path. This prevents the orchestrator from claiming Steps 4–5 ran when they were skipped.
+
 ## Step 6 — Gatekeeper audit (strict subagent)
 
 **MANDATORY** before reporting to the user. Launch a dedicated audit subagent via the `Task` tool with `subagent_type: general-purpose`. The gatekeeper does NOT re-run gates — it audits your draft completion report against the actual artifact contents to catch any rationalised-away failures, missed steps, or scope drift.
