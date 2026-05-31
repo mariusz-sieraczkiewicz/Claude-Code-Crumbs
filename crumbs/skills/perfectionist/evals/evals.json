@@ -1,0 +1,50 @@
+{
+  "skill_name": "perfectionist",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Create a Python CLI tool called 'csvstats' that reads a CSV file and prints summary statistics for each numeric column (count, mean, median, min, max, standard deviation). It should handle missing values gracefully, support an optional --columns flag to select specific columns, and include proper error handling for malformed CSVs. Put it in a new 'tools/' directory with a sample CSV for testing.",
+      "expected_output": "A working Python CLI script with argument parsing, CSV reading, numeric column detection, stats calculation, --columns filtering, error handling, and a sample CSV file.",
+      "files": [],
+      "assertions": [
+        {"text": "A csvstats.py file exists in the outputs", "type": "file_exists"},
+        {"text": "Script uses argparse or click for CLI argument parsing", "type": "code_inspection"},
+        {"text": "A --columns flag is supported for selecting specific columns", "type": "code_inspection"},
+        {"text": "All 6 statistics are calculated: count, mean, median, min, max, standard deviation", "type": "code_inspection"},
+        {"text": "A sample CSV file is included for testing", "type": "file_exists"},
+        {"text": "Missing/empty values are handled without crashing", "type": "code_inspection"},
+        {"text": "Non-existent file input produces a user-friendly error, not a raw traceback", "type": "code_inspection"}
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "I have a bug in my project — there's no input validation anywhere. Add comprehensive input validation to any Python files in the codebase that accept user input or external data. Make sure edge cases are covered: empty strings, None values, type mismatches, boundary values. Add corresponding unit tests for each validation function.",
+      "expected_output": "Input validation added to relevant Python files with corresponding test files. Validation covers edge cases. Tests pass.",
+      "files": [],
+      "assertions": [
+        {"text": "At least one Python file with validation functions exists", "type": "file_exists"},
+        {"text": "At least one test file exists", "type": "file_exists"},
+        {"text": "Validation covers empty string inputs", "type": "code_inspection"},
+        {"text": "Validation covers None value inputs", "type": "code_inspection"},
+        {"text": "Validation covers type mismatch inputs", "type": "code_inspection"},
+        {"text": "Tests are runnable and pass when executed", "type": "runtime_check"}
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Create a simple but complete REST API rate limiter middleware in Python (using FastAPI or Flask, whichever makes more sense). It should support configurable rate limits per endpoint, use a sliding window algorithm, return proper 429 responses with Retry-After headers, and include both in-memory and Redis-backed storage options. Include tests.",
+      "expected_output": "Rate limiter middleware with sliding window, configurable per-endpoint limits, 429+Retry-After, dual storage backends, and tests.",
+      "files": [],
+      "assertions": [
+        {"text": "Rate limiter middleware module exists", "type": "file_exists"},
+        {"text": "Sliding window algorithm is implemented (not fixed window or token bucket)", "type": "code_inspection"},
+        {"text": "429 HTTP status code is returned when rate limit is exceeded", "type": "code_inspection"},
+        {"text": "Retry-After header is included in 429 responses", "type": "code_inspection"},
+        {"text": "In-memory storage backend is implemented", "type": "code_inspection"},
+        {"text": "Redis storage backend is implemented", "type": "code_inspection"},
+        {"text": "At least one test file exists", "type": "file_exists"},
+        {"text": "Per-endpoint rate limit configuration is supported", "type": "code_inspection"}
+      ]
+    }
+  ]
+}
