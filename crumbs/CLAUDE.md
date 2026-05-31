@@ -16,7 +16,7 @@ Bias toward caution over speed. For trivial tasks, use judgment.
 
 Never answer technical questions from memory. Verify first:
 - Libraries, APIs, frameworks, K8s, Helm, GitLab CI → context7 MCP
-- Everything else → WebSearch
+- Everything else → WebSearch (if no results or errors, fall back to tavily MCP)
 
 Current year: 2026. Use when searching for latest information.
 
