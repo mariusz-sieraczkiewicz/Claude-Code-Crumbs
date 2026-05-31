@@ -1,6 +1,6 @@
 name: Auto version bump
 
-# Bumps the patch component of the plugin version on every push to main.
+# Bumps patch version for each plugin independently when its files change.
 # Skipped when the commit was itself a bump (marker [skip-bump]) or a
 # manual bump (commit message starts with "Bump version") — that lets a
 # human author a minor / major bump in-place without the workflow
@@ -24,52 +24,90 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Bump patch version
+      - name: Detect changed plugins and bump versions
         id: bump
         run: |
           set -euo pipefail
           marketplace=.claude-plugin/marketplace.json
-          plugin=claude-code-crumbs/.claude-plugin/plugin.json
 
-          current=$(python3 -c "import json; print(json.load(open('$marketplace'))['plugins'][0]['version'])")
-          IFS='.' read -r maj min pat <<< "$current"
-          new="${maj}.${min}.$((pat + 1))"
-          echo "current=$current" >> "$GITHUB_OUTPUT"
-          echo "new=$new" >> "$GITHUB_OUTPUT"
+          # Get files changed in the triggering commit
+          changed=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || echo "")
 
-          python3 <<EOF
-          import json, sys
+          bumped_plugins=""
 
-          new = "$new"
+          python3 <<'EOF'
+          import json, subprocess, sys
 
-          # marketplace.json — plugins[0].version
-          path = "$marketplace"
-          with open(path) as f:
-              d = json.load(f)
-          d["plugins"][0]["version"] = new
-          with open(path, "w") as f:
-              json.dump(d, f, indent=2)
-              f.write("\n")
+          marketplace_path = ".claude-plugin/marketplace.json"
+          with open(marketplace_path) as f:
+              marketplace = json.load(f)
 
-          # plugin.json — top-level version
-          path = "$plugin"
-          with open(path) as f:
-              d = json.load(f)
-          d["version"] = new
-          with open(path, "w") as f:
-              json.dump(d, f, indent=2)
-              f.write("\n")
+          # Get changed files
+          result = subprocess.run(["git", "diff", "--name-only", "HEAD~1", "HEAD"],
+                                  capture_output=True, text=True)
+          changed_files = result.stdout.strip().split("\n") if result.stdout.strip() else []
+
+          plugins = marketplace["plugins"]
+          bumped = []
+
+          for i, plugin in enumerate(plugins):
+              source_dir = plugin["source"].lstrip("./")
+              plugin_json_path = f"{source_dir}/.claude-plugin/plugin.json"
+
+              # Check if any changed file is inside this plugin's directory
+              plugin_changed = any(f.startswith(f"{source_dir}/") for f in changed_files)
+              if not plugin_changed:
+                  continue
+
+              # Bump patch version
+              current = plugin["version"]
+              parts = current.split(".")
+              parts[2] = str(int(parts[2]) + 1)
+              new_version = ".".join(parts)
+
+              # Update marketplace.json
+              plugins[i]["version"] = new_version
+
+              # Update plugin's own plugin.json
+              with open(plugin_json_path) as f:
+                  pj = json.load(f)
+              pj["version"] = new_version
+              with open(plugin_json_path, "w") as f:
+                  json.dump(pj, f, indent=2)
+                  f.write("\n")
+
+              bumped.append(f"{plugin['name']} {current} -> {new_version}")
+
+          if bumped:
+              with open(marketplace_path, "w") as f:
+                  json.dump(marketplace, f, indent=2)
+                  f.write("\n")
+
+              # Write summary for commit message
+              with open("/tmp/bump-summary.txt", "w") as f:
+                  f.write("; ".join(bumped))
+          else:
+              with open("/tmp/bump-summary.txt", "w") as f:
+                  f.write("")
           EOF
+
+          summary=$(cat /tmp/bump-summary.txt)
+          echo "summary=$summary" >> "$GITHUB_OUTPUT"
 
       - name: Commit and push
         run: |
           set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .claude-plugin/marketplace.json claude-code-crumbs/.claude-plugin/plugin.json
-          if git diff --cached --quiet; then
-            echo "No version change to commit (versions already match new value)."
+          summary="${{ steps.bump.outputs.summary }}"
+          if [ -z "$summary" ]; then
+            echo "No plugin files changed — nothing to bump."
             exit 0
           fi
-          git commit -m "Bump version ${{ steps.bump.outputs.current }} -> ${{ steps.bump.outputs.new }} [skip-bump]"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .claude-plugin/marketplace.json dev-workflow/.claude-plugin/plugin.json crumbs/.claude-plugin/plugin.json
+          if git diff --cached --quiet; then
+            echo "No version change to commit."
+            exit 0
+          fi
+          git commit -m "Bump version: ${summary} [skip-bump]"
           git push origin main

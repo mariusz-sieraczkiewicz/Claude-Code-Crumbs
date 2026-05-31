@@ -1,6 +1,6 @@
 {
-  "name": "Dev Workflow",
-  "description": "Collection of Claude Code plugins for MCP integrations and LSP support",
+  "name": "Claude-Code-Crumbs",
+  "description": "Claude Code plugins: dev-workflow for delivery pipelines, crumbs for small skills and configurations.",
   "owner": {
     "name": "Mariusz Sieraczkiewicz"
   },
@@ -10,6 +10,12 @@
       "source": "./dev-workflow",
       "description": "Universal product-driven delivery workflow: TDD entry-point, subagent chain, zero-tolerance gates. Stack-, SoT-, and team-agnostic.",
       "version": "0.2.8"
+    },
+    {
+      "name": "crumbs",
+      "source": "./crumbs",
+      "description": "A collection of small skills and configurations for Claude Code.",
+      "version": "0.1.0"
     }
   ]
 }
