@@ -1,43 +1,23 @@
-## Tools
-
-Never answer technical questions from memory. Verify first:
-- Python/JS/TS libraries, APIs, versions, frameworks → context MCP
-- Kubernetes, Helm, kubectl → context MCP
-- GitLab CI/CD → context MCP
-- Otherwise → WebSearch (fallback: tavily MCP if WebSearch fails)
-
-Use `rg` for exact strings/imports. Use `ast-grep` for structural patterns (class defs, function signatures).
-
-Current year: 2026. Use this when searching for latest information.
-
-## Behavioral Guidelines
+# Coding Principles
 
 Bias toward caution over speed. For trivial tasks, use judgment.
 
-### 1. Think Before Coding
+1. **Think first** — State assumptions. Multiple interpretations → present them. Simpler approach → say so. Unclear → stop and ask.
+2. **Simplicity** — Minimum code that solves the problem. No speculative features, no single-use abstractions, no impossible-scenario handling. 200 lines → 50.
+3. **Surgical changes** — Touch only what you must. Match existing style. Don't improve adjacent code or delete pre-existing dead code. Every changed line traces to the request.
+4. **Goal-driven** — Transform tasks into verifiable goals. Multi-step → state plan with checks. Weak criteria → ask first.
 
-State assumptions explicitly. Multiple interpretations → present them. Simpler approach exists → say so. Unclear → stop and ask.
+## Mandatory Rules
 
-### 2. Simplicity First
+- **One question at a time.** Never batch questions. Wait for answer before asking the next. Applies everywhere: elicitation, clarification, sub-agents.
+- **Fix all verification issues.** Every issue found by verifiers gets fixed — pre-existing, regression, or new. Never dismiss as "not my change." Leave the codebase cleaner than you found it.
 
-Minimum code that solves the problem. No speculative features, no single-use abstractions, no error handling for impossible scenarios. 200 lines that could be 50 → rewrite.
+## Research & Tools
 
-### 3. Surgical Changes
+Never answer technical questions from memory. Verify first:
+- Libraries, APIs, frameworks, K8s, Helm, GitLab CI → context7 MCP
+- Everything else → WebSearch
 
-Touch only what you must. Match existing style. Don't improve adjacent code, don't refactor what isn't broken, don't delete pre-existing dead code (mention it instead). Remove only orphans YOUR changes created. Test: every changed line traces to the user's request.
+Current year: 2026. Use when searching for latest information.
 
-### 4. Goal-Driven Execution
-
-Transform tasks into verifiable goals ("Add validation" → "Write tests for invalid inputs, make them pass"). For multi-step tasks, state plan with verification checks. Strong criteria → independent looping. Weak criteria → ask for clarification first.
-
-## Asking Questions (MANDATORY)
-
-ONE question at a time. Never batch. Wait for answer before next question. Applies everywhere: elicitation, clarification, sub-agents.
-
-## Fix ALL Issues During Verification (MANDATORY)
-
-Fix EVERY issue found by verifiers — pre-existing, regression, or new. Never dismiss as "not caused by this change." Leave the codebase cleaner than you found it: documentation gaps, naming inconsistencies, orphaned references, stale paths.
-
-## globaljira MCP
-
-If `globaljira` returns `Unexpected return value type` errors or `curl` gets a 302 from Cloudflare → user is off VPN. Tell them to connect; don't debug the MCP package.
+`rg` for exact strings/imports. `ast-grep` for structural patterns (class defs, function signatures).
