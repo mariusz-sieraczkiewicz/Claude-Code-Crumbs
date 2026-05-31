@@ -1,143 +1,73 @@
 ---
 name: pdf-ocr
-description: Use when asked to OCR, convert, extract text from PDF files, or convert PDF to markdown. Takes one or more PDF file paths as arguments. Converts pages to images via pdftoppm, reads each with Claude vision, externalizes embedded figures/charts/diagrams to separate image files, and produces a markdown file referencing them.
+description: Vision-based PDF to markdown converter. Converts pages to images via pdftoppm, reads with Claude vision in parallel subagents, externalizes figures, and produces a markdown file with image references.
 ---
 
 # PDF OCR (Vision-based)
 
-Convert PDF files to markdown using Claude's vision capabilities. No external libraries — only poppler CLI tools (`pdftoppm`, `pdftotext`, `pdfimages`) and Claude's `Read` tool.
+Tools: poppler CLI (`pdftoppm`, `pdftotext`, `pdfimages`), `sips`/`convert` for cropping, Claude `Read`. No pip install, no Python libraries.
 
-## Arguments
+Arguments: space-separated PDF file paths.
 
-Space-separated PDF file paths passed after the skill invocation.
+## Rules
+
+- **Max 3 pages per subagent** — non-negotiable; context overflow causes truncation
+- **Up to 20 parallel subagents**
+- Faithful transcription — reproduce text exactly, don't summarize or translate
+- Tables → markdown tables, preserve ALL numerical data exactly
+- Math/formulas → LaTeX `$...$` or `$$...$$`
+- Multi-column layouts → linearize left-to-right, top-to-bottom
+- Poor quality pages → flag with `[LOW QUALITY - may contain errors]`
+- Mid-sentence page boundaries → transcribe everything, assembly step handles continuity
+- Figure pages: transcribe ALL text (captions, body, data tables) as markdown AND externalize the page image for non-text visual content
 
 ## Workflow
 
-For each PDF file:
+### 1. Setup output
 
-### 1. Setup output directory
+Create sibling directory next to source PDF: `<pdf-name>/` containing `<pdf-name>.md`, `images/`, `pages/` (temp).
 
-```
-<pdf-name>/
-  <pdf-name>.md        # Final markdown output
-  images/              # Externalized figures, charts, diagrams
-  pages/               # Intermediate page images (delete after)
-```
-
-Create output dir next to the source PDF (sibling directory named after the PDF without extension).
-
-### 2. Convert PDF to page images
+### 2. Convert to page images
 
 ```bash
 pdftoppm -png -scale-to 1800 "input.pdf" "<output-dir>/pages/page"
 ```
 
-### 3. Detect figure pages with pdfimages
+### 3. Detect figure pages
 
 ```bash
 pdfimages -list "input.pdf" 2>/dev/null | awk 'NR>2 {p[$1]++} END {for(k in p) if(p[k]>=3) print k}' | sort -n
 ```
 
-This deterministically identifies which pages contain embedded images (≥3 image objects = likely a figure). Pass this list to each subagent so it knows which pages to externalize — no guessing needed.
+Pages with ≥3 image objects are likely figures. Pass this list to every subagent.
 
-### 4. Parallel page processing with subagents
+### 4. Parallel subagent dispatch
 
-**CRITICAL: Never read more than 3 pages in one agent context.**
+Split into chunks of ≤3 pages. Each subagent receives: page image paths, figure page list, output path `chunks/chunk_NN.md`.
 
-Split pages into chunks of max 3 pages each. Dispatch up to 20 subagents in parallel. Pass each subagent:
-- Its page image paths
-- The list of figure pages from step 3
+Subagent instructions:
+- Read page images, transcribe all text to markdown (including mid-sentence boundaries)
+- Figure pages: copy page PNG to `images/page_NN_figureN.png`, insert `![alt](images/...)` at visual content position, transcribe all text normally
+- Non-figure pages: text only
+- Omit repetitive headers/footers (page numbers, journal name)
 
-Each subagent:
-1. Reads its 3 (or fewer) page images with the `Read` tool
-2. Transcribes ALL text faithfully into markdown — including text that starts or ends mid-sentence at page boundaries
-3. For pages flagged as figure pages: copies the page PNG to `images/` with a descriptive name. All text on that page (caption, body text, data tables) is STILL transcribed as markdown text — the image is only for non-text visual content
-4. Writes its chunk to `<output-dir>/chunks/chunk_NN.md`
+### 5. Assemble
 
-### 5. Assemble final markdown
+1. Concatenate chunks in order, insert `---` between them
+2. Fix chunk boundaries — join split sentences, remove `---` between them
+3. Verify page count matches
 
-After all subagents complete:
-1. Concatenate chunks in order into `<pdf-name>.md`
-2. Insert `---` between chunks (page breaks)
-3. **Fix chunk boundaries**: where one chunk ends mid-sentence and the next starts mid-sentence, join them into one continuous sentence (remove the `---` between them)
-4. Verify total page count matches expected
+### 6. Verify
 
-### 6. Cleanup
+**Structural**: separator count ≈ page count, no truncation, every detected figure page has a file in `images/`, no mid-sentence breaks remain.
 
-Delete `pages/` and `chunks/` directories. Keep only the final `.md` and `images/`.
+**Numerical**: vision OCR misreads digits (8→6, 5→3). Cross-check against `pdftotext -layout` output — extract multi-digit numbers from tables, compare, replace mismatches with pdftotext values. Delete raw_text.txt after.
 
-## Subagent Prompt Template
+### 7. Cleanup
 
-```
-You are performing PDF OCR using Claude's vision capabilities.
+Delete `pages/` and `chunks/`. Keep `<pdf-name>.md` and `images/`.
 
-Read the following page images and transcribe ALL content to markdown:
-- [list of 1-3 page image paths]
-
-Pages that contain figures (detected by pdfimages): [list of page numbers, e.g. "3, 5, 6"]
-
-Output directory for images: [path to images/]
-
-Rules:
-- Transcribe ALL text on your assigned pages, even if it starts or ends mid-sentence
-  (the assembly step handles continuity across chunks)
-- Tables → markdown tables, preserve ALL numerical data exactly
-- For pages listed as figure pages:
-  • Copy the full page image to images/ (e.g., page_05_figure2.png)
-  • Transcribe ALL text from that page normally:
-    - Body text → regular markdown
-    - Figure caption → **Figure N.** description as markdown text
-    - Data tables within/below figures → markdown tables
-  • Insert ![short alt](images/page_NN_figureN.png) at the position where the visual
-    content (charts, blots, graphs, photographs) appears
-  • The image file supplements the text — everything readable must be transcribed
-- For pages NOT listed as figure pages: transcribe text only, no image needed
-- Multi-column layouts → linearize left-to-right, top-to-bottom
-- Math/formulas → LaTeX $...$ or $$...$$
-- Omit repetitive headers/footers (page numbers, journal name, "Downloaded from...")
-
-Write output to: [chunk path]
-```
-
-## Rules
-
-- **No pip install, no Python libraries** — only poppler CLI tools (`pdftoppm`, `pdftotext`, `pdfimages`) and `sips` (macOS) or `convert` (ImageMagick) if cropping needed
-- **Max 3 pages per subagent** — non-negotiable; context overflow causes truncation and data errors
-- **Up to 20 parallel subagents** — for a 60-page PDF, dispatch 20 agents processing 3 pages each
-- **Faithful transcription**: reproduce text exactly as written, don't summarize or interpret
-- **Tables**: always render as markdown tables, preserve ALL numerical data exactly as printed
-- **Math/formulas**: use LaTeX notation `$...$` or `$$...$$`
-- **Multi-column layouts**: linearize sensibly (left-to-right, top-to-bottom)
-- **Poor quality pages**: flag with `[LOW QUALITY - may contain errors]`
-- **Languages**: preserve original language, don't translate
-- **Mid-sentence boundaries**: transcribe everything — don't drop text at page edges
-
-## Post-completion verification
-
-### Structural checks
-- Number of `---` separators ≈ number of pages (no chunks missing)
-- File is not truncated (ends with complete content, not mid-sentence)
-- Every figure page detected in step 3 has a corresponding file in `images/`
-- No mid-sentence breaks remain (fix during assembly)
-
-### Numerical verification via pdftotext
-
-Vision OCR can misread digits (8→6, 5→3, 0→6). Use `pdftotext` as deterministic ground truth:
-
-```bash
-pdftotext -layout "input.pdf" "<output-dir>/raw_text.txt"
-```
-
-Then compare numbers:
-1. Extract all multi-digit numbers from the vision markdown (especially in table rows)
-2. Find the same rows/context in `raw_text.txt`
-3. Any mismatch → replace the vision number with the pdftotext number
-
-**Why not just use pdftotext alone?** It loses all structure — tables become space-padded lines, figures disappear, multi-column layouts scramble. Vision gives structure + images; pdftotext gives accurate numbers. Combine both.
-
-Delete `raw_text.txt` after verification.
-
-## Example Output Structure
+## Example Output
 
 ```
 Turner-2024-2/
@@ -147,30 +77,18 @@ Turner-2024-2/
     page_08_figure2_kaplan_meier.png
 ```
 
-In the markdown:
 ```markdown
-# Title of Paper
-
-## Abstract
-[transcribed text...]
-
 ## Results
 
-[body text above figure...]
+[body text...]
 
-**Figure 1.** Study design showing randomization and treatment arms...
+**Figure 1.** Study design showing randomization...
 
-![Figure 1 panels: study design flowchart](images/page_05_figure1_study_design.png)
-
-[body text below figure continues naturally...]
+![Figure 1: study design flowchart](images/page_05_figure1_study_design.png)
 
 | Endpoint | Treatment | Control | HR (95% CI) |
 |----------|-----------|---------|--------------|
 | PFS      | 15.0 mo   | 7.3 mo  | 0.43 (0.32-0.59) |
-
-**Figure 2.** Kaplan-Meier curves for investigator-assessed PFS...
-
-![Figure 2: KM PFS curves](images/page_08_figure2_kaplan_meier.png)
 ```
 
-Note: caption and data tables are TEXT (searchable, verifiable). The image is only for visual content that cannot be rendered as text.
+Captions and data tables are TEXT. Images are only for non-text visual content.
