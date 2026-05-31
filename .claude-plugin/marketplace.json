@@ -15,7 +15,7 @@
       "name": "crumbs",
       "source": "./crumbs",
       "description": "A collection of small skills and configurations for Claude Code.",
-      "version": "0.1.19"
+      "version": "0.1.20"
     }
   ]
 }
