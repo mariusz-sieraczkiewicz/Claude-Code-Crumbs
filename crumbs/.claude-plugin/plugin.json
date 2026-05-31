@@ -4,5 +4,9 @@
   "version": "0.1.11",
   "author": {
     "name": "Mariusz Sieraczkiewicz"
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "bash ${CLAUDE_PLUGIN_ROOT}/scripts/statusline.sh"
   }
 }
