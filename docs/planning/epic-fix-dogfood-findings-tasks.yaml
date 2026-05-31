@@ -10,7 +10,7 @@ tasks:
     effort: S
     depends_on: []
     files:
-      - claude-code-crumbs/schemas/run-phase.schema.json
+      - dev-workflow/schemas/run-phase.schema.json
     acceptance_criteria:
       - Add discriminator branch (if/then) requiring payload.sub_mode plus plan-only fields (files_to_touch, red_sketch, green_shape, refactor_notes, iteration) when phase==impl AND payload.sub_mode=="plan-only", OR add new phase enum value "impl-plan" (preferred — simpler). Pick one and document.
       - severity enum: keep blocker for back-compat; do not drop. Add comment block describing tier semantics.
@@ -21,7 +21,7 @@ tasks:
     effort: M
     depends_on: []
     files:
-      - claude-code-crumbs/commands/003-verify-dod.md
+      - dev-workflow/commands/003-verify-dod.md
     acceptance_criteria:
       - All runs paths prefixed .claude/runs/{epic_id}/{task_id}/... — no bare runs/.
       - payload.fixes_applied shape aligned with agents/feedback-implementer.md ({finding_id, file, change_summary} + optional commits_made[]).
@@ -36,7 +36,7 @@ tasks:
     effort: M
     depends_on: []
     files:
-      - claude-code-crumbs/commands/004-code-review.md
+      - dev-workflow/commands/004-code-review.md
     acceptance_criteria:
       - 04X-fix.json status enum: replace ok|fail with ok|blocked (schema-required for feedback-impl phase).
       - 04-review.json top-level findings:[] required on both ok and fail (schema-mandated).
@@ -53,7 +53,7 @@ tasks:
     effort: M
     depends_on: []
     files:
-      - claude-code-crumbs/commands/005-implement-feedback.md
+      - dev-workflow/commands/005-implement-feedback.md
     acceptance_criteria:
       - Step 4/5 use explicit loop wording — for each id in new_task_ids invoke /003-verify-dod <id> resp. /004-code-review <id> (current "scoped to new task IDs" implies batch arg that commands do not accept).
       - Step 3 explicitly states /002-implement task-mode auto-chain to /003 SATISFIES Step 4 (skip re-invocation if per-task 03-verify.json already exists with status ok). Same for /004 / Step 5.
@@ -70,7 +70,7 @@ tasks:
     effort: M
     depends_on: [T-001]
     files:
-      - claude-code-crumbs/commands/002-implement.md
+      - dev-workflow/commands/002-implement.md
     acceptance_criteria:
       - If T-001 chose phase rename, switch plan-only artifact to phase "impl-plan" everywhere in /002. If T-001 chose if/then, document the sub_mode discriminator + required fields.
       - Cancel path emits structured outcome discriminator (epic_outcome ∈ {cancelled, halted_too_big, halted_blocked, halted_verify, halted_review, done}).
@@ -89,7 +89,7 @@ tasks:
     effort: S
     depends_on: [T-002, T-003]
     files:
-      - claude-code-crumbs/templates/presets/enterprise/git-workflow.md
+      - dev-workflow/templates/presets/enterprise/git-workflow.md
     acceptance_criteria:
       - Replace "review board mediates fixes via /005-implement-feedback" wording with the new manual-edit + re-run /003/004 path (mirrors T-002/T-003 ELSE-branch fix).
       - Rationale paragraph still emphasizes human-mediated remediation but does not point at /005 for finding-consumption.

@@ -26,7 +26,7 @@ Run `/freeze --force` after any of:
 
 - **Preset change** — you edited `.claude/stack.yaml` and switched `team_preset` (e.g. solo → small-team).
 - **Toggle change** — you hand-edited `git-workflow.md` or `deployment.md` to override a single toggle (e.g. flipped `pr_required: true` while staying on solo preset).
-- **Plugin update** — `claude-code-crumbs` published a new version of a command/agent. `git pull` in the plugin dir won't reach you until you re-freeze.
+- **Plugin update** — `dev-workflow` published a new version of a command/agent. `git pull` in the plugin dir won't reach you until you re-freeze.
 
 `/freeze` without `--force` refuses to overwrite an already-frozen tree (exit 5). This is intentional — refreezing is a deliberate act.
 
@@ -67,7 +67,7 @@ Freezing is **not** a fully reversible operation. `/freeze --reset` restores plu
 `scripts/freeze.sh` — same flags. Run directly for CI / non-interactive contexts:
 
 ```
-bash scripts/freeze.sh --force --plugin-root=/path/to/claude-code-crumbs
+bash scripts/freeze.sh --force --plugin-root=/path/to/dev-workflow
 ```
 
 Self-test: `bash scripts/test-freeze.sh` (exit 0 = pass).

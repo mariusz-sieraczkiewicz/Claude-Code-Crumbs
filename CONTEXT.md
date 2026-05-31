@@ -1,4 +1,4 @@
-# Claude-Code-Crumbs
+# Dev Workflow
 
 Universal Claude Code workflow plugin distilled from mentora (web/Svelte) and sielappkowo (iOS/Swift) projects. Goal: one plugin, many stacks, one opinionated discipline.
 
@@ -164,15 +164,15 @@ The state of a **Task** or an **Epic**. Vocabulary: `pending | in_progress | blo
 _Avoid_: "todo", "wip", "complete", "partial"
 
 **Plugin distribution**:
-Plugin distributed via **Claude Code marketplace / global install** — plugin files live in `~/.claude/plugins/claude-code-crumbs/` (user-level, shared across all projects). Single source of truth for plugin code; upgrade once, all projects benefit. Per-project state (PRD, ruleset, stack.yaml, runs/) stays in the project. Git submodule may be a fallback channel for environments without marketplace support.
+Plugin distributed via **Claude Code marketplace / global install** — plugin files live in `~/.claude/plugins/dev-workflow/` (user-level, shared across all projects). Single source of truth for plugin code; upgrade once, all projects benefit. Per-project state (PRD, ruleset, stack.yaml, runs/) stays in the project. Git submodule may be a fallback channel for environments without marketplace support.
 
 **Install flow**:
 Two-step, explicit:
-1. **User-level**: `claude install plugin claude-code-crumbs` — once per developer machine.
+1. **User-level**: `claude install plugin dev-workflow` — once per developer machine.
 2. **Project-level**: inside a project, run `/000-prd-refine` — plugin detects absent `PRD.md`, bootstraps the project (PRD, epics.yaml, SCENARIOS.md, ruleset/, CONTEXT.md, stack.yaml.example, docs/adr/).
 
 **File ownership split**:
-- **Plugin-owned** (`~/.claude/plugins/claude-code-crumbs/`, upgraded as a unit): `agents/`, `commands/`, `schemas/`, `templates/`, `scripts/`. Read-only from a project's perspective. **Plugin does NOT ship skills** — `grill-with-docs` and any other skills are external/optional (user installs separately if desired).
+- **Plugin-owned** (`~/.claude/plugins/dev-workflow/`, upgraded as a unit): `agents/`, `commands/`, `schemas/`, `templates/`, `scripts/`. Read-only from a project's perspective. **Plugin does NOT ship skills** — `grill-with-docs` and any other skills are external/optional (user installs separately if desired).
 - **Project-owned** (commited per-project): `PRD.md`, `CONTEXT.md`, `docs/planning/`, `docs/adr/`, `.claude/ruleset/`, `.claude/stack.yaml`.
 - **Project-owned but gitignored**: `.claude/runs/`, `.claude/runs-archive/` (transient subagent comms, local forensics).
 - **Ruleset policy**: `.claude/ruleset/*.md` is a **snapshot copied from plugin templates at install time** (via `/000-prd-refine` first invocation). Subsequent plugin upgrades do **not** touch project-side ruleset — drift is the project's responsibility.

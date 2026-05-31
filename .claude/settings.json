@@ -9,6 +9,6 @@
     "google-docs-mcp"
   ],
   "enabledPlugins": {
-    "tavily@Claude-Code-Crumbs": true
+    "tavily@Dev-Workflow": true
   }
 }

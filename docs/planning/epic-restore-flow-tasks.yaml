@@ -47,13 +47,13 @@ tasks:
     effort: S
     depends_on: []
     files:
-      - claude-code-crumbs/commands/002-auto-implement.md (delete)
+      - dev-workflow/commands/002-auto-implement.md (delete)
       - PRD.md
       - CONTEXT.md
       - .claude-plugin/marketplace.json (verify no entry; commands auto-discovered)
     acceptance_criteria:
       - File commands/002-auto-implement.md does not exist
-      - No grep hit for "002-auto-implement" in claude-code-crumbs/, PRD.md, CONTEXT.md (except in this epic file)
+      - No grep hit for "002-auto-implement" in dev-workflow/, PRD.md, CONTEXT.md (except in this epic file)
       - Marketplace JSON unchanged (commands are auto-discovered, not enumerated)
     description: |
       Remove the standalone batch conductor. Its behavior moves into /002-implement
@@ -66,7 +66,7 @@ tasks:
     effort: L
     depends_on: [T-001]
     files:
-      - claude-code-crumbs/commands/002-implement.md
+      - dev-workflow/commands/002-implement.md
     acceptance_criteria:
       - Accepts <epic-id> (default mode) OR <task-id> (single-task mode); dispatch on shape
       - Epic mode iterates all status: pending tasks from epic-{id}-tasks.yaml in dependency order
@@ -89,7 +89,7 @@ tasks:
     effort: M
     depends_on: [T-001]
     files:
-      - claude-code-crumbs/commands/003-verify-dod.md
+      - dev-workflow/commands/003-verify-dod.md
     acceptance_criteria:
       - Phase 1 (detect) unchanged; emits 03-verify.json
       - Phase 2 (fix) dispatches feedback-implementer subagent with findings; writes 03b-fix.json
@@ -109,7 +109,7 @@ tasks:
     effort: M
     depends_on: [T-001]
     files:
-      - claude-code-crumbs/commands/004-code-review.md
+      - dev-workflow/commands/004-code-review.md
     acceptance_criteria:
       - Phase 1 unchanged; emits 04-review.json
       - Phase 2 fix dispatch feedback-implementer; writes 04b-fix.json
@@ -129,7 +129,7 @@ tasks:
     effort: L
     depends_on: [T-001]
     files:
-      - claude-code-crumbs/commands/005-implement-feedback.md
+      - dev-workflow/commands/005-implement-feedback.md
     acceptance_criteria:
       - Argument <epic-id> [feedback-text]
       - Step 0 gather feedback (interactive if $2 empty)
@@ -151,7 +151,7 @@ tasks:
     effort: M
     depends_on: [T-003, T-004, T-005]
     files:
-      - claude-code-crumbs/agents/feedback-implementer.md
+      - dev-workflow/agents/feedback-implementer.md
     acceptance_criteria:
       - Two execution modes documented in frontmatter description and system prompt
       - Mode A (iteration-fix) - called by /003 Phase 2 or /004 Phase 2; reads findings JSON; fixes; emits NNb-fix.json
@@ -168,11 +168,11 @@ tasks:
     effort: S
     depends_on: [T-001]
     files:
-      - claude-code-crumbs/templates/ruleset/git-workflow.md
-      - claude-code-crumbs/templates/presets/solo/git-workflow.md
-      - claude-code-crumbs/templates/presets/small-team/git-workflow.md
-      - claude-code-crumbs/templates/presets/oss/git-workflow.md
-      - claude-code-crumbs/templates/presets/enterprise/git-workflow.md
+      - dev-workflow/templates/ruleset/git-workflow.md
+      - dev-workflow/templates/presets/solo/git-workflow.md
+      - dev-workflow/templates/presets/small-team/git-workflow.md
+      - dev-workflow/templates/presets/oss/git-workflow.md
+      - dev-workflow/templates/presets/enterprise/git-workflow.md
     acceptance_criteria:
       - YAML toggle block contains auto_fix_on_verify_fail and auto_fix_on_review_fail keys
       - Baseline + solo/small-team/oss set both to true
@@ -186,11 +186,11 @@ tasks:
     effort: M
     depends_on: [T-002, T-003, T-004, T-005, T-007]
     files:
-      - claude-code-crumbs/commands/002-implement.md
-      - claude-code-crumbs/commands/003-verify-dod.md
-      - claude-code-crumbs/commands/004-code-review.md
-      - claude-code-crumbs/commands/005-implement-feedback.md
-      - claude-code-crumbs/scripts/test-freeze.sh
+      - dev-workflow/commands/002-implement.md
+      - dev-workflow/commands/003-verify-dod.md
+      - dev-workflow/commands/004-code-review.md
+      - dev-workflow/commands/005-implement-feedback.md
+      - dev-workflow/scripts/test-freeze.sh
     acceptance_criteria:
       - /003 Phase 2/3/Loop wrapped in FREEZE:IF auto_fix_on_verify_fail / ELSE (read-only fallback) / ENDIF
       - /004 same with auto_fix_on_review_fail
@@ -221,7 +221,7 @@ tasks:
     depends_on: [T-006, T-008, T-009]
     files: []
     acceptance_criteria:
-      - bash claude-code-crumbs/scripts/test-freeze.sh -> exit 0
+      - bash dev-workflow/scripts/test-freeze.sh -> exit 0
       - 4-preset smoke (solo/small-team/oss/enterprise) -> 0 markers leftover, frozen tree consistent
       - Dogfood A - throwaway task with deliberate lint failure -> /003 self-heal loop applies fix, exits ok
       - Dogfood B - throwaway task with deliberate ruleset violation -> /004 self-heal loop applies fix, exits ok

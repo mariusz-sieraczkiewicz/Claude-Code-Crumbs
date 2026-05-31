@@ -7,7 +7,7 @@ argument-hint: [--mode=A|B|C]
 
 # /000-prd-refine — Product-level definition (bootstrap + refine)
 
-You are the **product-level entry point** for the `claude-code-crumbs` plugin. This command has no dedicated subagent — you run interactively in the main thread, grilling the user, building `CONTEXT.md` inline, and offering ADRs at trade-off decisions.
+You are the **product-level entry point** for the `dev-workflow` plugin. This command has no dedicated subagent — you run interactively in the main thread, grilling the user, building `CONTEXT.md` inline, and offering ADRs at trade-off decisions.
 
 **There is no separate `/init-crumbs` command.** This command IS the bootstrap. State A is detected from the absence of `PRD.md` at the repo root.
 
@@ -131,7 +131,7 @@ Grill each section in order. Do not advance until the section is concrete enough
 
 ### A.3 — Bootstrap files
 
-After the PRD skeleton is in place (and ideally after §1-§3 have been grilled, so context exists), copy the rest of the bootstrap files. Use plugin-relative paths; `<plugin-root>` is the install location of `claude-code-crumbs`.
+After the PRD skeleton is in place (and ideally after §1-§3 have been grilled, so context exists), copy the rest of the bootstrap files. Use plugin-relative paths; `<plugin-root>` is the install location of `dev-workflow`.
 
 | Source (plugin) | Destination (project) | Notes |
 |---|---|---|

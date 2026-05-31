@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://claude-code-crumbs/schemas/run-phase.schema.json",
+  "$id": "https://dev-workflow/schemas/run-phase.schema.json",
   "title": "Run Phase",
   "description": "Schema for .claude/runs/{epic_id}/[<task_id>/]NN-<phase>.json — subagent output for one phase of the chain. task_id is required for all phases except plan; the plan phase may omit task_id in fresh mode and include it in resplit mode.",
   "type": "object",

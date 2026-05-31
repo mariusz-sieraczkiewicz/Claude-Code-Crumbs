@@ -1,10 +1,10 @@
-# claude-code-crumbs
+# dev-workflow
 
 A universal, stack-agnostic Claude Code workflow plugin: TDD entry-point, a five-subagent chain, and zero-tolerance Definition-of-Done gates wired into your repo.
 
 ## What it is
 
-`claude-code-crumbs` is a workflow, not a framework. It ships a small set of slash commands that orchestrate a fixed pipeline — **plan → implement → verify → review → feedback → merge → promote** — and it delegates the heavy lifting to five dedicated subagents. The plugin never picks your language, your test runner, your CI, or your branching model: those are read from `.claude/stack.yaml`, which you fill in once during bootstrap.
+`dev-workflow` is a workflow, not a framework. It ships a small set of slash commands that orchestrate a fixed pipeline — **plan → implement → verify → review → feedback → merge → promote** — and it delegates the heavy lifting to five dedicated subagents. The plugin never picks your language, your test runner, your CI, or your branching model: those are read from `.claude/stack.yaml`, which you fill in once during bootstrap.
 
 The value is in the discipline. Every task starts with a failing **domain test** (TDD entry-point). Every task ends behind a Definition-of-Done gate that runs every check declared in `stack.yaml.gates` with **zero tolerance** — any non-zero exit, any rule violation, is a blocker. Code reviews read your project-specific ruleset verbatim. Findings loop back through a feedback subagent, capped at three iterations before halting for human input. Business scenarios are written in domain-oriented Gherkin (UI-ignorant) and indexed flat into `docs/planning/SCENARIOS.md`.
 
@@ -18,14 +18,14 @@ From a Claude Code session:
 
 ```
 /plugin marketplace add mariusz-sieraczkiewicz/Claude-Code-Crumbs
-/plugin install claude-code-crumbs@Claude-Code-Crumbs
+/plugin install dev-workflow@Claude-Code-Crumbs
 ```
 
 Or from a local clone:
 
 ```
 /plugin marketplace add /absolute/path/to/Claude-Code-Crumbs
-/plugin install claude-code-crumbs@Claude-Code-Crumbs
+/plugin install dev-workflow@Claude-Code-Crumbs
 ```
 
 After install, `/000-prd-refine`..`/007-promote` and `/freeze` are available as slash commands.

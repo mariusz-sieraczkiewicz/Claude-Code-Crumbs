@@ -1,5 +1,5 @@
 {
-  "name": "claude-code-crumbs",
+  "name": "dev-workflow",
   "description": "Universal product-driven delivery workflow: TDD entry-point, subagent chain, zero-tolerance gates. Stack-, SoT-, and team-agnostic.",
   "version": "0.2.8",
   "author": {

@@ -1,4 +1,4 @@
-# Claude-Code-Crumbs — Product Requirements Document
+# Dev Workflow — Product Requirements Document
 
 ## §1. Vision
 
@@ -112,15 +112,15 @@ docs/
 
 ### Ownership split
 
-- **Plugin-owned** (`~/.claude/plugins/claude-code-crumbs/`, upgraded as a unit): `agents/`, `commands/`, `schemas/`, `templates/`, `scripts/`. Plugin ships **no skills** — `grill-with-docs` and any other skills are external/optional.
+- **Plugin-owned** (`~/.claude/plugins/dev-workflow/`, upgraded as a unit): `agents/`, `commands/`, `schemas/`, `templates/`, `scripts/`. Plugin ships **no skills** — `grill-with-docs` and any other skills are external/optional.
 - **Project-owned** (committed per-project): `PRD.md`, `CONTEXT.md`, `docs/planning/`, `docs/adr/`, `.claude/ruleset/`, `.claude/stack.yaml`.
 - **Project-owned but gitignored**: `.claude/runs/`, `.claude/runs-archive/`.
 
 ## §8. Distribution and install
 
-- **Distribution channel**: Claude Code marketplace / global install. Plugin lives in `~/.claude/plugins/claude-code-crumbs/` and is shared across all the user's projects. Git submodule is a fallback channel for environments without marketplace support.
+- **Distribution channel**: Claude Code marketplace / global install. Plugin lives in `~/.claude/plugins/dev-workflow/` and is shared across all the user's projects. Git submodule is a fallback channel for environments without marketplace support.
 - **Install flow** (two-step, explicit):
-  1. User-level: `claude install plugin claude-code-crumbs` — once per developer machine.
+  1. User-level: `claude install plugin dev-workflow` — once per developer machine.
   2. Project-level: inside a project, run `/000-prd-refine`. Plugin detects absent `PRD.md` and bootstraps everything (PRD, epics.yaml, SCENARIOS.md, ruleset/*, CONTEXT.md, stack.yaml.example, docs/adr/).
 
 ## §9. Decisions

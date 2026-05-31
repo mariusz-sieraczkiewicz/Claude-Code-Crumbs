@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://claude-code-crumbs/schemas/epics.schema.json",
+  "$id": "https://dev-workflow/schemas/epics.schema.json",
   "title": "Epics",
   "description": "Schema for docs/planning/epics.yaml — the SoT list of epics with verbatim Gherkin business scenarios.",
   "type": "object",

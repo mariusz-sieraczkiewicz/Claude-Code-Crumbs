@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://claude-code-crumbs/schemas/stack.schema.json",
+  "$id": "https://dev-workflow/schemas/stack.schema.json",
   "title": "Stack",
   "description": "Schema for .claude/stack.yaml — project stack, gates, paths and promotion config.",
   "type": "object",

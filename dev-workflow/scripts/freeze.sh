@@ -29,7 +29,7 @@ set -o pipefail
 # -----------------------------------------------------------------------------
 # Default plugin root. Override with --plugin-root=<path>.
 # -----------------------------------------------------------------------------
-DEFAULT_PLUGIN_ROOT="${HOME}/.claude/plugins/claude-code-crumbs"
+DEFAULT_PLUGIN_ROOT="${HOME}/.claude/plugins/dev-workflow"
 PLUGIN_ROOT=""
 DRY_RUN=0
 FORCE=0
@@ -66,7 +66,7 @@ Usage: freeze.sh [--dry-run] [--force] [--reset] [--plugin-root=<path>]
   --force           Skip confirmation prompts (re-freeze, reset).
   --reset           Remove .claude/commands/ and .claude/agents/ and exit.
   --plugin-root=P   Override plugin source dir.
-                    Default: ~/.claude/plugins/claude-code-crumbs
+                    Default: ~/.claude/plugins/dev-workflow
 
 Scope is preset-driven: freeze resolves keys from .claude/ruleset/git-workflow.md
 and .claude/ruleset/deployment.md (the active team_preset). Other dynamics
