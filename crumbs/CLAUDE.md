@@ -19,5 +19,3 @@ Never answer technical questions from memory. Verify first:
 - Everything else → WebSearch (if no results or errors, fall back to tavily MCP)
 
 Current year: 2026. Use when searching for latest information.
-
-`rg` for exact strings/imports. `ast-grep` for structural patterns (class defs, function signatures).
