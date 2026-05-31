@@ -1,7 +1,7 @@
 {
   "name": "crumbs",
   "description": "A collection of small skills and configurations for Claude Code.",
-  "version": "0.1.17",
+  "version": "0.1.18",
   "author": {
     "name": "Mariusz Sieraczkiewicz"
   },
