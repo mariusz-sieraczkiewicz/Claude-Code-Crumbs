@@ -22,7 +22,7 @@ Resolve the working base directory in this order:
 2. `base:` in `{base-candidate}/config.yaml` — check `~/daily-publishing/config.yaml`
 3. Default: `~/daily-publishing`
 
-Default date is today (`currentDate` / `date +%F`); override with the first positional arg. Enabled sources default to all; restrict with `--source slack,cc-sessions`. All config knobs (`identity`, `outputs`, `sources`, `video_tool`, `base`) are documented in `references/configuration.md`.
+Default date is today (`currentDate` / `date +%F`); override with the first positional arg. Enabled sources default to all; restrict with `--source slack,cc-sessions`. All config knobs are documented in `references/integration.md`.
 
 Layout under `{base}`:
 
