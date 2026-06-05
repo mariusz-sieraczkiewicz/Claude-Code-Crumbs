@@ -7,11 +7,11 @@ allowed-tools: Read, Write, Edit, Glob, Grep, Bash, AskUserQuestion
 
 # Daily Publishing
 
-Mine a day of work activity for things worth publishing, let the user pick, then draft content for each chosen subject. Two halves are kept in separate, independently optimizable reference files:
+Mine a day of work activity for things worth publishing, let the user pick, then draft content for each chosen subject. The two halves are split into **one file per source** and **one file per output format**, so each can be tuned and developed on its own:
 
-- **Gathering** → `references/sources.md` (one adapter per source)
-- **Creating** → `references/create.md` (one recipe per output format)
-- **Setup** → `references/integration.md` (how to connect each service)
+- **Gathering** → `references/sources/<source>.md` (one file per source) + `references/sources/README.md` (shared contract)
+- **Creating** → `references/formats/<format>.md` (one file per format) + `references/formats/README.md` (shared voice)
+- **Setup** → `references/integration.md` (how to connect each service + scheduling)
 
 Read a reference file only when you reach the phase that needs it. Don't inline its content here.
 
@@ -43,7 +43,7 @@ This skill does not run itself at 9 pm — invocation is the harness's job. To r
 
 ## Phase 1 — Gather
 
-Read `references/sources.md`. For each enabled source, run its adapter to collect the target day's material into `{base}/raw/{date}/<source>.md`. Each file: timestamped, deduplicated, with a provenance line (link, channel, file path, or session id) per item so subjects can cite where they came from.
+Read `references/sources/README.md` for the shared output contract. Then, for each enabled source, read and run its file `references/sources/<source>.md` to collect the target day's material into `{base}/raw/{date}/<source>.md`. Each file: timestamped, deduplicated, with a provenance line (link, channel, file path, or session id) per item so subjects can cite where they came from.
 
 Skip a source cleanly if it is not configured — note it as "skipped (not configured)", don't fail. If **no** source produced material, stop and tell the user, pointing at `references/integration.md`.
 
@@ -73,7 +73,7 @@ For each chosen subject, create `{base}/subjects/{date}-{slug}/`. On slug collis
 
 ## Phase 6 — Create
 
-Read `references/create.md`. For each chosen subject, generate every enabled output format from `subject.md` into the subject directory. Default outputs: `blog.md`, `x-post.md`, `linkedin.md`, `youtube-scenario.md`, `youtube-presentation.md`. Keep each format in its own file so it can be edited or regenerated alone.
+Read `references/formats/README.md` for the shared voice. Then, for each chosen subject, generate every enabled output by applying its format file `references/formats/<format>.md` to `subject.md`, writing into the subject directory. Default outputs: `blog.md`, `x-post.md`, `linkedin.md`, `youtube-scenario.md`, `youtube-presentation.md`. Each format file defines that format's structure, length, and writing style — follow it. Keep each output in its own file so it can be edited or regenerated alone.
 
 ## Phase 7 — Index & report
 

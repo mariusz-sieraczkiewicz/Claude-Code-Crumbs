@@ -1,6 +1,6 @@
 # Integration
 
-How to connect each source and run the skill on a schedule. The collection logic is in `sources.md`; this file is the *setup* (credentials, paths, install steps). Configure once, then the adapters just work.
+How to connect each source and run the skill on a schedule. The collection logic is in `sources/<source>.md`; this file is the *setup* (credentials, paths, install steps). Configure once, then the adapters just work.
 
 ## config.yaml
 
@@ -56,7 +56,7 @@ Pick one:
 
 ## Claude Code sessions (work / private)
 
-No setup beyond classification. List which project roots are work (Roche) vs private under `work_paths` / `private_paths`. Session files are read locally from `~/.claude/projects/`. Work items are abstracted before publishing — confirm the redaction rules in `sources.md` match your employer's policy.
+No setup beyond classification. List which project roots are work (Roche) vs private under `work_paths` / `private_paths`. Session files are read locally from `~/.claude/projects/`. Work items are abstracted before publishing — confirm the redaction rules in `sources/cc-sessions.md` match your employer's policy.
 
 ## Meetings & all-day recorder
 
@@ -71,7 +71,7 @@ No setup beyond classification. List which project roots are work (Roche) vs pri
 The skill doesn't self-trigger. Pick one:
 - **cron / launchd / Task Scheduler** — run a headless Claude Code invocation nightly, e.g.
   `0 21 * * * claude -p "Use the daily-publishing skill for today" >> ~/daily-publishing/cron.log 2>&1`
-- **`/loop` skill** — `/loop 24h /daily-publishing` keeps a recurring run inside a session.
+- **`/loop` skill** — `/loop 24h Use the daily-publishing skill for today` keeps a recurring run inside a session.
 - **`send_later`** (claude-code-remote MCP, when available) — schedule a self check-in that re-invokes the skill.
 
 Whichever you choose, the run is still interactive at Phase 4 (subject selection). For a fully unattended run, tell the skill to auto-select all `new` subjects (or the top N) instead of asking.
