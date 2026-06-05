@@ -17,7 +17,7 @@
 
 ## Render hand-off
 
-If a video/slide-generation skill is available (a `video` skill, a deck renderer, or marp/reveal in the user's setup), pass this file to it to produce the actual deck and note that in the run report. Otherwise leave it as this markdown spec.
+If `video_tool:` is set in `{base}/config.yaml`, hand this file (plus `youtube-scenario.md`) to that tool to produce the actual presentation/video and note it in the run report. Candidate tools and how each consumes this deck are documented in `../video-tools.md`. Otherwise leave it as this markdown spec.
 
 ## Skeleton
 
