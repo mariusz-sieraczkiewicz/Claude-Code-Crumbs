@@ -1,46 +1,6 @@
 # Integration
 
-How to connect each source and run the skill on a schedule. The collection logic is in `sources/<source>.md`; this file is the *setup* (credentials, paths, install steps). Configure once, then the adapters just work.
-
-## config.yaml
-
-Create `{base}/config.yaml` (default base `~/daily-publishing`):
-
-```yaml
-base: ~/daily-publishing
-identity:
-  name: "Your Name"
-  handles: { x: "@you", linkedin: "in/you" }
-  links: { blog: "https://...", youtube: "https://..." }
-  tone: "practical, first-person, no hype"
-  audience: "developers / engineering leaders"
-outputs: [blog, x-post, linkedin, youtube-scenario, youtube-presentation]
-sources:
-  slack:
-    enabled: true
-    access: mcp          # mcp | export | api
-    export_dir: ""       # when access: export
-    channels: []         # empty = all the user participates in
-  gchat:
-    enabled: true
-    access: api          # api | export
-    credentials: ""      # path to OAuth creds (api)
-    export_dir: ""       # Takeout dir (export)
-  cc_sessions:
-    enabled: true
-    work_paths: []       # project roots treated as work
-    private_paths: []    # project roots treated as private
-  meetings:
-    enabled: true
-    transcript_dir: "~/recordings/meetings"
-    transcribe: false
-  recorder:
-    enabled: true
-    dir: "~/recordings/allday"
-    transcribe: true
-```
-
-Keep secrets out of this file — reference paths/env vars, not raw tokens.
+How to connect each source and run the skill on a schedule. The collection logic is in `sources/<source>.md`; the config schema (all knobs) is in `configuration.md`. This file is the *setup* — credentials, install steps, paths — for each service. Configure once, then the adapters just work.
 
 ## Slack
 
