@@ -7,7 +7,7 @@ Personal scratchpad (kept outside the `daily-publishing` skill). Use it to decid
 - [ ] **Video/presentation tool** for `youtube-presentation` → see options below.
 - [ ] **Slack access** (company workspace): official MCP (admin approval) vs. own app + `xoxp` user token vs. browser `xoxc`/`xoxd` tokens → see options below.
 - [ ] **Google Chat access**: Chat API (OAuth) vs. Takeout export.
-- [ ] **Transcription** for meetings + all-day recorder: `whisper` vs `whisper.cpp` vs the recorder tool's own export.
+- [ ] **Meeting recording + transcription** (company calls): local-first notetaker vs DIY system-audio + Whisper → see options below.
 - [ ] **Scheduling** the 9 pm run: cron/launchd vs `/loop` skill vs `send_later`.
 
 ---
@@ -86,3 +86,36 @@ Sources:
 - https://docs.slack.dev/ai/slack-mcp-server/connect-to-claude/
 - https://github.com/slackapi/slack-mcp-plugin
 - https://github.com/korotovsky/slack-mcp-server/blob/master/docs/01-authentication-setup.md
+
+---
+
+## Meeting recording + transcription (company calls → local-first)
+
+Goal: record video calls externally (not Google Meet's built-in recording) and get a **transcript file** the `meetings` source drops into `transcript_dir`. For **company** calls, prefer **local-first** — no bot joins the call, audio never leaves my machine, which fits the skill's name-redaction and keeps IT/policy happy. (Always still inform participants they're being recorded.)
+
+### Local-first notetakers  ← recommended for company/confidential calls
+
+- **Hyprnote (now "Char")** — local-first, **open-source**, markdown notes (Obsidian-style). Best fit: markdown transcripts route straight into `transcript_dir`.
+- **Meetily** — open-source, **100% local**, live Whisper/Parakeet transcription + speaker diarization + local LLM (Ollama) summaries.
+- **BB Recorder** — free, fully local, no account; combines Apple Intelligence + Whisper + Llama.
+- Why local: captures system + mic audio on-device, no bot in the call, no vendor cloud → no cross-border/GDPR transfer concern.
+
+### DIY — system audio + Whisper
+
+- Record the call audio (OBS / OS audio capture), then transcribe with **whisper.cpp** or **faster-whisper** (large-v3 ≈ 95–97% on English).
+- This is the skill's existing `transcribe: true` path — point `sources.meetings.dir`/`transcript_dir` at the audio/transcripts; it caches `.txt` next to each file.
+
+### Cloud bot notetakers (only if IT allows)
+
+- Fireflies (API) / Otter / tl;dv / Fathom — a bot joins the call, cloud transcript + export/API. Convenient auto-pull, but visible bot + vendor cloud → **check company policy first**. Not preferred for confidential calls.
+
+### When decided
+
+- Local notetaker / DIY: set `sources.meetings.transcript_dir` (and `transcribe: true` if only audio). Route the tool's transcript output there.
+- Cloud-with-API: the adapter can pull the day's transcripts via API instead of a folder.
+
+Sources:
+- https://meetily.ai/blog/best-self-hosted-meeting-transcription-tools-2026
+- https://github.com/Zackriya-Solutions/meetily
+- https://hyprnote.com/vs/granola
+- https://meetingnotes.com/blog/bot-free-ai-note-takers-alternatives
