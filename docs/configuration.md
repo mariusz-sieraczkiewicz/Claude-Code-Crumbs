@@ -8,6 +8,7 @@ Personal scratchpad (kept outside the `daily-publishing` skill). Use it to decid
 - [ ] **Slack access** (company workspace): official MCP (admin approval) vs. own app + `xoxp` user token vs. browser `xoxc`/`xoxd` tokens → see options below.
 - [ ] **Google Chat access**: Chat API (OAuth) vs. Takeout export.
 - [ ] **Meeting recording + transcription** (company calls): local-first notetaker vs DIY system-audio + Whisper → see options below.
+- [x] **Hardware recorder** (in-person + phone calls) → **UMEVO Note Plus (purchased)** — see notes below.
 - [ ] **Scheduling** the 9 pm run: cron/launchd vs `/loop` skill vs `send_later`.
 
 ---
@@ -119,3 +120,30 @@ Sources:
 - https://github.com/Zackriya-Solutions/meetily
 - https://hyprnote.com/vs/granola
 - https://meetingnotes.com/blog/bot-free-ai-note-takers-alternatives
+
+---
+
+## Hardware recorder — UMEVO Note Plus (PURCHASED ✅)
+
+The device I bought for in-person conversations and phone calls — feeds the `recorder` (and, for calls, `meetings`) source.
+
+### Device
+
+- Credit-card-thin (~$149), snaps to the back of the phone via MagSafe.
+- **Records phone calls via magnetic vibration** (captures both sides) + in-person audio. 64 GB onboard, ~40 hr battery, 140+ languages, ChatGPT-powered transcription/summaries.
+
+### Transcription plan (what I'm on)
+
+- **Year 1: Max plan free** (unlimited transcription) — bundled with the device.
+- **After year 1:** drops to free **Starter = 400 min/month**. If I need more: **Pro $2.50/mo** or **Max $5.83/mo** (both unlimited, billed annually), or pay-as-you-go minute packs (120 min $0.59 … 6,000 min $19.99, valid 2 yrs).
+- Note: Pro vs Max both give "unlimited transcription"; Max's extra ~$3/mo is for AI-summary/premium extras, **not** more transcript minutes — so **Pro is enough** for this skill (we only need the transcript).
+
+### Export → feeds the skill
+
+- In the UMEVO app, export type **Transcript → TXT** (or **SRT** for timestamps), with speaker labels/timestamps toggled on.
+- Drop those files into `sources.recorder.dir` (and/or `sources.meetings.transcript_dir`). The adapter segments by topic, applies the shared name-redaction, and writes `raw/{date}/recorder.md`.
+- Since UMEVO transcribes in its own cloud, leave `transcribe: false` (no local Whisper needed). ⚠️ Cloud processing → keep confidential company-call content abstracted per the redaction rules.
+
+Sources:
+- https://www.umevo.ai/products/umevo-note-plus-magnetic-call-recorder-ai-voice-recorder-transcribe-summarize
+- https://www.umevo.ai/blogs/ume-all-posts/umevo-note-plus-full-features-and-specs-everything-you-need-to-know
