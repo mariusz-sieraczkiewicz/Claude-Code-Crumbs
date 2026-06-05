@@ -1,6 +1,6 @@
 # Source: cc-sessions
 
-Processes already-collected Claude Code session history — split into **work (Roche)** and **private** profiles. Output contract: see `README.md`.
+Processes already-collected Claude Code session history — split into **work** and **private** profiles. Output contract: see `README.md`.
 
 ## Locate
 
@@ -12,9 +12,9 @@ Session files: `~/.claude/projects/{encoded-project-path}/*.jsonl` (path `/`→`
 2. Per file: read compaction summaries first (richest), then scan user↔assistant turns.
 3. Extract publishable moments — problems solved, decisions, techniques, gotchas, before/after, "why this approach" reasoning. Tag each `profile:work` or `profile:private`.
 
-## Confidentiality (Roche / work)
+## Confidentiality
 
-For `profile:work` items, abstract away client names, internal systems, and proprietary detail — keep only the transferable, generic lesson. Mark residual sensitivity `⚠️confidential`. When in doubt, abstract harder.
+Apply the shared Redaction rules from `README.md`. For `profile:work` items, abstract harder — strip proprietary detail and keep only the transferable, generic lesson. Mark residual sensitivity `⚠️confidential`.
 
 ## Emit
 

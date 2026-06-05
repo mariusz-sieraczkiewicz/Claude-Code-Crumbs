@@ -10,7 +10,7 @@ Processes already-collected meeting transcripts for the day. Output contract: se
 
 1. Find transcripts dated to the target day.
 2. Per meeting, extract: decisions, action items, and any insight worth sharing publicly.
-3. Strip attendee names and confidential specifics — keep the generalizable idea.
+3. Apply the shared Redaction rules from `README.md` — keep the generalizable idea, drop the specifics.
 
 ## Emit
 

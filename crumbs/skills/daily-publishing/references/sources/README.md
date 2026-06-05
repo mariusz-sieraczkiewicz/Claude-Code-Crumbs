@@ -12,7 +12,18 @@ Write the target day's material to `{base}/raw/{date}/<source>.md`, one item per
 
 - `provenance ref` — a link, channel, file path, or session id specific enough to cite later.
 - Sort ascending by time. Deduplicate near-identical lines.
-- Redact secrets/tokens. Mark client-confidential items `⚠️confidential` (kept here, filtered in Phase 2) — never drop them silently.
+- Redact secrets/tokens. Mark anything still sensitive after redaction `⚠️confidential` (kept here, filtered in Phase 2) — never drop it silently.
+
+## Redaction (every source, while gathering)
+
+Strip identifying names as you write each item — this happens during gathering, not later:
+
+- **Company / employer names** → "the company" / "work".
+- **Project / product / codename** → "the project" / "a service".
+- **People's names** (colleagues, clients, attendees) → role or "a teammate" / "a stakeholder".
+- **Internal systems, repos, hostnames, URLs, ticket ids** → a generic noun ("an internal service", "the deploy pipeline").
+
+Keep the transferable lesson; drop the identifier. Provenance refs (channel/file/session id) stay — they're local and never published. When unsure whether something identifies, redact it.
 
 ## Resolving where data lives
 

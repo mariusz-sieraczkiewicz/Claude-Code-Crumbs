@@ -28,7 +28,7 @@ sources:
     export_dir: ""       # Takeout dir (export)
   cc_sessions:
     enabled: true
-    work_paths: []       # project roots treated as work/Roche
+    work_paths: []       # project roots treated as work
     private_paths: []    # project roots treated as private
   meetings:
     enabled: true
@@ -56,7 +56,7 @@ Pick one:
 
 ## Claude Code sessions (work / private)
 
-No setup beyond classification. List which project roots are work (Roche) vs private under `work_paths` / `private_paths`. Session files are read locally from `~/.claude/projects/`. Work items are abstracted before publishing — confirm the redaction rules in `sources/cc-sessions.md` match your employer's policy.
+No setup beyond classification. List which project roots are work vs private under `work_paths` / `private_paths`. Session files are read locally from `~/.claude/projects/`. Work items are abstracted before publishing — confirm the redaction rules in `sources/README.md` match your employer's policy.
 
 ## Meetings & all-day recorder
 
