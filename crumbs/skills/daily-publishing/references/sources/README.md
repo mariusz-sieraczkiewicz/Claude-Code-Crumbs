@@ -1,6 +1,6 @@
 # Sources — shared contract
 
-Each source has its own file in this directory so it can be tuned and developed independently. Phase 1 reads this contract once, then runs each enabled source's file. Files here cover **processing already-collected data into raw material** — not service setup (that's `../integration.md`).
+Each source has its own file in this directory so it can be tuned and developed independently. Phase 1 reads this contract once, then runs each source in the active set (see "Resolving" below). Files here cover **processing already-collected data into raw material** — not service setup (that's `../integration.md`).
 
 ## Output contract (every source file obeys this)
 
@@ -25,9 +25,11 @@ Strip identifying names as you write each item — this happens during gathering
 
 Keep the transferable lesson; drop the identifier. Provenance refs (channel/file/session id) stay — they're local and never published. When unsure whether something identifies, redact it.
 
-## Resolving where data lives
+## Resolving the active set & where data lives
 
-Read the source's block under `sources.<name>` in `{base}/config.yaml` for paths/access. If the path or access is missing, **skip** the source and record `skipped (not configured)` — do not fail the run.
+Which sources run is decided by the precedence in `SKILL.md` → Configuration → Active source set: `--source` override → else `sources.<name>.enabled: true` → else (no config) all.
+
+For each source in that set, read its block under `sources.<name>` in `{base}/config.yaml` for paths/access. If the required path or access is missing, **skip** the source and record `skipped (not configured)` — do not fail the run. (`enabled: false` excludes a source up front; a missing-config skip is the fallback for an enabled-but-unconfigured one.)
 
 ## Adding a source
 

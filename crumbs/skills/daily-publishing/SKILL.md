@@ -22,7 +22,17 @@ Resolve the working base directory in this order:
 2. `base:` in `{base-candidate}/config.yaml` — check `~/daily-publishing/config.yaml`
 3. Default: `~/daily-publishing`
 
-Default date is today (`currentDate` / `date +%F`); override with the first positional arg. Enabled sources default to all; restrict with `--source slack,cc-sessions`. All config knobs are documented in `references/integration.md`.
+Default date is today (`currentDate` / `date +%F`); override with the first positional arg. All config knobs are documented in `references/integration.md`.
+
+### Active source set
+
+Resolve which sources run, in this precedence:
+
+1. **`--source a,b` given** → exactly those (intersected with known sources). Explicit override wins, ignoring `enabled`.
+2. **Else, with a `config.yaml`** → every source where `sources.<name>.enabled: true`. `enabled: false` reliably turns a source off.
+3. **No `config.yaml`** → all sources (zero-config default).
+
+Then, for each source in the resolved set, if its required config (access/paths) is missing, **skip it** with `skipped (not configured)` — never fail the run.
 
 Layout under `{base}`:
 
@@ -43,9 +53,9 @@ This skill does not run itself at 9 pm — invocation is the harness's job. To r
 
 ## Phase 1 — Gather
 
-Read `references/sources/README.md` for the shared output contract. Then, for each enabled source, read and run its file `references/sources/<source>.md` to collect the target day's material into `{base}/raw/{date}/<source>.md`. Each file: timestamped, deduplicated, with a provenance line (link, channel, file path, or session id) per item so subjects can cite where they came from.
+Read `references/sources/README.md` for the shared output contract. Then, for each source in the **active source set** (resolved per Configuration above), read and run its file `references/sources/<source>.md` to collect the target day's material into `{base}/raw/{date}/<source>.md`. Each file: timestamped, deduplicated, with a provenance line (link, channel, file path, or session id) per item so subjects can cite where they came from.
 
-Skip a source cleanly if it is not configured — note it as "skipped (not configured)", don't fail. If **no** source produced material, stop and tell the user, pointing at `references/integration.md`.
+A source whose required config is missing is skipped as `skipped (not configured)`, never a failure. If **no** source produced material, stop and tell the user, pointing at `references/integration.md`.
 
 ## Phase 2 — Mine subjects
 
