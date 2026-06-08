@@ -20,4 +20,4 @@ Read `identity:` from `{base}/config.yaml` (name, handles, links, tone, audience
 
 ## Adding a format
 
-Add `<name>.md` here (purpose · structure · voice for that channel · skeleton), then add its filename to the default `outputs` list and the Phase 8 `outputs` index field in `SKILL.md`.
+Add `<name>.md` here (purpose · structure · voice for that channel · skeleton), then add its filename to the default `outputs` list and the `outputs` index field in the Index & report phase of `SKILL.md`.

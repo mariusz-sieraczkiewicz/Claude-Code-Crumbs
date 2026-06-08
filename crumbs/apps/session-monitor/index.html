@@ -27,6 +27,19 @@
       font-size: 1.1em;
       font-weight: 600;
       color: #a0a0c0;
+      flex-shrink: 0;
+    }
+    #project-dir {
+      font-size: 0.78em;
+      color: #6b7280;
+      font-family: 'SF Mono', 'Menlo', monospace;
+      direction: rtl;
+      text-align: left;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 360px;
+      flex-shrink: 0;
     }
     select {
       background: #1a1a2e;
@@ -78,6 +91,28 @@
       font-size: 0.75em;
       font-family: 'SF Mono', 'Menlo', monospace;
       margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .entry .role {
+      font-size: 0.92em;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      text-transform: lowercase;
+      padding: 1px 7px;
+      border-radius: 4px;
+    }
+    .entry .role.user { color: #93c5fd; background: rgba(96,165,250,0.15); }
+    .entry .role.assistant { color: #a7f3d0; background: rgba(16,185,129,0.15); }
+    .entry .role.summary { color: #fca5a5; background: rgba(239,68,68,0.15); }
+    .step .step-detail {
+      display: block;
+      font-size: 0.88em;
+      font-weight: 400;
+      opacity: 0.62;
+      font-style: italic;
+      padding-left: 2px;
     }
     .entry .progress-text {
       color: #9ca3af;
@@ -146,6 +181,7 @@
 <body>
   <div id="header">
     <h1>Session Monitor</h1>
+    <span id="project-dir" title=""></span>
     <select id="session-select">
       <option value="">Select session...</option>
     </select>
@@ -161,6 +197,7 @@
 
   <script>
     const timeline = document.getElementById('timeline');
+    const projectDirEl = document.getElementById('project-dir');
     const sessionSelect = document.getElementById('session-select');
     const showAllBtn = document.getElementById('show-all');
     const statusDot = document.getElementById('status-dot');
@@ -262,24 +299,34 @@
     let lastAgentBlock = null;
     let lastTimeEl = null;
 
+    const fmtTime = (ts) => new Date(ts).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+    function appendStep(block, headline, detail) {
+      const stepDiv = document.createElement('div');
+      stepDiv.className = 'step';
+      stepDiv.textContent = headline;
+      if (detail) {
+        const d = document.createElement('span');
+        d.className = 'step-detail';
+        d.textContent = detail;
+        stepDiv.appendChild(d);
+      }
+      block.appendChild(stepDiv);
+    }
+
     function addEntry(entry) {
       const isSummary = entry.type === 'summary';
       const isAgent = !isSummary && (entry.type === 'progress' || (entry.agent && entry.agent.length > 0 && !entry.user));
       const isUser = !!entry.user && !isAgent && !isSummary;
       const steps = entry.agent || (entry.summary ? [entry.summary] : []);
+      const details = entry.details || [];
 
       // Merge agent entries, but start new block every 5 steps
       if (isAgent && lastEntryType === 'agent' && lastAgentBlock && lastTimeEl) {
         const currentSteps = lastAgentBlock.querySelectorAll('.step').length;
         if (currentSteps < 5) {
-          const date = new Date(entry.ts);
-          lastTimeEl.textContent = date.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-          for (const step of steps) {
-            const stepDiv = document.createElement('div');
-            stepDiv.className = 'step';
-            stepDiv.textContent = step;
-            lastAgentBlock.appendChild(stepDiv);
-          }
+          lastTimeEl.textContent = fmtTime(entry.ts);
+          steps.forEach((step, i) => appendStep(lastAgentBlock, step, details[i]));
           if (autoScroll) timeline.scrollTop = timeline.scrollHeight;
           return;
         }
@@ -291,8 +338,14 @@
 
       const time = document.createElement('div');
       time.className = 'time';
-      const date = new Date(entry.ts);
-      time.textContent = date.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const role = isUser ? 'user' : isSummary ? 'summary' : 'assistant';
+      const roleChip = document.createElement('span');
+      roleChip.className = 'role ' + role;
+      roleChip.textContent = role;
+      time.appendChild(roleChip);
+      const timeText = document.createElement('span');
+      timeText.textContent = fmtTime(entry.ts);
+      time.appendChild(timeText);
       div.appendChild(time);
 
       if (isUser) {
@@ -308,17 +361,12 @@
       if (steps.length > 0) {
         const stepsBlock = document.createElement('div');
         stepsBlock.className = isSummary ? 'summary-steps' : 'agent-steps';
-        for (const step of steps) {
-          const stepDiv = document.createElement('div');
-          stepDiv.className = 'step';
-          stepDiv.textContent = step;
-          stepsBlock.appendChild(stepDiv);
-        }
+        steps.forEach((step, i) => appendStep(stepsBlock, step, details[i]));
         div.appendChild(stepsBlock);
         if (isAgent) {
           lastEntryType = 'agent';
           lastAgentBlock = stepsBlock;
-          lastTimeEl = time;
+          lastTimeEl = timeText;
         }
         if (isSummary) {
           lastEntryType = 'summary';
@@ -335,6 +383,18 @@
       selectSession(sessionSelect.value);
     });
 
+    async function loadProjectDir() {
+      try {
+        const res = await fetch('/api/info');
+        const info = await res.json();
+        if (info.project) {
+          projectDirEl.textContent = info.project;
+          projectDirEl.title = info.project;
+        }
+      } catch {}
+    }
+
+    loadProjectDir();
     loadSessions();
     setInterval(loadSessions, 30000);
   </script>

@@ -16,6 +16,12 @@ identity:
   audience: "developers / engineering leaders"
 outputs: [blog, x-post, linkedin, youtube-scenario, youtube-presentation]
 video_tool: ""         # "" (markdown deck only) | video-toolkit | frontend-slides
+visuals:
+  enabled: false           # opt-in; true to generate companion visuals
+  provider: gemini         # only 'gemini' implemented; knob reserved for future providers
+  model: gemini-3-pro-image  # pin the GA id; do NOT use the deprecated `-preview` variant (shut down 2026-06-25)
+  candidates: 3            # candidates generated per visual; best is auto-picked
+  aspect_default: "16:9"   # blog hero default; per-format overrides in references/visuals/README.md
 sources:
   slack:
     enabled: true
@@ -43,6 +49,8 @@ sources:
 
 Keep secrets out of this file — reference paths/env vars, not raw tokens.
 
+Note: under `visuals:`, `model` is currently pinned by the generator (the knob is reserved for the future provider router) and `aspect_default` is only a fallback — the per-format table in `references/visuals/README.md` overrides it; the genuinely-active knobs are `enabled`, `provider`, and `candidates`.
+
 ## Slack
 
 Pick one:
@@ -67,6 +75,15 @@ No setup beyond classification. List which project roots are work vs private und
   - `whisper` (OpenAI) or `whisper.cpp` locally — `whisper <file> --output_format txt`.
   - The adapter calls it via Bash and caches the `.txt` next to the audio so it isn't re-run.
 - Common meeting tools (Zoom/Meet/Granola/Otter/Fireflies) can auto-export transcripts to a folder — route them to `transcript_dir`.
+
+## Visuals
+
+Companion images and diagrams are fully opt-in. With `visuals.enabled: false` (or absent) or no usable key, the run skips the phase and reports `visuals skipped (not configured)` — nothing else changes. To turn it on:
+
+- **API key:** store it at `~/.config/daily-publishing/secrets.env` (chmod 600, *outside* the repo so it is never committed) as `GEMINI_API_KEY=...`. The generator (`scripts/generate-visual.sh`) sources that file, or falls back to the `$GEMINI_API_KEY` env var if it isn't there. Never put a token in `config.yaml` or any tracked file.
+- **Billing is required.** The free tier for `gemini-3-pro-image` is `0`, so without billing every call returns HTTP 429 (`RESOURCE_EXHAUSTED`). Enable billing on the Google Cloud project the API key belongs to — a key is bound to one specific project, so billing must be on *that* project. Cost is ≈ $0.13/image at 1K–2K, ≈ $0.24 at 4K.
+- **Model:** pin the GA id `gemini-3-pro-image` (the `model:` default). Do **not** use the `-preview` variant — it is deprecated and was shut down 2026-06-25.
+- **Provider:** only `gemini` is implemented. The `provider:` knob exists so a second provider can be added later without changing the config schema.
 
 ## Scheduling (the "9 pm" run)
 

@@ -51,7 +51,8 @@ Dispatch on the skill argument. `start` is the default for no/unrecognized argum
 2. Compute `DATA_DIR` (see **Layout**); `mkdir -p "$DATA_DIR"`.
 3. If `$DATA_DIR/viewer.pid` exists and the PID is alive (`kill -0 <pid> 2>/dev/null`), it's already
    running — read `$DATA_DIR/viewer.port`, report `http://localhost:<port>`, and stop. No second copy.
-4. Pick a free port from 7891 upward:
+4. Pick a starting port from 7891 upward (a hint — `viewer.ts` re-checks and advances on its own if
+   this one gets taken before it binds):
    ```bash
    PORT=7891; while lsof -iTCP:$PORT -sTCP:LISTEN >/dev/null 2>&1; do PORT=$((PORT+1)); done
    ```
@@ -62,7 +63,12 @@ Dispatch on the skill argument. `start` is the default for no/unrecognized argum
    SESSION_MONITOR_PORT="$PORT" \
    nohup bun run ${CLAUDE_PLUGIN_ROOT}/apps/session-monitor/viewer.ts > "$DATA_DIR/viewer.out" 2>&1 &
    echo $! > "$DATA_DIR/viewer.pid"
-   echo "$PORT" > "$DATA_DIR/viewer.port"
+   ```
+   `viewer.ts` writes the port it actually bound to `$DATA_DIR/viewer.port`. Read it back (give it a
+   moment to appear) — that, not `$PORT`, is the real port:
+   ```bash
+   for _ in $(seq 1 10); do [ -s "$DATA_DIR/viewer.port" ] && break; sleep 0.2; done
+   PORT="$(cat "$DATA_DIR/viewer.port")"
    ```
 6. If launched: "Session Monitor running at http://localhost:<port> — select a session to start
    watching." If declined: report it's configured and how to start later.
