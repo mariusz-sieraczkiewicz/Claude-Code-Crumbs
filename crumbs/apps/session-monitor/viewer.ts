@@ -295,9 +295,12 @@ Odpowiedz samą parafrazą, nic więcej. Przykłady:
 Kroki wykonane w tej rundzie:
 ${turnSteps.join('\n').slice(0, 2000)}
 
-Odpowiedz jako JSON z max 2 krokami (czas przeszły) i jednozdaniowym statusem. Kroki grupuj — np. "edycja 3 plików" zamiast wymieniania każdego.
+Odpowiedz jako JSON: {"steps":[{"headline":"...","detail":"..."}],"status":"..."}.
+- max 2 kroki, "headline" w czasie przeszłym, kroki grupuj — np. "edycja 3 plików" zamiast wymieniania każdego.
+- "detail": konkret WYNIKAJĄCY z kroków powyżej, podobnej długości co headline. NIE zgaduj — jeśli brak konkretu, ustaw "".
+- "status": jednozdaniowy stan końcowy rundy.
 
-Przykład: {"steps":["Naprawiłem detekcję pytań w agent-runner","Przetestowałem na dev serverze"],"status":"Gotowe do review"}`;
+Przykład: {"steps":[{"headline":"Naprawiłem detekcję pytań","detail":"w agent-runner, kolejka zdarzeń"}],"status":"Gotowe do review"}`;
 
     log(`SDK_SUMMARY calling with ${turnSteps.length} steps`);
     const raw = await this.callSDK(prompt);
@@ -307,12 +310,19 @@ Przykład: {"steps":["Naprawiłem detekcję pytań w agent-runner","Przetestowa�
       const match = raw.match(/\{[\s\S]*\}/);
       const parsed = JSON.parse(match ? match[0] : raw);
       if (parsed.steps || parsed.status) {
-        this.appendEntry({
-          ts,
-          type: 'summary',
-          agent: [...(parsed.steps || []), parsed.status ? `→ ${parsed.status}` : ''].filter(Boolean),
-        });
-        log(`SUMMARY_ENTRY created: ${JSON.stringify(parsed.steps?.slice(0,2))}`);
+        // Steps may be {headline,detail} objects (current) or bare strings (legacy).
+        const rawSteps: Array<{ headline?: string; detail?: string } | string> = parsed.steps ?? [];
+        const headlines: string[] = [];
+        const dets: string[] = [];
+        for (const s of rawSteps) {
+          if (typeof s === 'string') { if (s) { headlines.push(s); dets.push(''); } }
+          else if (s?.headline) { headlines.push(s.headline); dets.push(s.detail ?? ''); }
+        }
+        if (parsed.status) { headlines.push(`→ ${parsed.status}`); dets.push(''); }
+        if (headlines.length > 0) {
+          this.appendEntry({ ts, type: 'summary', agent: headlines, details: dets });
+          log(`SUMMARY_ENTRY created: ${JSON.stringify(headlines.slice(0, 2))}`);
+        }
       }
     } catch (e) { log(`SDK_SUMMARY parse error: ${e}`); }
   }
@@ -350,36 +360,40 @@ Przykłady:
   }
 
   private async callSDK(prompt: string): Promise<string | null> {
-    try {
-      const sdk = await import('@anthropic-ai/claude-agent-sdk');
-      const conversation = sdk.query({
-        prompt,
-        options: {
-          permissionMode: 'bypassPermissions',
-          allowDangerouslySkipPermissions: true,
-          model: 'sonnet',
-          // Keep the summarizer's own transcripts out of the monitored project's
-          // dir — write them under the data dir instead.
-          cwd: LOGS_DIR,
-        },
-      });
+    return callSDK(prompt);
+  }
+}
 
-      let result = '';
-      for await (const msg of conversation) {
-        const m = msg as { type?: string; subtype?: string; result?: string; message?: { content?: ContentBlock[] } };
-        if (m.type === 'assistant' && m.message?.content) {
-          for (const block of m.message.content) {
-            if (block.type === 'text' && block.text) result += block.text;
-          }
-        }
-        if (m.type === 'result' && m.subtype === 'success' && m.result) {
-          result = m.result;
+async function callSDK(prompt: string, model = 'sonnet'): Promise<string | null> {
+  try {
+    const sdk = await import('@anthropic-ai/claude-agent-sdk');
+    const conversation = sdk.query({
+      prompt,
+      options: {
+        permissionMode: 'bypassPermissions',
+        allowDangerouslySkipPermissions: true,
+        model,
+        // Keep the summarizer's own transcripts out of the monitored project's
+        // dir — write them under the data dir instead.
+        cwd: LOGS_DIR,
+      },
+    });
+
+    let result = '';
+    for await (const msg of conversation) {
+      const m = msg as { type?: string; subtype?: string; result?: string; message?: { content?: ContentBlock[] } };
+      if (m.type === 'assistant' && m.message?.content) {
+        for (const block of m.message.content) {
+          if (block.type === 'text' && block.text) result += block.text;
         }
       }
-      return result.trim() || null;
-    } catch {
-      return null;
+      if (m.type === 'result' && m.subtype === 'success' && m.result) {
+        result = m.result;
+      }
     }
+    return result.trim() || null;
+  } catch {
+    return null;
   }
 }
 
@@ -410,8 +424,155 @@ function firstUserText(sessionId: string): string {
   return '';
 }
 
+// Slash commands that only reset/manage context — never a session's real intent.
+const RESET_COMMANDS = new Set(['/clear', '/compact']);
+
+// Turn one raw user-message string into a display candidate, or '' to skip it.
+// Strips local-command wrappers, surfaces meaningful slash commands, drops resets.
+function cleanUserText(raw: string): string {
+  let t = raw.trim();
+  if (!t) return '';
+
+  // A slash-command invocation arrives as <command-name>/x</command-name> + args.
+  const nameMatch = t.match(/<command-name>([^<]*)<\/command-name>/);
+  if (nameMatch) {
+    const name = nameMatch[1]!.trim();
+    if (RESET_COMMANDS.has(name)) return '';
+    const argsMatch = t.match(/<command-args>([^<]*)<\/command-args>/);
+    const args = argsMatch ? argsMatch[1]!.trim() : '';
+    return (name + (args ? ' ' + args : '')).trim();
+  }
+
+  // Strip local-command wrapper blocks (caveats, stdout) and any stray tags.
+  t = t
+    .replace(/<local-command-caveat>[\s\S]*?<\/local-command-caveat>/g, '')
+    .replace(/<local-command-stdout>[\s\S]*?<\/local-command-stdout>/g, '')
+    .replace(/<\/?[a-z-]+>/gi, '')
+    .trim();
+  return t;
+}
+
+// First human-meaningful user message in a transcript, wrappers/resets skipped.
 function getSessionTitle(sessionId: string): string {
-  return firstUserText(sessionId).slice(0, 80);
+  const path = join(TRANSCRIPTS_DIR, `${sessionId}.jsonl`);
+  try {
+    for (const line of readFileSync(path, 'utf-8').split('\n')) {
+      if (!line) continue;
+      let entry: TranscriptLine;
+      try { entry = JSON.parse(line); } catch { continue; }
+      if (entry.type !== 'user' || !entry.message?.content) continue;
+      const c = entry.message.content;
+      let raw = '';
+      if (typeof c === 'string') raw = c;
+      else if (Array.isArray(c)) {
+        const tb = c.find((b: ContentBlock) => b.type === 'text' && b.text);
+        if (tb?.text) raw = tb.text;
+      }
+      const cleaned = cleanUserText(raw);
+      if (cleaned) return cleaned.replace(/\s+/g, ' ').slice(0, 80);
+    }
+  } catch {}
+  return '';
+}
+
+// Slash commands that carry no session topic — skip them when picking title input.
+const LOW_SIGNAL_COMMANDS = new Set([
+  '/clear', '/compact', '/model', '/reload-plugins', '/reload-skills',
+  '/plugin', '/plugins', '/config', '/status', '/help',
+]);
+
+// First few human-meaningful user messages, used as LLM title input. Reuses
+// cleanUserText, then drops low-signal commands and tiny non-command fragments.
+function meaningfulUserTexts(sessionId: string, max = 4): string[] {
+  const path = join(TRANSCRIPTS_DIR, `${sessionId}.jsonl`);
+  const out: string[] = [];
+  try {
+    for (const line of readFileSync(path, 'utf-8').split('\n')) {
+      if (!line) continue;
+      let entry: TranscriptLine;
+      try { entry = JSON.parse(line); } catch { continue; }
+      if (entry.type !== 'user' || !entry.message?.content) continue;
+      const c = entry.message.content;
+      let raw = '';
+      if (typeof c === 'string') raw = c;
+      else if (Array.isArray(c)) {
+        const tb = c.find((b: ContentBlock) => b.type === 'text' && b.text);
+        if (tb?.text) raw = tb.text;
+      }
+      const cleaned = cleanUserText(raw).replace(/\s+/g, ' ').trim();
+      if (!cleaned) continue;
+      if (LOW_SIGNAL_COMMANDS.has(cleaned.split(' ')[0]!)) continue;
+      if (!cleaned.startsWith('/') && cleaned.length < 12) continue;
+      out.push(cleaned.slice(0, 400));
+      if (out.length >= max) break;
+    }
+  } catch {}
+  return out;
+}
+
+// Per-session short title (3-7 words) from the LLM, cached forever on disk.
+// Memory map fronts the disk so the hot path (/api/sessions) rarely reads files.
+const titleCache = new Map<string, string>();
+const titleQueue: string[] = [];
+const titleInFlight = new Set<string>();
+let titleDraining = false;
+
+function titlePath(sessionId: string): string {
+  return join(LOGS_DIR, `${sessionId}.title.json`);
+}
+
+function loadCachedTitle(sessionId: string): string | null {
+  const mem = titleCache.get(sessionId);
+  if (mem) return mem;
+  try {
+    const p = titlePath(sessionId);
+    if (existsSync(p)) {
+      const t = JSON.parse(readFileSync(p, 'utf-8')).title;
+      if (t) { titleCache.set(sessionId, t); return t; }
+    }
+  } catch {}
+  return null;
+}
+
+async function generateTitle(sessionId: string): Promise<void> {
+  if (loadCachedTitle(sessionId)) return;
+  const texts = meaningfulUserTexts(sessionId);
+  if (texts.length === 0) return; // only low-signal commands — heuristic stands, no call
+  const prompt = `Jesteś obserwatorem sesji. Na podstawie początkowych wiadomości użytkownika napisz krótki tytuł sesji — od 3 do 7 słów — oddający temat/zadanie. Bez kropki na końcu, bez cudzysłowów, w języku wiadomości. Odpowiedz samym tytułem.
+
+Wiadomości użytkownika:
+${texts.join('\n').slice(0, 1500)}`;
+  const raw = await callSDK(prompt, 'haiku');
+  if (!raw) return; // null result — leave uncached so a later load can retry
+  const title = raw.trim().replace(/^["'«»]+|["'«»]+$/g, '').replace(/\s+/g, ' ').trim().slice(0, 60);
+  if (!title) return;
+  titleCache.set(sessionId, title);
+  try {
+    writeFileSync(titlePath(sessionId), JSON.stringify({ title, generatedAt: new Date().toISOString() }));
+  } catch {}
+  log(`TITLE_GEN ${sessionId.slice(0, 8)} "${title}"`);
+}
+
+function ensureTitleQueued(sessionId: string): void {
+  if (loadCachedTitle(sessionId)) return;
+  if (titleInFlight.has(sessionId) || titleQueue.includes(sessionId)) return;
+  titleQueue.push(sessionId);
+  void drainTitleQueue();
+}
+
+async function drainTitleQueue(): Promise<void> {
+  if (titleDraining) return;
+  titleDraining = true;
+  try {
+    while (titleQueue.length > 0) {
+      const id = titleQueue.shift()!;
+      if (loadCachedTitle(id)) continue;
+      titleInFlight.add(id);
+      try { await generateTitle(id); } catch {} finally { titleInFlight.delete(id); }
+    }
+  } finally {
+    titleDraining = false;
+  }
 }
 
 // The summarizer runs its own SDK queries, which write their own transcripts into
@@ -456,13 +617,16 @@ const serveOptions = {
           .filter(f => f.endsWith('.jsonl'))
           .filter(f => isRealSession(f.replace('.jsonl', '')))
           .map(f => {
-            const fullPath = join(TRANSCRIPTS_DIR, f);
-            const stat = statSync(fullPath);
             const id = f.replace('.jsonl', '');
-            return { id, mtime: stat.mtimeMs, title: getSessionTitle(id) };
+            return { id, mtime: statSync(join(TRANSCRIPTS_DIR, f)).mtimeMs };
           })
           .sort((a, b) => b.mtime - a.mtime)
-          .slice(0, limit);
+          .slice(0, limit)
+          .map(({ id, mtime }) => {
+            const cached = loadCachedTitle(id);
+            if (!cached) ensureTitleQueued(id); // lazily backfill LLM title
+            return { id, mtime, title: cached ?? getSessionTitle(id) };
+          });
         return Response.json(files);
       } catch {
         return Response.json([]);

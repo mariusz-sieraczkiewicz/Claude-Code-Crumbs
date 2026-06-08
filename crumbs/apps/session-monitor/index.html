@@ -16,12 +16,17 @@
     }
     #header {
       display: flex;
-      align-items: center;
-      gap: 16px;
+      flex-direction: column;
+      gap: 8px;
       padding: 16px 20px;
       background: #16213e;
       border-bottom: 1px solid #2a2a4a;
       flex-shrink: 0;
+    }
+    #header-row {
+      display: flex;
+      align-items: center;
+      gap: 16px;
     }
     #header h1 {
       font-size: 1.1em;
@@ -33,13 +38,9 @@
       font-size: 0.78em;
       color: #6b7280;
       font-family: 'SF Mono', 'Menlo', monospace;
-      direction: rtl;
-      text-align: left;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      max-width: 360px;
-      flex-shrink: 0;
     }
     select {
       background: #1a1a2e;
@@ -180,16 +181,18 @@
 </head>
 <body>
   <div id="header">
-    <h1>Session Monitor</h1>
-    <span id="project-dir" title=""></span>
-    <select id="session-select">
-      <option value="">Select session...</option>
-    </select>
-    <button id="show-all">Show all</button>
-    <div id="status">
-      <div id="status-dot"></div>
-      <span id="status-text">Disconnected</span>
+    <div id="header-row">
+      <h1>Session Monitor</h1>
+      <select id="session-select">
+        <option value="">Select session...</option>
+      </select>
+      <button id="show-all">Show all</button>
+      <div id="status">
+        <div id="status-dot"></div>
+        <span id="status-text">Disconnected</span>
+      </div>
     </div>
+    <span id="project-dir" title=""></span>
   </div>
   <div id="timeline">
     <div id="empty">Select a session to start monitoring.</div>
@@ -396,7 +399,7 @@
 
     loadProjectDir();
     loadSessions();
-    setInterval(loadSessions, 30000);
+    setInterval(loadSessions, 10000);
   </script>
 </body>
 </html>
