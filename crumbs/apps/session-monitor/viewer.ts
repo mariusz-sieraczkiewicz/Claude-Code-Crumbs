@@ -22,7 +22,15 @@ interface Entry {
   type: 'progress' | 'turn' | 'summary';
   user?: string;
   agent?: string[];
+  // Per-step grounded detail, parallel to `agent` (details[i] expands agent[i]).
+  // Empty string when nothing specific can be said.
+  details?: string[];
   summary?: string;
+}
+
+interface Step {
+  headline: string;
+  detail: string;
 }
 
 interface ContentBlock {
@@ -239,24 +247,29 @@ class TranscriptWatcher {
     try {
       const steps = await this.summarizeProgress(bufferSnapshot.map(b => b.text));
       if (steps && steps.length > 0) {
-        this.appendEntry({ ts: snapshotTs, type: 'progress', agent: steps });
-        this.lastSummary = steps.join(', ');
+        this.appendEntry({
+          ts: snapshotTs,
+          type: 'progress',
+          agent: steps.map(s => s.headline),
+          details: steps.map(s => s.detail),
+        });
+        this.lastSummary = steps.map(s => s.headline).join(', ');
       }
     } catch {}
     this.summarizing = false;
   }
 
   private async summarizeUserIntent(text: string): Promise<string | null> {
-    const prompt = `Jesteś obserwatorem sesji agenta. Skróć wiadomość użytkownika do esencji — max 10 słów. Zachowaj jego własne słowa i intencję. Opisz sytuację/prośbę, nie rozwiązanie.
+    const prompt = `Jesteś obserwatorem sesji agenta. Sparafrazuj wiadomość użytkownika — powiedz to samo, jego głosem, krótko (max ~12 słów). Zachowaj jego intencję i ton. To parafraza, nie streszczenie i nie rozwiązanie.
 
 Wiadomość użytkownika:
 "${text.slice(0, 300).replace(/"/g, "'")}"
 
-Odpowiedz samym skrótem, nic więcej. Przykłady:
-"odpowiedziałem w czacie i czat zawisł, trzy kropki" → "Czat zawisł, trzy kropki"
-"zmienianie portu jest irytujące, wybierz stały" → "Port ma być stały"
-"nie widzę żadnych updateów" → "Brak updateów"
-"zrób żeby markdown się renderował" → "Markdown ma się renderować"`;
+Odpowiedz samą parafrazą, nic więcej. Przykłady:
+"git push" → "Spushuj zmiany na zdalne repozytorium"
+"napraw te duplikaty w combo" → "Napraw duplikaty sesji w liście rozwijanej"
+"odpowiedziałem w czacie i czat zawisł, trzy kropki" → "Czat zawisł na trzech kropkach po odpowiedzi"
+"zrób żeby markdown się renderował" → "Spraw, żeby markdown się renderował"`;
 
     return this.callSDK(prompt);
   }
@@ -304,9 +317,9 @@ Przykład: {"steps":["Naprawiłem detekcję pytań w agent-runner","Przetestowa�
     } catch (e) { log(`SDK_SUMMARY parse error: ${e}`); }
   }
 
-  private async summarizeProgress(buffer: string[]): Promise<string[] | null> {
+  private async summarizeProgress(buffer: string[]): Promise<Step[] | null> {
     log(`SDK_PROGRESS calling buf=${buffer.length}`);
-    const prompt = `Jesteś obserwatorem sesji agenta. Na podstawie nowych kroków agenta napisz jedno zwięzłe hasło opisujące aktualną czynność.
+    const prompt = `Jesteś obserwatorem sesji agenta. Na podstawie nowych kroków agenta napisz jedno zwięzłe hasło opisujące aktualną czynność, plus krótki szczegół.
 
 Kontekst: monitorujesz live sesję agenta. Co ${SUMMARY_INTERVAL / 1000} sekund dostajesz nowe kroki i musisz napisać jedno hasło do dashboardu — ma oddawać CO agent faktycznie robi i DLACZEGO.
 
@@ -315,21 +328,24 @@ Poprzedni status: "${this.lastSummary || 'początek sesji'}"
 Nowe kroki agenta:
 ${buffer.join('\n').slice(0, 2000)}
 
-Odpowiedz jednym JSON array z dokładnie 1 elementem. Hasło w pierwszej osobie, max 6 słów. Opisz cel czynności, nie mechanikę.
+Odpowiedz JSON: {"headline":"...","detail":"..."}.
+- "headline": pierwsza osoba, max 6 słów, cel czynności (nie mechanika).
+- "detail": konkret WYNIKAJĄCY z kroków powyżej, podobnej długości co headline. NIE zgaduj — jeśli kroki nie zawierają konkretu, ustaw detail na "".
 
-Przykłady poprawnych odpowiedzi:
-["Szukam przyczyny zawieszania czatu"]
-["Analizuję wyniki wyszukiwania"]
-["Porównuję opcje architektury"]
-["Piszę podsumowanie raportu"]`;
+Przykłady:
+{"headline":"Szukam przyczyny zawieszania czatu","detail":"Sprawdzam agent-runner i kolejkę zdarzeń"}
+{"headline":"Upraszczam typy w viewer.ts","detail":"Usuwam satisfies, typuję req jako Request"}
+{"headline":"Analizuję wyniki wyszukiwania","detail":""}`;
 
     const raw = await this.callSDK(prompt);
     if (!raw) return null;
     try {
-      const match = raw.match(/\[[\s\S]*\]/);
-      return JSON.parse(match ? match[0] : raw);
+      const match = raw.match(/\{[\s\S]*\}/);
+      const parsed = JSON.parse(match ? match[0] : raw) as { headline?: string; detail?: string };
+      if (!parsed.headline) return null;
+      return [{ headline: parsed.headline, detail: parsed.detail ?? '' }];
     } catch {
-      return [raw.slice(0, 80)];
+      return [{ headline: raw.slice(0, 80), detail: '' }];
     }
   }
 
@@ -342,6 +358,9 @@ Przykłady poprawnych odpowiedzi:
           permissionMode: 'bypassPermissions',
           allowDangerouslySkipPermissions: true,
           model: 'sonnet',
+          // Keep the summarizer's own transcripts out of the monitored project's
+          // dir — write them under the data dir instead.
+          cwd: LOGS_DIR,
         },
       });
 
@@ -369,19 +388,21 @@ Przykłady poprawnych odpowiedzi:
 const watchers = new Map<string, TranscriptWatcher>();
 let activeSessionId: string | null = null;
 
-function getSessionTitle(sessionId: string): string {
+// First user-message text in a transcript. For a real session this is the user's
+// actual prompt; for a summarizer SDK session it's the summarizer prompt itself.
+function firstUserText(sessionId: string): string {
   const path = join(TRANSCRIPTS_DIR, `${sessionId}.jsonl`);
   try {
-    const lines = readFileSync(path, 'utf-8').split('\n').slice(0, 30);
-    for (const line of lines) {
+    for (const line of readFileSync(path, 'utf-8').split('\n')) {
       if (!line) continue;
-      const entry = JSON.parse(line);
+      let entry: TranscriptLine;
+      try { entry = JSON.parse(line); } catch { continue; }
       if (entry.type === 'user' && entry.message?.content) {
         const c = entry.message.content;
-        if (typeof c === 'string') return c.slice(0, 80);
+        if (typeof c === 'string') return c;
         if (Array.isArray(c)) {
           const textBlock = c.find((b: ContentBlock) => b.type === 'text' && b.text);
-          if (textBlock?.text) return textBlock.text.slice(0, 80);
+          if (textBlock?.text) return textBlock.text;
         }
       }
     }
@@ -389,26 +410,43 @@ function getSessionTitle(sessionId: string): string {
   return '';
 }
 
+function getSessionTitle(sessionId: string): string {
+  return firstUserText(sessionId).slice(0, 80);
+}
+
+// The summarizer runs its own SDK queries, which write their own transcripts into
+// this project's dir. Their first user message IS one of these prompts — match on
+// that (not a full-file scan, which false-positives on real sessions that quote a
+// prompt). Survives future prompt edits as long as the lead phrase is stable.
+const SUMMARIZER_SIGNATURES = [
+  'Jesteś obserwatorem sesji',
+  'Skróć wiadomość użytkownika',
+  'Opisz tę turę sesji',
+  'Co nowego się dzieje',
+];
+
 function isRealSession(sessionId: string): boolean {
   const path = join(TRANSCRIPTS_DIR, `${sessionId}.jsonl`);
   try {
-    const stat = statSync(path);
-    if (stat.size < 50_000) return false;
-    const head = readFileSync(path, 'utf-8').slice(0, 2000);
-    if (head.includes('Opisz tę turę sesji') || head.includes('Co nowego się dzieje')) return false;
+    if (statSync(path).size < 50_000) return false;
+    const head = firstUserText(sessionId).trimStart();
+    if (SUMMARIZER_SIGNATURES.some(sig => head.startsWith(sig))) return false;
     return true;
   } catch { return false; }
 }
 
-const server = Bun.serve({
-  port: parseInt(process.env.SESSION_MONITOR_PORT ?? '7891', 10),
-  async fetch(req) {
+const serveOptions = {
+  async fetch(req: Request) {
     const url = new URL(req.url);
 
     if (url.pathname === '/') {
       return new Response(Bun.file(join(import.meta.dir, 'index.html')), {
         headers: { 'Content-Type': 'text/html; charset=utf-8' },
       });
+    }
+
+    if (url.pathname === '/api/info') {
+      return Response.json({ project: PROJECT_DIR });
     }
 
     if (url.pathname === '/api/sessions') {
@@ -457,6 +495,25 @@ const server = Bun.serve({
 
     return new Response('Not found', { status: 404 });
   },
-});
+};
+
+function startServer(startPort: number, maxAttempts = 50) {
+  for (let port = startPort; port < startPort + maxAttempts; port++) {
+    try {
+      return Bun.serve({ ...serveOptions, port });
+    } catch (err) {
+      if ((err as { code?: string }).code === 'EADDRINUSE') {
+        log(`Port ${port} in use, trying ${port + 1}`);
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error(`No free port found in range ${startPort}-${startPort + maxAttempts - 1}`);
+}
+
+const server = startServer(parseInt(process.env.SESSION_MONITOR_PORT ?? '7891', 10));
+
+writeFileSync(join(LOGS_DIR, 'viewer.port'), String(server.port));
 
 console.log(`Session Monitor: http://localhost:${server.port}`);
