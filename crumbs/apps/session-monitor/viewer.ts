@@ -4,7 +4,7 @@ import { join, basename } from 'node:path';
 const PROJECT_DIR = process.env.SESSION_MONITOR_PROJECT || process.cwd();
 const ENCODED_PATH = '-' + PROJECT_DIR.replace(/\//g, '-').replace(/^-/, '');
 const TRANSCRIPTS_DIR = join(process.env.HOME ?? '~', '.claude', 'projects', ENCODED_PATH);
-const LOGS_DIR = join(import.meta.dir, 'logs');
+const LOGS_DIR = process.env.SESSION_MONITOR_DATA_DIR || join(import.meta.dir, 'logs');
 const LOG_FILE = join(LOGS_DIR, '.viewer.log');
 const SUMMARY_INTERVAL = 10_000;
 const POLL_INTERVAL = 2_000;
@@ -401,7 +401,7 @@ function isRealSession(sessionId: string): boolean {
 }
 
 const server = Bun.serve({
-  port: 7891,
+  port: parseInt(process.env.SESSION_MONITOR_PORT ?? '7891', 10),
   async fetch(req) {
     const url = new URL(req.url);
 
