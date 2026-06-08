@@ -43,6 +43,7 @@ raw/{date}/<source>.md            # gathered material per source
 subjects/{date}-{slug}/           # one directory per chosen subject
   subject.md  blog.md  x-post.md  linkedin.md
   youtube-scenario.md  youtube-presentation.md  sources.md
+  assets/                         # generated visuals + manifest.yaml (Phase 8, opt-in)
 ```
 
 Create missing directories. If `index.yaml` is absent, start one (`subjects: []`).
@@ -102,7 +103,21 @@ For each chosen subject, create `{base}/subjects/{date}-{slug}/`. On slug collis
 
 Read `references/formats/README.md` for the shared voice. Then, for each chosen subject, generate every enabled output by applying its format file `references/formats/<format>.md` to `subject.md`, writing into the subject directory. Default outputs: `blog.md`, `x-post.md`, `linkedin.md`, `youtube-scenario.md`, `youtube-presentation.md`. Each format file defines that format's structure, length, and writing style — follow it. Keep each output in its own file so it can be edited or regenerated alone.
 
-## Phase 8 — Index & report
+## Phase 8 — Visuals
+
+Opt-in companion images and diagrams. Read `references/visuals/README.md` for the shared contract.
+
+**Skip gate (check first).** Read `visuals:` from `{base}/config.yaml`. If `visuals.enabled` is false (or absent), or the API key is not configured (the helper exits non-zero for a missing/empty/placeholder key), **skip the whole phase** — touch nothing, report `visuals skipped (not configured)`. Never fail the run.
+
+Otherwise, for each chosen subject:
+
+- **Require `subject.md`.** Visuals are grounded in the verified `subject.md` (checked against source in Phase 6) — its main message, structure, and concrete worked example. Never generate from the title or slug. If a subject's `subject.md` is missing, skip that subject's visuals with a noted reason; do not fabricate.
+- **Judge what to make** from the content (see `references/visuals/README.md`): a **hero image is mandatory**; additional diagrams/images and their **count** are decided from the subject — no fixed number. Add a diagram when the subject turns on structure/relationships; add another image when a distinct idea earns one. Fewer and clearer wins.
+- **Build each brief** by applying the per-kind file (`references/visuals/image.md` for hero/images, `references/visuals/diagram.md` for diagrams), then call `scripts/generate-visual.sh` once per candidate to generate N candidates (N from `visuals.candidates`, default ~2–3) into `-1`, `-2`, … filenames and **auto-pick the best** — no interactive prompt in this phase. Interactive runs auto-generate, then let the user adjust afterward; unattended runs auto-proceed (mirror Phase 5's unattended handling).
+- **Save & manifest.** Assets go under `{base}/subjects/{date}-{slug}/assets/`. The helper prints the final saved path on stdout (its extension may be `.jpg` even if you requested otherwise) — use that reported path. Write `assets/manifest.yaml` per the README contract (each asset: `file`, `kind`, `prompt`, `alt`, `aspect`, `model`). Helper exit codes: 0 = saved; non-zero = skip this asset (2 = not configured → skip the phase; 3 = API error such as 429 → skip just that asset) — degrade gracefully and record skipped assets.
+- **Embed into drafts.** Insert `![alt](assets/<file>)` into `blog.md` (hero near the top, diagrams inline where relevant) and add a thumbnail note referencing the hero or an image to `youtube-scenario.md` and `youtube-presentation.md`. Use the alt text from the manifest.
+
+## Phase 9 — Index & report
 
 Append each new subject to `{base}/index.yaml`:
 
@@ -115,6 +130,7 @@ subjects:
     status: new       # new | extends
     parent: ""        # set when status is extends
     outputs: [blog, x-post, linkedin, youtube-scenario, youtube-presentation]
+    visuals: []       # kept asset files (or entries) written in Phase 8; [] if skipped
 ```
 
-Report: subjects found / skipped as duplicate / chosen, the directories written, and any sources skipped for lack of configuration.
+Report: subjects found / skipped as duplicate / chosen, the directories written, any sources skipped for lack of configuration, and visuals — assets written plus any skipped (no key, 429, or missing `subject.md`).
