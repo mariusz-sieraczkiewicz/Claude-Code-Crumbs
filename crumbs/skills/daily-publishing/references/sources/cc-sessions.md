@@ -4,7 +4,7 @@ Processes already-collected Claude Code session history — split into **work** 
 
 ## Locate
 
-Session files: `~/.claude/projects/{encoded-project-path}/*.jsonl` (path `/`→`-`, leading `-`). `sources.cc_sessions` in `config.yaml`: `work_paths` / `private_paths` map project roots to profiles; unlisted projects default to `private`. JSONL shape: see `learn-from-conversation-analyzer`.
+Session files: `~/.claude/projects/{encoded-project-path}/*.jsonl` (path `/`→`-`, leading `-`). `sources.cc-sessions` in `config.yaml`: `work_paths` / `private_paths` map project roots to profiles; unlisted projects default to `private`. JSONL shape: see `learn-from-conversation-analyzer`.
 
 ## Collect
 

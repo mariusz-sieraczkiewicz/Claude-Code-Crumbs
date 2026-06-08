@@ -4,7 +4,7 @@ Processes already-collected Google Chat activity for the day. Output contract: s
 
 ## Locate
 
-`sources.gchat` in `config.yaml`: `access` (`api` | `export`), `credentials`, `export_dir`. Setup → `../integration.md`.
+`sources.gchat` in `config.yaml`: `access` (`api` | `export` | `cli`), `credentials`, `export_dir`. With `access: cli`, read via a Google Workspace CLI (e.g. `gws chat spaces list`, `gws chat spaces messages list`) — auth lives in the CLI, no credentials path needed. Setup → `../integration.md`.
 
 ## Collect
 

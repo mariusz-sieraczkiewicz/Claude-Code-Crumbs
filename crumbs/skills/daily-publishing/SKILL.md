@@ -2,7 +2,7 @@
 name: daily-publishing
 description: Turn your daily activity (Slack, Google Chat, Claude Code sessions, meetings, recordings) into publishable subjects, then draft blog/X/LinkedIn/YouTube content.
 argument-hint: "[YYYY-MM-DD] [--base <dir>] [--source <name,...>]"
-allowed-tools: Read, Write, Edit, Glob, Grep, Bash, AskUserQuestion
+allowed-tools: Read, Write, Edit, Glob, Grep, Bash, Agent
 ---
 
 # Daily Publishing
@@ -59,7 +59,14 @@ A source whose required config is missing is skipped as `skipped (not configured
 
 ## Phase 2 — Mine subjects
 
-Read all `raw/{date}/*.md`. Extract candidate **subjects** — each one a topic that:
+Read all `raw/{date}/*.md`. Mine in two passes:
+
+1. **Surface pass** — the obvious candidates: problems solved, decisions made, gotchas, tools used.
+2. **Deep pass** — spawn 2–3 parallel subagents over the richest raw material (for cc-sessions, point them back at the underlying session logs) tasked with understanding the *system being built*, not just the day's fixes. Hunt for: named principles and mental models invented in the work, decisions that changed the course of the work or its results, non-typical approaches, and small-but-novel gotchas that can be extended into a full piece. Novelty outranks size — a reader should find something here they can't find in generic posts.
+
+When the richest material is a real system the user built (a skill, codebase, doc set), treat the gathered raw as **leads, not facts** — session summaries paraphrase and drift. The canonical definition lives in the source files; record where it lives so the chosen subject can be verified there before any drafting (Phase 6). Never characterize a system from session summaries alone.
+
+Each candidate **subject** is a topic that:
 - Can be **presented self-contained in ≤10 minutes** (no missing prerequisites the audience would need).
 - Has a real hook: a problem solved, a decision made, a lesson learned, a pattern noticed, a tool or technique used.
 
@@ -71,21 +78,31 @@ Read `{base}/index.yaml`. Compare candidates against already-published subjects 
 
 ## Phase 4 — Choose
 
-Present the surviving candidates and ask the user to pick with `AskUserQuestion` (`multiSelect: true`). One option per candidate: label = title, description = `pitch` + `~{est_minutes} min` + status (`new`/`extends parent`). Include the provenance compactly. The user may also type custom subjects.
+Present **all** surviving candidates as a markdown table in the reply — title, pitch, `~{est_minutes} min`, status (`new`/`extends parent`), compact provenance. Do **not** use `AskUserQuestion` — plain text only; option widgets cap and hide the list. Ask the user to reply with their picks by number or slug; custom subjects are welcome.
 
 If there are no candidates, say so and stop.
 
-## Phase 5 — Scaffold
+## Phase 5 — Define the message
+
+For each chosen subject, **before writing any content**, interview the user — one question at a time — until these are pinned down:
+- the **main message**: the one sentence the reader should walk away with,
+- the **outline**: 3–6 beats/sections,
+- include/exclude: angle, audience, examples to use or avoid,
+- **grounding & example**: where the subject's authoritative source lives (repo/skill/docs) so Phase 6 can verify against it; and the concrete worked example the piece will turn on. If an example must be a stand-in (e.g. confidential real domain), agree it up front — and it must faithfully mirror the real system, flagged as a stand-in.
+
+Confirm the agreed main message + outline back to the user, then proceed. Keep every subsequent draft on the agreed audience/angle — if a draft drifts off it, that's a defect. In unattended runs skip the interview, draft from the mined material with your own judgment, and say so in the report.
+
+## Phase 6 — Scaffold
 
 For each chosen subject, create `{base}/subjects/{date}-{slug}/`. On slug collision append `-2`, `-3`. Write:
-- `subject.md` — the ≤10-minute brief: title, hook, key points (3–5), the "so what", and any code/links. This is the self-contained source of truth every output draws from.
-- `sources.md` — provenance refs for this subject.
+- `subject.md` — the ≤10-minute brief: title, hook, **main message + outline from Phase 5**, key points (3–5), the "so what", and any code/links. This is the self-contained source of truth every output draws from. Before writing it: **verify every technical/conceptual claim against the authoritative source** (the actual code/skill/docs the work produced), not the mined summaries — read those files. For a technical or system subject the brief must carry a **concrete worked example: an example problem, the actual example artifacts shown with real content (not just file names), and a before/after that shows the idea solving the problem (the result with vs without it).** Flag any stand-in example as such and keep it faithful to the real system.
+- `sources.md` — provenance refs for this subject, including the authoritative source files verified against (separate from the session-summary raw).
 
-## Phase 6 — Create
+## Phase 7 — Create
 
 Read `references/formats/README.md` for the shared voice. Then, for each chosen subject, generate every enabled output by applying its format file `references/formats/<format>.md` to `subject.md`, writing into the subject directory. Default outputs: `blog.md`, `x-post.md`, `linkedin.md`, `youtube-scenario.md`, `youtube-presentation.md`. Each format file defines that format's structure, length, and writing style — follow it. Keep each output in its own file so it can be edited or regenerated alone.
 
-## Phase 7 — Index & report
+## Phase 8 — Index & report
 
 Append each new subject to `{base}/index.yaml`:
 

@@ -11,6 +11,7 @@ Write the target day's material to `{base}/raw/{date}/<source>.md`, one item per
 ```
 
 - `provenance ref` — a link, channel, file path, or session id specific enough to cite later.
+- `HH:MM` is **local time** — convert from UTC when the source reports UTC (session logs, APIs).
 - Sort ascending by time. Deduplicate near-identical lines.
 - Redact secrets/tokens. Mark anything still sensitive after redaction `⚠️confidential` (kept here, filtered in Phase 2) — never drop it silently.
 

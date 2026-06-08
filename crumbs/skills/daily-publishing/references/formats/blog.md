@@ -16,7 +16,8 @@
 - Front matter at top: `title`, `date`, `tags` (3–6, lowercase), `slug`.
 - Short paragraphs (1–4 sentences). Headings every ~150–250 words.
 - Prefer showing a code/diff/example over describing it.
-- Define a term once, then use it.
+- Define a term the first time it appears, before you rely on it — teach from first principles; don't assume the reader shares your project's context.
+- **For a technical or system subject, the explanation turns on a concrete worked example** (the one agreed in Phase 5): state an example problem, show the actual artifacts with real content (not just their file names), and give a before/after that contrasts the result *with* vs *without* the idea — that contrast is what proves it. Show the artifact, don't merely name it.
 - Honest about tradeoffs and what you'd do differently — that's what makes it trusted.
 
 ## Skeleton

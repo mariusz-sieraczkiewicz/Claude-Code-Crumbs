@@ -4,7 +4,7 @@ Personal scratchpad (kept outside the `daily-publishing` skill). Use it to decid
 
 ## Open decisions
 
-- [ ] **Video/presentation tool** for `youtube-presentation` → see options below.
+- [x] **Video/presentation tool**: **HyperFrames** (`heygen-com/hyperframes`, installed 2026-06-07) — chosen over the two options below. See "Decided" note.
 - [ ] **Slack access** (company workspace): official MCP (admin approval) vs. own app + `xoxp` user token vs. browser `xoxc`/`xoxd` tokens → see options below.
 - [ ] **Google Chat access**: Chat API (OAuth) vs. Takeout export.
 - [ ] **Meeting recording + transcription** (company calls): local-first notetaker vs DIY system-audio + Whisper → see options below.
@@ -45,9 +45,18 @@ Sources:
 - https://github.com/jezweb/claude-skills/blob/main/plugins/frontend/skills/walkthrough-video/SKILL.md
 - https://pexo.ai/blog/best-video-generation-skills-for-claude-code-agents-2026-3772
 
-### When decided
+### Decided (2026-06-07) — HyperFrames
 
-Set `video_tool: video-toolkit` (or `frontend-slides`) in `{base}/config.yaml`; the `youtube-presentation` format will hand the deck + scenario to it.
+Picked **HyperFrames** (`heygen-com/hyperframes`), a third option found after the two above. It sits in Option A territory (renders an MP4 with my voiceover) but is HTML-native rather than Remotion/React.
+
+- **What:** HTML is the source of truth for video — a composition is an HTML file with `data-*` timing, a GSAP timeline, and CSS; rendered to MP4 via headless Chrome + ffmpeg. Built-in TTS (Kokoro), transcription/captions (Whisper), background removal.
+- **Install:** `npx skills add heygen-com/hyperframes` (skills land in `~/.agents/skills/`, symlinked into `~/.claude/skills/`). TTS needs `pip install kokoro-onnx soundfile`.
+- **CLI:** `npx hyperframes init | lint | validate | inspect | render`; `npx hyperframes tts <text> -o out.wav -v am_adam`.
+- **Set in config:** `video_tool: hyperframes`.
+- **First proof:** `subjects/2026-06-07-problem-model-above-tasks/video/problem-model/` → `problem-model.mp4` (1920×1080, ~2:00, am_adam scratch narration). Workflow: `youtube-presentation.md` + `youtube-scenario.md` → per-scene TTS (sets scene durations) → 8-scene `index.html` (Space Grotesk via local woff2 + JetBrains Mono) → lint/validate/inspect clean → render.
+- **Gotchas:** Node 22 recommended (20 works with EBADENGINE warning); only a narrow font set auto-embeds (Space Grotesk/DM Sans are NOT — ship a woff2 + `@font-face`); mark decorative bleed `data-layout-ignore`; final scene needs a `tl.set(..., {visibility:"hidden"})` hard-kill after its fade.
+
+(Earlier note kept for history: `video_tool: video-toolkit` / `frontend-slides` were the two candidates before HyperFrames was chosen.)
 
 ---
 

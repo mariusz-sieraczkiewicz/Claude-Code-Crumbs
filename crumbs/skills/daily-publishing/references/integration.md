@@ -24,10 +24,10 @@ sources:
     channels: []         # empty = all the user participates in
   gchat:
     enabled: true
-    access: api          # api | export
+    access: api          # api | export | cli
     credentials: ""      # path to OAuth creds (api)
     export_dir: ""       # Takeout dir (export)
-  cc_sessions:
+  cc-sessions:
     enabled: true
     work_paths: []       # project roots treated as work
     private_paths: []    # project roots treated as private
@@ -53,6 +53,7 @@ Pick one:
 ## Google Chat
 
 - **API:** enable the Google Chat API in a Google Cloud project, create OAuth client creds, point `credentials` at the JSON, complete the consent flow once. Scope: `chat.messages.readonly`.
+- **CLI:** if a Google Workspace CLI (e.g. `gws`) is already authenticated, set `access: cli` — no credentials path needed. Its OAuth grant must include `chat.spaces.readonly` + `chat.messages.readonly`; if a scope upgrade looks applied but still 403s, clear the CLI's token cache so it mints a token from the new grant.
 - **Export:** Google Takeout → Google Chat → download → point `export_dir` at the unzipped folder.
 
 ## Claude Code sessions (work / private)
@@ -75,7 +76,7 @@ The skill doesn't self-trigger. Pick one:
 - **`/loop` skill** — `/loop 24h Use the daily-publishing skill for today` keeps a recurring run inside a session.
 - **`send_later`** (claude-code-remote MCP, when available) — schedule a self check-in that re-invokes the skill.
 
-Whichever you choose, the run is still interactive at Phase 4 (subject selection). For a fully unattended run, tell the skill to auto-select all `new` subjects (or the top N) instead of asking.
+Whichever you choose, the run is still interactive at Phase 4 (subject selection) and Phase 5 (main message + outline). For a fully unattended run, tell the skill to auto-select all `new` subjects (or the top N) and skip the Phase 5 interview, drafting from the mined material directly.
 
 ## Verifying setup
 
