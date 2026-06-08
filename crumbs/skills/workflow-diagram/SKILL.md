@@ -73,7 +73,10 @@ reference. Write each prompt to its own temp file (e.g. `/tmp/wfd-overview.txt`,
 ## Phase 3: Generate candidates → auto-pick
 
 For each diagram (overview, detailed), call the helper **N times** (~2–3) into `-1`, `-2`, …
-filenames:
+filenames. **Always generate at `--size 1K`** — pass it on every call (generate and repair
+alike). 1K is the cheapest tier for this model (same token cost as 2K but smaller files) and
+is sharp enough for these label-driven diagrams. Only override to `2K`/`4K` if the user
+explicitly asks for a larger image.
 
 ```bash
 scripts/generate-diagram.sh \
