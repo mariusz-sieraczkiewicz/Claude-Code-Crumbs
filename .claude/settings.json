@@ -8,7 +8,5 @@
     "tavily",
     "google-docs-mcp"
   ],
-  "enabledPlugins": {
-    "tavily@Dev-Workflow": true
-  }
+  "enabledPlugins": {}
 }
