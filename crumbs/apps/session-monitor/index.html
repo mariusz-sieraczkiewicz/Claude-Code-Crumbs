@@ -251,6 +251,7 @@
       if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
       currentSessionId = sessionId;
       lastEntryId = 0;
+      allEntries = [];
       timeline.innerHTML = '';
       if (!sessionId) {
         timeline.innerHTML = '<div id="empty">Select a session to start monitoring.</div>';
