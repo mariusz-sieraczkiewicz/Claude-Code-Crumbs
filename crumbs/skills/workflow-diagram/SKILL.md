@@ -1,12 +1,34 @@
 ---
 name: workflow-diagram
-description: Generate SVG workflow diagrams from skill definitions, slash commands, or agent configurations using Graphviz DOT.
+description: Generate workflow diagram images from skill definitions, slash commands, or agent configurations using Gemini 3 Pro Image (Nano Banana Pro).
 allowed-tools: Read, Write, Glob, Grep, Bash, Agent
 ---
 
 # Workflow Diagram Generator
 
-Generate workflow diagrams from Claude Code skills/commands/agents. Uses Graphviz DOT. Read `references/dot-templates.md` for all node/edge styles and color values.
+Generate workflow diagrams from Claude Code skills/commands/agents as **images**, via
+Gemini 3 Pro Image (Nano Banana Pro). Read `references/diagram-prompt.md` for how to turn
+the extracted workflow into a grounded prompt (element colors, arrow semantics, skeletons).
+
+The model renders genuine workflow graphs with crisp labels, but only when grounded in the
+**real** steps and elements — so extraction (Phase 1) and the self-check/repair loop
+(Phase 4) carry the accuracy. The picture is generated from that extraction, never from the
+skill's name alone.
+
+## Setup (read once)
+
+Generation calls a paid API, so the skill is gated on a key being configured:
+
+- The key is read by `scripts/generate-diagram.sh` from `~/.config/workflow-diagram/secrets.env`
+  (`GEMINI_API_KEY=...`, chmod 600, **outside this repo** — never commit it). An exported
+  `$GEMINI_API_KEY` overrides the file.
+- **Billing must be enabled** on the key's GCP project: the free tier for `gemini-3-pro-image`
+  is `limit: 0`, so every call 429s without billing. Cost ≈ $0.13/image at 1K–2K, $0.24 at 4K.
+- Model is pinned to the GA id `gemini-3-pro-image` — **not** the deprecated `-preview`
+  variant (shut down 2026-06-25). The helper hardcodes this; don't parameterize it.
+
+If the helper exits non-zero for a missing/empty/placeholder key (exit 2), tell the user how
+to configure it and stop — don't fail noisily.
 
 ## Input
 
@@ -33,50 +55,76 @@ Physicality test — only draw elements you can point to a file path, URL, or na
 
 Non-physical things → step description text or edge labels.
 
-## Phase 2: Generate DOT
+This extraction is the **ground truth** the rest of the run is checked against — capture
+exact labels (file paths, agent names, service names), the step order, and which element
+attaches to which step.
 
-Structure (define nodes BEFORE edges):
-1. Graph settings (`rankdir=LR`, `splines=spline`, `nodesep=0.8`, `ranksep=1.5`)
-2. Backbone step nodes (`group=backbone`, green)
-3. Side element nodes (inputs/outputs/rules/agents)
-4. Positioning (`rank=same` + invisible edges for above/below)
-5. Backbone edges (`weight=10` — keeps steps horizontal)
-6. Side edges (`weight=1`)
+## Phase 2: Build the prompts
 
-### Critical Rules
+Read `references/diagram-prompt.md`. Translate the Phase 1 extraction into two prompts:
 
-- **Backbone edges always `weight=10`**, side edges always `weight=1`
-- **Outputs are dead ends** — never connect output to a downstream step
-- **Above/below positioning**: `rank=same` + invisible edge chain sets vertical order, visible edges use `constraint=false`
-- **Self-loops for verify-fix cycles** — don't split into separate steps
-- **Edge labels**: use `xlabel` (prevents edge stretching)
-- **Element labels**: up to 3 lines — title, purpose, file path
-- **Duplicate elements** near where used rather than drawing long-distance arrows
-- **3+ reference files for one step**: fold into step description text instead of separate nodes
-- **Color**: local files = data (yellow), remote/network = knowledge (blue). Guideline files are data, NOT knowledge.
-- **Arrow direction**: inputs/rules/services → step; step → outputs; step → subagents
+- **overview** — concept altitude (~5–8 step nodes, flow arrows, pattern indicators).
+- **detailed** — full completeness (every step + every physical element, exact labels).
 
-## Phase 3: Render
+Apply the element-color legend, the explicit arrow semantics, and the density rules from the
+reference. Write each prompt to its own temp file (e.g. `/tmp/wfd-overview.txt`,
+`/tmp/wfd-detailed.txt`) so long multi-line prompts need no shell escaping.
+
+## Phase 3: Generate candidates → auto-pick
+
+For each diagram (overview, detailed), call the helper **N times** (~2–3) into `-1`, `-2`, …
+filenames:
 
 ```bash
-dot -Tsvg "input.dot" -o "output.svg"
+scripts/generate-diagram.sh \
+  --prompt-file /tmp/wfd-overview.txt \
+  --out "{skill_dir}/diagrams/{name}-overview-1.jpg" \
+  --aspect 16:9 --size 1K
 ```
 
-If overlapping: increase `ranksep`/`nodesep` or fold elements into descriptions.
+The helper prints the **final saved path** on stdout (extension may be `.jpg`/`.png` per the
+returned bytes — trust it) and usage/cost on stderr. Read each candidate and **auto-pick the
+best** (every real node present, no invented nodes, arrow directions correct, labels legible
+and correctly spelled, clean layout). No interactive prompt. Discard the rest.
 
-## Phase 4: Verify
+Helper exit codes: 0 = saved; 2 = not configured → stop per Setup; 3 = API error (e.g. 429) →
+skip that candidate (if every candidate for a diagram fails, report it and move on).
+
+## Phase 4: Self-check & repair loop
+
+For each picked diagram, **read the image** and check it against the Phase 1 ground truth:
+
+- **Completeness** — every real step and element is present; nothing important missing.
+- **No fabrication** — no invented nodes, arrows, or labels that aren't in the extraction.
+- **Labels** — every label is spelled correctly and matches the exact name/path from Phase 1.
+- **Arrows** — directions obey the stated semantics (flow L→R, inputs into steps, outputs are
+  dead ends, subagents above, self-loop for verify-fix cycles).
+- **Legibility** — text readable, backbone horizontal, minimal/no crossings.
+
+If anything is wrong, **repair with an editing re-prompt** (don't regenerate from scratch —
+you'd lose the good composition). Write a surgical instruction to a temp file and feed the
+picked image back:
 
 ```bash
-qlmanage -t -s 2000 -o /tmp "output.svg" 2>/dev/null
+scripts/generate-diagram.sh \
+  --prompt-file /tmp/wfd-fix.txt \
+  --edit-image "{skill_dir}/diagrams/{name}-detailed-2.jpg" \
+  --out "{skill_dir}/diagrams/{name}-detailed-fixed.jpg" \
+  --aspect 16:9 --size 1K
 ```
 
-Read the PNG. Check: backbone horizontal, text readable, all elements present, arrows correct, no crossings. Fix and re-render if needed. Delete PNG when done.
+Example fix prompt: *"Change the label 'invariants cleners' to 'invariants'. Keep everything
+else — layout, colors, every other label, all arrows — exactly identical."*
+
+Re-read the result and repeat. **Max 3 repair iterations** per diagram; if issues remain after
+3, keep the best version and report the residual problems plainly rather than looping forever.
 
 ## Output
 
-Save to `{skill_directory}/diagrams/`:
-- `{name}-overview.dot` + `.svg` — steps + flow arrows only
-- `{name}-detailed.dot` + `.svg` — steps + all surrounding elements
+Save the final picked (and repaired) images to `{skill_directory}/diagrams/`:
+- `{name}-overview.<ext>` — steps + flow arrows + pattern indicators (loops, subagent markers).
+- `{name}-detailed.<ext>` — full diagram: all steps + inputs, outputs, rules, services,
+  subagents, user interactions, with exact labels.
 
-**Overview**: green step boxes + labeled flow arrows + pattern indicators (loops, subagent icons).
-**Detailed**: full diagram with all inputs, outputs, rules, subagents, 3-line labels, connections.
+`<ext>` is whatever the model returned (`.jpg` or `.png`). Report the saved paths, the
+candidate/repair counts, approximate cost, and any residual issues the repair loop couldn't fix.
