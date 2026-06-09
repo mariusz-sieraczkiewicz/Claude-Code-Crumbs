@@ -16,9 +16,15 @@ grounding + N candidates + the self-check/repair loop in `SKILL.md` to keep it c
 
 ## Element types → visual style
 
-Carry the original six-type color legend into the prompt as **style instructions** (the
-model has no node "types" — you describe each node's color and role in words). Keep the
-palette consistent across both diagrams.
+> **Appearance is now owned by `diagram-style.md`.** That file's palette, fonts, box anatomy,
+> arrow rendering, and pasteable **Style Block** are authoritative — use them for the actual
+> look. The legend below is kept as a quick structural reference for *which roles exist and
+> where they attach*; if a color or border here differs from `diagram-style.md`, the style
+> file wins.
+
+Carry the six-type role legend into the prompt as **style instructions** (the model has no
+node "types" — you describe each node's color and role in words). Keep the palette consistent
+across both diagrams.
 
 | Element | Role in the prompt | Fill | Border | Font |
 |---------|--------------------|------|--------|------|

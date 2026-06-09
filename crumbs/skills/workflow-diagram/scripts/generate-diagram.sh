@@ -76,7 +76,55 @@ if [ -n "$EDIT_IMAGE" ] && [ ! -f "$EDIT_IMAGE" ]; then
   exit 1
 fi
 
-# --- Resolve the API key ---------------------------------------------------------
+# --- Backend dispatch ------------------------------------------------------------
+# Backend + non-secret settings live in config.toml (NOT secrets — keys stay in
+# secrets.env). Absent file => gemini, i.e. unchanged behaviour. The "portkey"
+# backend routes image generation through the Roche Galileo gateway; it hands off
+# to portkey-image.py with this same CLI contract and we exit with its status.
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+CONFIG_FILE="${HOME}/.config/workflow-diagram/config.toml"
+BACKEND="gemini"
+if [ -f "$CONFIG_FILE" ]; then
+  BACKEND="$(CONFIG_FILE="$CONFIG_FILE" python3 - <<'PY'
+import os, tomllib
+try:
+    with open(os.environ["CONFIG_FILE"], "rb") as fh:
+        cfg = tomllib.load(fh)
+    print(str(cfg.get("backend", "gemini")).strip().lower() or "gemini")
+except Exception:
+    print("gemini")
+PY
+)"
+fi
+
+if [ "$BACKEND" = "portkey" ]; then
+  # Parse the [portkey] table -> shell vars (base_url, model, key_env).
+  eval "$(CONFIG_FILE="$CONFIG_FILE" python3 - <<'PY'
+import os, shlex, tomllib
+try:
+    with open(os.environ["CONFIG_FILE"], "rb") as fh:
+        p = tomllib.load(fh).get("portkey", {}) or {}
+except Exception:
+    p = {}
+def emit(name, val):
+    print(f"{name}={shlex.quote(str(val))}")
+emit("PK_BASE_URL", p.get("base_url", ""))
+emit("PK_MODEL", p.get("model", ""))
+emit("PK_KEY_ENV", p.get("key_env", "PORTKEY_AZURE_API_KEY"))
+PY
+)"
+  PORTKEY_BASE_URL="$PK_BASE_URL" \
+  PORTKEY_MODEL="$PK_MODEL" \
+  PORTKEY_KEY_ENV="$PK_KEY_ENV" \
+  exec uv run --quiet --with portkey-ai python "${SCRIPT_DIR}/portkey-image.py" \
+    --prompt-file "$PROMPT_FILE" \
+    --out "$OUT" \
+    --aspect "$ASPECT" \
+    --size "$SIZE" \
+    ${EDIT_IMAGE:+--edit-image "$EDIT_IMAGE"}
+fi
+
+# --- Resolve the API key (gemini backend) ----------------------------------------
 # An explicitly-set GEMINI_API_KEY takes precedence over the secrets file — even if it
 # is empty. This makes the environment a true override and lets tests force an
 # empty/placeholder key safely (no accidental billed call against a real secrets file).

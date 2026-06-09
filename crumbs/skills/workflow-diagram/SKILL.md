@@ -17,18 +17,56 @@ skill's name alone.
 
 ## Setup (read once)
 
-Generation calls a paid API, so the skill is gated on a key being configured:
+Generation calls a paid API, so the skill is gated on a key being configured. Two backends
+exist; `scripts/generate-diagram.sh` dispatches on `~/.config/workflow-diagram/config.toml`:
 
-- The key is read by `scripts/generate-diagram.sh` from `~/.config/workflow-diagram/secrets.env`
-  (`GEMINI_API_KEY=...`, chmod 600, **outside this repo** — never commit it). An exported
-  `$GEMINI_API_KEY` overrides the file.
+```toml
+backend = "gemini"            # "gemini" (default) | "portkey"
+
+[gemini]
+model = "gemini-3-pro-image"
+
+[portkey]
+base_url = "https://us.aigw.galileo.roche.com/v1"   # US only (see caveats)
+model    = "gpt-image-1.5-2025-12-16"
+key_env  = "PORTKEY_AZURE_API_KEY"                  # secrets.env var holding the key
+```
+
+No config file (or `backend = "gemini"`) → the default Gemini backend, unchanged. API keys
+live ONLY in `~/.config/workflow-diagram/secrets.env` (chmod 600, **outside this repo** —
+never commit). The helper hands off to `scripts/portkey-image.py` for the portkey backend.
+
+### Gemini backend (default)
+
+- Key `GEMINI_API_KEY` read from `secrets.env`; an exported `$GEMINI_API_KEY` overrides the file.
 - **Billing must be enabled** on the key's GCP project: the free tier for `gemini-3-pro-image`
   is `limit: 0`, so every call 429s without billing. Cost ≈ $0.13/image at 1K–2K, $0.24 at 4K.
-- Model is pinned to the GA id `gemini-3-pro-image` — **not** the deprecated `-preview`
-  variant (shut down 2026-06-25). The helper hardcodes this; don't parameterize it.
+- Model pinned to the GA id `gemini-3-pro-image` — **not** the deprecated `-preview` variant
+  (shut down 2026-06-25). Full repair loop (true `--edit-image`).
+
+### Portkey backend (Roche Galileo gateway)
+
+- Runs `portkey-image.py` via `uv run --with portkey-ai` (no project venv needed). Key read
+  from the `secrets.env` var named by `key_env` (default `PORTKEY_AZURE_API_KEY`); an exported
+  env var of that name overrides the file.
+- **Requires Roche VPN / Corporate Network.** Off-VPN the gateway is unreachable (calls hang).
+- **US gateway only.** Image generation works on `us.aigw.galileo.roche.com`; the EU gateway's
+  Azure image route is misconfigured (every image model misroutes to a non-existent
+  `gpt-4o-2024-05-13`). Keep `base_url` on US until Galileo fixes EU.
+- **Use `gpt-image-1.5-2025-12-16`.** `gpt-image-2` and `dall-e-3` are NOT deployed ("Unknown
+  model"); Stability/Imagen render worse text. gpt-image-1.5 produces clean, correctly-labeled
+  diagrams in the house style.
+- **Repair regenerates, it does not edit.** The gateway does not expose `images.edit`, so under
+  the portkey backend `--edit-image` regenerates from the (fix-amended) prompt rather than
+  editing the prior image. Generate more candidates to compensate.
 
 If the helper exits non-zero for a missing/empty/placeholder key (exit 2), tell the user how
 to configure it and stop — don't fail noisily.
+
+**Portkey + VPN:** the Galileo gateway is only reachable on the Roche VPN / Corporate Network.
+When the portkey backend fails with a connection or timeout error (exit 3, message mentions
+"gateway unreachable"), tell the user clearly and first that **this is most likely because the
+VPN is not connected** — have them connect and retry before investigating anything else.
 
 ## Input
 
@@ -61,13 +99,18 @@ attaches to which step.
 
 ## Phase 2: Build the prompts
 
-Read `references/diagram-prompt.md`. Translate the Phase 1 extraction into two prompts:
+Read `references/diagram-prompt.md` (structure) **and** `references/diagram-style.md` (look).
+Translate the Phase 1 extraction into two prompts:
 
 - **overview** — concept altitude (~5–8 step nodes, flow arrows, pattern indicators).
 - **detailed** — full completeness (every step + every physical element, exact labels).
 
-Apply the element-color legend, the explicit arrow semantics, and the density rules from the
-reference. Write each prompt to its own temp file (e.g. `/tmp/wfd-overview.txt`,
+Apply the arrow semantics and density rules from `diagram-prompt.md`. Then append the
+ready-to-paste **Style Block** from `diagram-style.md` (Section 9) verbatim to every prompt —
+it carries the locked "Internal Workflow" house style (white canvas, bold title + subtitle,
+numbered green step boxes with a short description line, orthogonal right-angle gray routing,
+the color-matched multi-arrow feed bundles, tilted blue decision node, stacked-card multi-file
+boxes, dashed bypass/self-loop arrows). Write each prompt to its own temp file (e.g. `/tmp/wfd-overview.txt`,
 `/tmp/wfd-detailed.txt`) so long multi-line prompts need no shell escaping.
 
 ## Phase 3: Generate candidates → auto-pick
@@ -103,6 +146,10 @@ For each picked diagram, **read the image** and check it against the Phase 1 gro
 - **Arrows** — directions obey the stated semantics (flow L→R, inputs into steps, outputs are
   dead ends, subagents above, self-loop for verify-fix cycles).
 - **Legibility** — text readable, backbone horizontal, minimal/no crossings.
+- **Style** — matches the house style in `references/diagram-style.md` (Section 8 checklist):
+  white canvas, bold title + gray subtitle, numbered green step boxes with a short description
+  line, exact palette, orthogonal right-angle gray routing, color-matched feed bundles, tilted
+  blue decision node, stacked-card multi-file boxes, dashed bypass/self-loop arrows.
 
 If anything is wrong, **repair with an editing re-prompt** (don't regenerate from scratch —
 you'd lose the good composition). Write a surgical instruction to a temp file and feed the
