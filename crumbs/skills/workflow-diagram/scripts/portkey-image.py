@@ -35,8 +35,8 @@ this candidate; 1 usage/argument error.
 import argparse
 import base64
 import os
-import re
 import sys
+import time
 from pathlib import Path
 
 
@@ -118,31 +118,52 @@ def main() -> int:
         return 3
 
     px = resolve_size(args.aspect, args.size)
-    try:
-        client = Portkey(api_key=key, base_url=base_url, timeout=300.0)
-        resp = client.images.generate(model=model, prompt=prompt, size=px, n=1)
-    except Exception as e:
-        name = type(e).__name__
-        text = str(e)
-        # A connection/timeout failure to the Roche gateway is almost always a missing
-        # VPN — surface that prominently so the user checks it first.
-        looks_like_conn = (
-            "Connection" in name
-            or "Timeout" in name
-            or "timed out" in text.lower()
-            or "connection" in text.lower()
-            or "getaddrinfo" in text.lower()
-            or "name resolution" in text.lower()
-        )
-        if looks_like_conn:
-            err(
-                f"Portkey gateway unreachable ({name}). The Galileo gateway "
-                f"({base_url}) requires the Roche VPN / Corporate Network — this error is "
-                "most likely because you are NOT connected to the VPN. Connect and retry."
+    client = Portkey(api_key=key, base_url=base_url, timeout=300.0)
+
+    # The US gateway load-balances across Azure backends, and a minority lack the
+    # gpt-image deployment — those return a 400 "Unknown model" for a model that is
+    # otherwise served fine (measured ~20% miss rate). It is a transient routing miss,
+    # not a real config error, so retry: with ~80% per-call success, MAX_TRIES makes it
+    # effectively reliable. Retries cost nothing — a miss 400s instantly before any image.
+    MAX_TRIES = 6
+    resp = None
+    for attempt in range(1, MAX_TRIES + 1):
+        try:
+            resp = client.images.generate(model=model, prompt=prompt, size=px, n=1)
+            break
+        except Exception as e:
+            name = type(e).__name__
+            text = str(e)
+            if "unknown_model" in text or "Unknown model" in text:
+                # Routing miss — a different backend should have the deployment.
+                if attempt < MAX_TRIES:
+                    err(f"portkey: gateway routing miss (unknown_model) on try {attempt}/{MAX_TRIES}; retrying…")
+                    time.sleep(1.0)
+                    continue
+                err(
+                    f"Portkey API error after {MAX_TRIES} tries: gateway kept routing '{model}' "
+                    "to a backend without that deployment (unknown_model). Try again shortly."
+                )
+                return 3
+            # A connection/timeout failure to the Roche gateway is almost always a missing
+            # VPN — surface that prominently so the user checks it first.
+            looks_like_conn = (
+                "Connection" in name
+                or "Timeout" in name
+                or "timed out" in text.lower()
+                or "connection" in text.lower()
+                or "getaddrinfo" in text.lower()
+                or "name resolution" in text.lower()
             )
-        else:
-            err(f"Portkey API error: {name}: {text[:300]}")
-        return 3
+            if looks_like_conn:
+                err(
+                    f"Portkey gateway unreachable ({name}). The Galileo gateway "
+                    f"({base_url}) requires the Roche VPN / Corporate Network — this error is "
+                    "most likely because you are NOT connected to the VPN. Connect and retry."
+                )
+            else:
+                err(f"Portkey API error: {name}: {text[:300]}")
+            return 3
 
     try:
         datum = resp.data[0]

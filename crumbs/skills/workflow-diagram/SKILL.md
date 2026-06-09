@@ -56,6 +56,11 @@ never commit). The helper hands off to `scripts/portkey-image.py` for the portke
 - **Use `gpt-image-1.5-2025-12-16`.** `gpt-image-2` and `dall-e-3` are NOT deployed ("Unknown
   model"); Stability/Imagen render worse text. gpt-image-1.5 produces clean, correctly-labeled
   diagrams in the house style.
+- **Intermittent "unknown_model" is expected and handled.** The US gateway load-balances across
+  Azure backends and ~20% lack the gpt-image deployment, so a given call may 400 with
+  `unknown_model` even though the model works. `portkey-image.py` retries (up to 6×) on this
+  specific error — a transient routing miss, not a misconfig. You may see "routing miss …
+  retrying" on stderr before success; that is normal.
 - **Repair regenerates, it does not edit.** The gateway does not expose `images.edit`, so under
   the portkey backend `--edit-image` regenerates from the (fix-amended) prompt rather than
   editing the prior image. Generate more candidates to compensate.
