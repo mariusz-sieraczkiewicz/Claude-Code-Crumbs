@@ -8,7 +8,7 @@ set -euo pipefail
 # key is NEVER stored in this repo.
 #
 # Usage:
-#   generate-diagram.sh --prompt-file PATH --out PATH [--aspect 16:9] [--size 1K]
+#   generate-diagram.sh --prompt-file PATH --out PATH [--aspect 16:9] [--size 2K]
 #                       [--edit-image PATH]
 #
 #   --prompt-file PATH   File containing the full prompt text (a file, not an inline
@@ -17,7 +17,7 @@ set -euo pipefail
 #                        the bytes the model actually returns (JPEG even when not asked).
 #                        Required.
 #   --aspect AR          Aspect ratio: 16:9 (default), 1:1, 4:5, 1.91:1, 9:16, etc.
-#   --size SIZE          Image size: 1K (default) | 2K | 4K.
+#   --size SIZE          Image size: 1K | 2K (default) | 4K.
 #   --edit-image PATH    Optional. An existing image to EDIT: it is sent as an extra
 #                        image part alongside the prompt, so the model modifies it
 #                        instead of generating from scratch. Use for the repair loop
@@ -44,7 +44,7 @@ MODEL="gemini-3-pro-image"
 ENDPOINT="https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent"
 
 ASPECT="16:9"
-SIZE="1K"
+SIZE="2K"
 PROMPT_FILE=""
 OUT=""
 EDIT_IMAGE=""
@@ -57,14 +57,14 @@ while [ $# -gt 0 ]; do
     --size)        SIZE="${2:-}"; shift 2 ;;
     --edit-image)  EDIT_IMAGE="${2:-}"; shift 2 ;;
     -h|--help)
-      err "usage: generate-diagram.sh --prompt-file PATH --out PATH [--aspect 16:9] [--size 1K] [--edit-image PATH]"
+      err "usage: generate-diagram.sh --prompt-file PATH --out PATH [--aspect 16:9] [--size 2K] [--edit-image PATH]"
       exit 1 ;;
     *) err "unknown argument: $1"; exit 1 ;;
   esac
 done
 
 if [ -z "$PROMPT_FILE" ] || [ -z "$OUT" ]; then
-  err "usage: generate-diagram.sh --prompt-file PATH --out PATH [--aspect 16:9] [--size 1K] [--edit-image PATH]"
+  err "usage: generate-diagram.sh --prompt-file PATH --out PATH [--aspect 16:9] [--size 2K] [--edit-image PATH]"
   exit 1
 fi
 if [ ! -f "$PROMPT_FILE" ]; then
@@ -245,7 +245,7 @@ with open(out, "wb") as fh:
     fh.write(base64.b64decode(inline["data"]))
 
 # Cost approximation: ~$0.13/image at 1K-2K, ~$0.24 at 4K.
-size = os.environ.get("SIZE", "1K").upper()
+size = os.environ.get("SIZE", "2K").upper()
 cost = "~$0.24" if size.startswith("4") else "~$0.13"
 usage = data.get("usageMetadata", {}) or {}
 tokens = usage.get("totalTokenCount", "?")

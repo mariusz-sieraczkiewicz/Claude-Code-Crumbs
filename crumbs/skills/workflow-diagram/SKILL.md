@@ -121,16 +121,16 @@ boxes, dashed bypass/self-loop arrows). Write each prompt to its own temp file (
 ## Phase 3: Generate candidates → auto-pick
 
 For each diagram (overview, detailed), call the helper **N times** (~2–3) into `-1`, `-2`, …
-filenames. **Always generate at `--size 1K`** — pass it on every call (generate and repair
-alike). 1K is the cheapest tier for this model (same token cost as 2K but smaller files) and
-is sharp enough for these label-driven diagrams. Only override to `2K`/`4K` if the user
+filenames. **Generate at `--size 2K` by default** — pass it on every call (generate and repair
+alike). 2K is the same token cost as 1K for this model but yields crisper, larger output for
+these label-driven diagrams. Override to `1K` for smaller files or `4K` only when the user
 explicitly asks for a larger image.
 
 ```bash
 scripts/generate-diagram.sh \
   --prompt-file /tmp/wfd-overview.txt \
   --out "{skill_dir}/diagrams/{name}-overview-1.jpg" \
-  --aspect 16:9 --size 1K
+  --aspect 16:9 --size 2K
 ```
 
 The helper prints the **final saved path** on stdout (extension may be `.jpg`/`.png` per the
@@ -165,7 +165,7 @@ scripts/generate-diagram.sh \
   --prompt-file /tmp/wfd-fix.txt \
   --edit-image "{skill_dir}/diagrams/{name}-detailed-2.jpg" \
   --out "{skill_dir}/diagrams/{name}-detailed-fixed.jpg" \
-  --aspect 16:9 --size 1K
+  --aspect 16:9 --size 2K
 ```
 
 Example fix prompt: *"Change the label 'invariants cleners' to 'invariants'. Keep everything
