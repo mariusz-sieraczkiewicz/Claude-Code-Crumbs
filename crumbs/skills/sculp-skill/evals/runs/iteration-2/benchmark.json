@@ -1,0 +1,48 @@
+{
+  "anchors": {
+    "source": 1.4,
+    "reference": 5.0
+  },
+  "iteration_1": {
+    "with_skill": {
+      "writing_manner": 3,
+      "altitude": 3,
+      "conditions": 3,
+      "structures": 4,
+      "coverage": 2
+    },
+    "mean": 3.0
+  },
+  "iteration_2": {
+    "with_skill_v2": {
+      "writing_manner": 3,
+      "altitude": 4,
+      "conditions": 4,
+      "structures": 4,
+      "coverage": 2
+    },
+    "mean": 3.4,
+    "baseline_isolated": {
+      "writing_manner": 3,
+      "altitude": 2,
+      "conditions": 3,
+      "structures": 2,
+      "coverage": 2
+    },
+    "baseline_mean": 2.4
+  },
+  "delta_v1_to_v2": {
+    "writing_manner": 0,
+    "altitude": 1,
+    "conditions": 1,
+    "structures": 0,
+    "coverage": 0
+  },
+  "delta_v2_vs_baseline": {
+    "writing_manner": 0,
+    "altitude": 2,
+    "conditions": 1,
+    "structures": 2,
+    "coverage": 0
+  }
+}

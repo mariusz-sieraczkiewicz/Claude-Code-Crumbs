@@ -1,0 +1,103 @@
+{
+  "dimensions": {
+    "essence": {
+      "score": 5,
+      "reasoning": "Every responsibility in the source that decides an outcome or a branch survives in binding form. Orchestrator-never-implements and the ban on self-verification are stated as rules, not description ('You orchestrate; you never carry out the task yourself, and no subagent checks its own work'). Status-to-user after every phase survives. The two verifiers run in parallel and both receive the task plus the latest worker-or-fixer report, which also carries the source's Phase-4 loop-back ('the latest worker or fixer report') without needing a separate step. The instruction verifier's independence rule keeps its teeth: verify 'against the files, commands and outputs themselves, never against that report's account of them'. The outcome verifier keeps intent-derived success, run-what-runs, and judge-quality-not-existence. The decide step keeps all three branches, and the source's 'without user permission' qualifier on the cap survives as 'continue only if the user asks for further iterations', which the reference dropped. The fixer keeps fix-only-don't-redo and refute-with-evidence. Report shapes, status sets and the fix hint are delegated to the types file, which is correct placement. Nothing is invented: every rule in the body traces to a line in the source.",
+      "losses": []
+    },
+    "minimalism": {
+      "score": 3,
+      "reasoning": "One recognisable class of passenger survives, and it is the class the rubric rules against by name: the run's own bookkeeping. It appears in four places. The frontmatter already declares the workspace, so describing the folder structure inside it, restating that a running log is kept, and naming the two files buys nothing. The silent-failure guard is real essence, but it is carried in artifact terms ('a subagent log that is missing or empty') where the rubric's own rewrite — a subagent that returns no result has failed — would keep the guard and let the log description go. Separately the 5-iteration cap is stated three times in four consecutive lines. Everything else is tight: shapes, statuses and the final report's contents are all delegated to the types file rather than spelled out, and that is where the source spent most of its length.",
+      "passengers": [
+        {
+          "quote": "Every iteration keeps its own folder in the workspace holding each subagent's log and report.",
+          "why_it_is_spare": "Pure run bookkeeping — per-iteration folders and an artifact inventory. The frontmatter's workspace declaration is the whole of what a sculpt keeps about where a run writes; no behaviour changes if this sentence goes."
+        },
+        {
+          "quote": "A subagent log that is missing or empty means that subagent failed silently — report it instead of reading the result as success.",
+          "why_it_is_spare": "The guard is essence but it is phrased over an artifact, which is what forces the preceding folder/log sentence to exist at all. Restated over the result — a subagent that returns no result has failed, report it — the guard survives and the bookkeeping becomes deletable."
+        },
+        {
+          "quote": "After every phase, update the running log in the workspace and tell the user where the loop stands.",
+          "why_it_is_spare": "The second half is essence (report status after every phase). 'Update the running log in the workspace' is bookkeeping, and it duplicates the log already named in the folder sentence and again in the worker's instruction."
+        },
+        {
+          "quote": "Carry out the task in full, logging each action as it happens.",
+          "why_it_is_spare": "'Logging each action as it happens' is the third statement of the same running-log requirement. 'Carry out the task in full' alone is the worker's whole job."
+        },
+        {
+          "quote": "Run at most 5 verify–fix iterations.",
+          "why_it_is_spare": "The two bullets beneath it already encode the cap ('fewer than 5 iterations are complete' / 'after the fifth iteration'). Three statements of one number; any one of the three could go."
+        }
+      ]
+    },
+    "readability": {
+      "score": 4,
+      "reasoning": "Read cold, this works. The section order — Worker, Verify, Decide, Fixer — is the order the work happens in, and each heading names a stage a reader would look for rather than restating the line below it. Sentences are short, one idea each, and the vocabulary is plain: 'trust the failing one', 'judge quality rather than existence', 'refute it with evidence instead of ignoring it'. Naming each subagent on its own line before its instruction makes it obvious who is being told what, which the source's numbered phases did less well. The one passage needing a second pass is the preamble: three unrelated rules (orchestration stance, self-verification ban, status reporting) are packed into one sentence-pair, then a second paragraph switches to folder layout and back out to a failure guard.",
+      "friction": [
+        {
+          "quote": "Every iteration keeps its own folder in the workspace holding each subagent's log and report. A subagent log that is missing or empty means that subagent failed silently — report it instead of reading the result as success.",
+          "why_it_is_hard": "The two sentences sit at different levels — the first is descriptive scenery, the second is an instruction to act on — with nothing marking the shift. The first also implies a naming scheme the reader is never given, so someone trying to act on it stops to wonder what the folders are called, then finds it did not matter."
+        }
+      ]
+    }
+  },
+  "defensible_divergences": [
+    {
+      "topic": "How verdicts are made unrepresentable",
+      "candidate": "Flat models with Literal status fields on each check plus a top-level verdict on the outcome report.",
+      "reference": "Discriminated unions — separate Passed/Failed report classes, with issues typed as an empty tuple so a passing report is structurally incapable of carrying issues, plus all_done() / overall_pass() helpers.",
+      "why_it_costs_nothing": "The reference's encoding is stricter, but the candidate's body states the decision rule in words ('If every imperative was carried out and the outcome verifier passes the result'), so the branch is fully determined either way. A modelling-taste difference, not a lost responsibility."
+    },
+    {
+      "topic": "Keeping the source's third status, 'concern'",
+      "candidate": "Outcome checks and the outcome verdict may be pass, fail or concern; the decide rule finishes only on a pass, so concern routes to the fixer.",
+      "reference": "Collapses to pass/fail, so concern disappears as a concept.",
+      "why_it_costs_nothing": "The source is itself unclear on whether concern blocks. The candidate resolves it coherently and in the stricter direction, which matches the source's instruction that the fixer address concerns."
+    },
+    {
+      "topic": "Shape of the final report",
+      "candidate": "Delegated entirely to LoopResult (passed, iterations, changes, unresolved, workspace) with a one-line Output declaration in the body.",
+      "reference": "One prose line, 'Report the terminal result and workspace', with Passed/Stopped contracts behind it.",
+      "why_it_costs_nothing": "The source spent a three-item numbered section on this; both sculpts push it into types. The candidate's version is arguably the cleaner delegation — the only cost is the status.md filename riding along, already counted under minimalism."
+    },
+    {
+      "topic": "Headings and named subagent blocks vs a flat numbered list",
+      "candidate": "H2 sections per stage, with 'Subagent: X (→ Type)' lines.",
+      "reference": "Numbered steps 1-3 with subagent lines inside.",
+      "why_it_costs_nothing": "Both track the real control flow. The rubric explicitly does not penalise headings retained from the source, and these aid scanning rather than restate their contents."
+    }
+  ],
+  "source_contradictions": [
+    {
+      "contradiction": "The source's guardrail says 'Max 5 iterations without user permission', implying the user may authorise more, but its decide phase says at iteration 5 simply 'stop, report remaining issues honestly' with no route to continue.",
+      "candidate_resolution": "Stop and report every unresolved issue, and continue only if the user asks for further iterations — both halves kept, with stopping as the default.",
+      "holds_together": true
+    },
+    {
+      "contradiction": "The source is inconsistent about whether an outcome status of 'concern' blocks completion: the decide phase defines clean as the outcome verdict being 'pass', while the fixer phase explicitly lists 'concern' among findings that must be addressed.",
+      "candidate_resolution": "Finish only when the outcome verifier passes; anything else, concern included, goes to the fixer, who must resolve every finding.",
+      "holds_together": true
+    },
+    {
+      "contradiction": "The source never settles what one iteration is. Its first phase is the worker, but the fixer is told to write into the next iteration's folder and then return to the verify phase, so after the first pass an iteration is fix-then-verify, not work-then-verify — yet the cap of 5 is stated as if the unit were constant.",
+      "candidate_resolution": "Names the unit explicitly as a verify–fix iteration and counts the cap in those, with the worker sitting outside the loop as a one-time start.",
+      "holds_together": true
+    }
+  ],
+  "better_than_reference": [
+    "Keeps the source guardrail 'Trust failing verifier over passing one when they disagree' as 'When the verifiers disagree, trust the failing one.' The reference drops it entirely. This is outcome-bearing: with two independent verifiers, the tie-break decides whether a run finishes or goes to the fixer, and without it the orchestrator is free to accept the passing report. A real loss in the reference.",
+    "Preserves the cap's escape hatch. The source allows more than 5 iterations with user permission; the reference's 'Run at most 5 work–verification iterations' plus 'If iteration 5 has been reached, stop' removes that option, while the candidate keeps stopping as the default and the user's word as the only way past it.",
+    "Avoids the reference's fix-hint defect cleanly. The reference's body tells the fixer to weigh a fix hint that its own types file never declares and forbids as an extra field, so no verifier could produce one. The candidate declares fix_hint on both check models and lets the fixer instruction stay silent about it — the hint is available, and the body carries no rule the types cannot satisfy."
+  ],
+  "mean_score": 4.0,
+  "verdict": "sound",
+  "weakest_dimension": "minimalism",
+  "what_to_fix_in_the_sculpting_skill": "Add a rule that the source's workspace layout is never described in the body — no per-iteration folders, no log or report filenames, no statement that a log is kept — because the frontmatter workspace declaration is the entirety of what a sculpt says about where a run writes. Pair it with the transform that makes the rule safe to apply: any guard phrased over one of those artifacts must first be rewritten over the result ('an empty log means the subagent failed silently' becomes 'a subagent that returns no result has failed'), then the artifact dropped. Without the second half, a sculptor keeps the folder-and-log description purely to give the silent-failure guard something to refer to — which is exactly what happened here: one legitimate guard dragged three bookkeeping sentences in with it.",
+  "expectations": [
+    {"text": "The essence survived", "passed": true, "evidence": "score 5/5 — every outcome-bearing rule from the source is present and binding, including two the reference lost (trust the failing verifier; the user may authorise more than 5 iterations). Nothing invented."},
+    {"text": "Nothing spare remains", "passed": false, "evidence": "score 3/5 — the run's own bookkeeping survives in four places (per-iteration folder layout, 'update the running log', 'logging each action as it happens', and a silent-failure guard phrased over the log file), and the 5-iteration cap is stated three times in four lines."},
+    {"text": "A person can read it easily", "passed": true, "evidence": "score 4/5 — plain words, one idea per sentence, stage headings in the order the work happens. Only the preamble needs a second pass, where descriptive folder scenery sits unmarked next to a rule the reader must act on."}
+  ],
+  "summary": {"passed": 2, "failed": 1, "total": 3, "pass_rate": 0.67}
+}

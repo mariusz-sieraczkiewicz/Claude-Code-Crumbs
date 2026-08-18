@@ -1,0 +1,114 @@
+{
+  "dimensions": {
+    "essence": {
+      "score": 5,
+      "reasoning": "Every responsibility in the source that changes what a run produces or which path it takes is present, and each is stated in a form that binds. The orchestrator-never-implements rule and the no-self-verification rule are fused into one sentence ('You orchestrate: never carry out the task yourself, and never let a subagent judge its own work'), which covers both the source's 'You orchestrate — never implement' and its 'Never let worker/fixer self-verify'. The parallel two-verifier structure, the verbatim task passed to each, the don't-trust-the-report rule, the checklist decomposition, the intent-not-literal-wording reading by the outcome verifier, running runnable artifacts, the definition of clean, the fixer's address-everything / change-nothing-that-passed / push-back-with-evidence duties, and the return-to-verification with the fix report standing in as the work report are all carried. Two source guardrails that verifiers commonly drop survive here: 'Trust failing verifier over passing one when they disagree' becomes 'Where the two verifiers contradict each other, believe the one reporting a failure', and 'Empty/missing .log = silent failure — surface to user' becomes 'If a subagent produced nothing, tell the user which one failed silently' — exactly the artifact-to-result restatement the rubric prescribes, so the guard survives without the log file. Report shapes, status vocabularies, and the final report's contents are delegated to the types file rather than lost: ComplianceStatus and OutcomeStatus carry the source's done/missing/partial and pass/fail/concern sets, and LoopResult carries the source's three final-report items (result, what changed, workspace). Nothing outcome-bearing is invented; the two places where the candidate hands a decision to the user are branch completions of things the source already escalates ('Max 5 iterations without user permission', 'surface to user'), not new behaviour.",
+      "losses": []
+    },
+    "minimalism": {
+      "score": 3,
+      "reasoning": "Two recognisable classes of passenger survive. First and larger: the body enumerates the shape of two reports the types file already declares. The worker line 'Report what was done, which files changed, anything left undone and why, and how each unclear point was decided' is a one-to-one paraphrase of WorkReport's four fields — including their Field descriptions ('Absolute paths', 'Each omission with its reason', 'Each unclear point in the task and how it was decided') — and 'Report each fix as the state before and after it' is a paraphrase of Fix(finding, before, after). Neither changes behaviour if removed, because the type binds the shape either way; the reference shows the alternative in one clause, 'Spawn a subagent to complete the user's task. (→ WorkingReport)', with no field list. Second: a run's own bookkeeping, which the rubric rules out explicitly. 'Give each iteration its own folder inside the workspace' names what goes inside a workspace already declared in the frontmatter, and 'after each phase record where the loop stands' is the source's status.md running log carried across under a different name — the half of that sentence that matters, 'and tell the user', is essence and survives on its own. Everything else earns its place: the parallel declaration, the verbatim-task wiring, the verifier disagreement rule, and the four Decide branches are all load-bearing.",
+      "passengers": [
+        {
+          "quote": "Report what was done, which files changed, anything left undone and why, and how each unclear point was decided.",
+          "why_it_is_spare": "WorkReport already declares completed, changed_files (description: 'Absolute paths.'), left_undone (description: 'Each omission with its reason.') and decisions (description: 'Each unclear point in the task and how it was decided.'). The type binds the shape; the sentence restates it in prose."
+        },
+        {
+          "quote": "Report each fix as the state before and after it.",
+          "why_it_is_spare": "Fix declares finding, before, after. A fixer returning that type cannot report a fix any other way."
+        },
+        {
+          "quote": "Give each iteration its own folder inside the workspace",
+          "why_it_is_spare": "Per-iteration folders are a run's internal bookkeeping. The frontmatter workspace declaration is the whole of what a sculpt keeps about where a run writes; nothing in the loop's behaviour depends on the folder layout."
+        },
+        {
+          "quote": "after each phase record where the loop stands",
+          "why_it_is_spare": "This is the source's status.md running log with the filename removed. Removing it changes nothing a verifier or the user sees — the sibling clause 'and tell the user' is what actually surfaces progress."
+        }
+      ]
+    },
+    "readability": {
+      "score": 4,
+      "reasoning": "Read cold, this lands. The order matches how the work happens — input, the orchestrator's standing rule, Work, Verify, Decide, Fix, output — and the four headings each name a stage a reader would want to find, rather than restating the sentence beneath. Language is plain and concrete ('believe the one reporting a failure', 'change nothing that already passed', 'treating the fix report as the work being checked'), sentences are mostly one idea each, and no internal name is used without being introduced. The shared preamble before the two verifiers is a good touch: it states once, before the split, that both get the task word for word and both judge artifacts rather than the report, so neither verifier block has to repeat it. The types file is equally readable — plain field names, enums that read as English, and descriptions only where the name does not carry the meaning. One passage costs a second pass: the iteration-cap branch stacks three decisions into one sentence with a semicolon and an 'unless', and a reader has to work out that the default when the user says nothing is to stop with a result. The bookkeeping clause 'record where the loop stands' is also faintly vague about where the record goes — though since it is a passenger, deleting it removes the friction too.",
+      "friction": [
+        {
+          "quote": "If the work is not clean and at least 5 iterations are complete, show the user the unresolved issues and what another iteration would attempt, and let them choose between continuing and finishing; unless they continue, produce the result listing those issues and stop.",
+          "why_it_is_hard": "Three things happen in one sentence — surface the issues, offer a choice, and act on the default. The 'unless they continue' inverts the branch a second time, so a newcomer re-reads to confirm that silence means stop-with-a-result rather than stop-without-one. The reference's flat 'If iteration 5 has been reached, stop and report every remaining issue' is easier to act on, though it also drops the user-permission escape the source's guardrail grants."
+        }
+      ]
+    }
+  },
+  "defensible_divergences": [
+    {
+      "topic": "Where the input and output contracts are declared",
+      "candidate": "In the body: 'Input (→ `TaskRequest`)' as the first line and 'Output (→ `LoopResult`(`result.yaml`))' as the last, with frontmatter metadata carrying only types and workspace.",
+      "reference": "In the frontmatter: 'inputs: Task' and 'output: VerificationResult'.",
+      "why_it_costs_nothing": "Both bind the same contract. The candidate's placement is the convention the sculpting skill itself documents ('Declare input typed data at the beginning of the skill file' / 'Declare output typed data at the end'), and bracketing the body with the two contracts reads well — the reader sees what goes in before the first stage and what comes out after the last."
+    },
+    {
+      "topic": "Resolving the source's own conflict about the 5-iteration cap",
+      "candidate": "At 5 iterations, show the user the unresolved issues and what another iteration would attempt, and let them choose; if they do not continue, produce the result with those issues and stop.",
+      "reference": "'If iteration 5 has been reached, stop and report every remaining issue.'",
+      "why_it_costs_nothing": "The source says both 'Max 5 iterations without user permission' and 'Issues + iter == 5: stop, report remaining issues honestly'. The candidate honours the permission clause and keeps the hard stop as the default; the reference honours the hard stop and drops the permission clause. Both are coherent readings, and the candidate's costs nothing because the default path is identical."
+    },
+    {
+      "topic": "How the types file makes an inconsistent verdict impossible",
+      "candidate": "Flat models with enum statuses — ComplianceStatus(carried_out/partly_carried_out/missed), OutcomeStatus(pass/concern/fail) — and an `overall` on OutcomeReview.",
+      "reference": "Discriminated unions (PassedInstructionsReport | FailedInstructionsReport, with issues typed as an empty tuple on the passing arm) plus all_done()/overall_pass() helper methods.",
+      "why_it_costs_nothing": "The reference buys a structural guarantee that a 'pass' cannot carry issues; the candidate buys legibility for a human reading the contract. The body's own definition of clean — 'every instruction was carried out and the outcome verifier passes it' — is unambiguous against the candidate's enums, so nothing about the loop's behaviour is left open."
+    },
+    {
+      "topic": "Stage headings versus a numbered sequence",
+      "candidate": "Four named sections: Work, Verify, Decide, Fix.",
+      "reference": "Numbered steps 1–3 with the subagents inlined.",
+      "why_it_costs_nothing": "Both make the sequence obvious. The headings additionally give a reader somewhere to jump back to, and none of them merely restates the sentence below it."
+    },
+    {
+      "topic": "Renaming the source's status vocabulary",
+      "candidate": "carried_out / partly_carried_out / missed.",
+      "reference": "done / partial / missing, as in the source.",
+      "why_it_costs_nothing": "Same three-way distinction, same decision derived from it. The candidate's names match the verb it uses in the body ('whether it was carried out'), so body and type read as one voice."
+    }
+  ],
+  "source_contradictions": [
+    {
+      "contradiction": "The source's Guardrails say 'Max 5 iterations without user permission' — implying the cap can be lifted by asking — while Phase 3 says 'Issues + iter == 5: stop, report remaining issues honestly', implying an unconditional stop.",
+      "candidate_resolution": "At the cap the orchestrator surfaces the unresolved issues and what another iteration would attempt, asks the user to choose, and stops with a result listing the issues unless the user chooses to continue.",
+      "holds_together": true
+    },
+    {
+      "contradiction": "The source is ambiguous about what counts as an iteration: Phase 1 gives the worker `iter-N/`, Phase 4 gives the fixer 'new iteration workspace iter-(N+1)/', and re-verification is described as going 'back to Phase 2' — so it is unclear whether an iteration is work+verify or fix+verify, and therefore what 'iter == 5' counts.",
+      "candidate_resolution": "The candidate counts completed iterations rather than folders ('at least 5 iterations are complete') and defines the cycle once as work → verify → decide → fix → verify again, so a fix-and-verify pass is plainly one iteration.",
+      "holds_together": true
+    }
+  ],
+  "better_than_reference": [
+    "The fix hint is handled correctly, where the reference's is broken. The reference body tells the fixer to 'Use a fix hint only when supported by evidence and it addresses the root cause', but its contracts declare no such field and forbid extra ones, so no verifier can ever produce a hint for the fixer to weigh. The candidate says nothing about hints in the body and instead puts `suggested_fix: str | None` on both InstructionCheck and OutcomeCheck — the hint exists, reaches the fixer, and needs no prose because the field carries it.",
+    "The source's silent-failure guardrail survives. 'Empty/missing .log = silent failure — surface to user' becomes 'If a subagent produced nothing, tell the user which one failed silently' — the guard restated in terms of the result instead of the log file. The reference drops this guardrail entirely, so a reference-driven run that gets an empty subagent result has no instruction to escalate it.",
+    "The verifier-disagreement rule survives: 'Where the two verifiers contradict each other, believe the one reporting a failure.' The reference has no equivalent, so a run following it has nothing to fall back on when the instruction verifier passes and the outcome verifier fails.",
+    "The final report is fully delegated. LoopResult(clean, iterations, changes, unresolved, workspace) covers all three items the source's Final Report section lists, so the body needs no closing paragraph; the reference still spends a line on 'Report the terminal result and workspace.'",
+    "The source's 'Report status to the user after every phase' survives in the candidate ('and tell the user') and is absent from the reference — the reference's run is silent until it finishes."
+  ],
+  "mean_score": 4.0,
+  "verdict": "sound",
+  "weakest_dimension": "minimalism",
+  "what_to_fix_in_the_sculpting_skill": "Tighten the rule at 'Do not ever directly refer to contract type fields'. As written it says 'Instead of field references use human language counterparts', which invites exactly what happened here: the author avoided naming WorkReport's and Fix's fields and instead paraphrased all of them in prose, so the duplication survived in disguise. Replace it with: a subagent's paragraph states only the work it must do and the judgment it must exercise; what its report contains is stated once, in the type, and never re-listed in the body in any wording. Human-language counterparts are for rules a type cannot carry (an obligation, a tie-break, a prohibition), not for describing what to report.",
+  "expectations": [
+    {
+      "text": "The essence survived",
+      "passed": true,
+      "evidence": "score 5/5 — every outcome-bearing responsibility binds, including two guardrails the reference drops: the failing-verifier tie-break and the silent-failure escalation, the latter restated as 'If a subagent produced nothing' so the guard survives without the log file it was attached to."
+    },
+    {
+      "text": "Nothing spare remains",
+      "passed": false,
+      "evidence": "score 3/5 — two classes of passenger survive: report shapes paraphrased in the body that WorkReport and Fix already declare, and a run's own bookkeeping ('Give each iteration its own folder inside the workspace', 'record where the loop stands')."
+    },
+    {
+      "text": "A person can read it easily",
+      "passed": true,
+      "evidence": "score 4/5 — plain language, stage order matches the work, shared preamble states the verifiers' common contract once; one passage, the iteration-cap branch, stacks three decisions and an 'unless' into a single sentence and needs a second pass."
+    }
+  ],
+  "summary": {"passed": 2, "failed": 1, "total": 3, "pass_rate": 0.67}
+}

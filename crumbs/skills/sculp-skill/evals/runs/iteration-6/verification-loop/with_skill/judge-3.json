@@ -1,0 +1,104 @@
+{
+  "dimensions": {
+    "essence": {
+      "score": 5,
+      "reasoning": "Every outcome-bearing responsibility in the source survives in a form that still binds. Orchestrator-never-implements and report-after-every-phase are both stated plainly (\"You orchestrate and never carry out the task yourself. Tell the person the outcome of each phase.\"). The two verifiers run in parallel and are structurally separate from worker and fixer, so \"never skip a verifier\" and \"never let worker/fixer self-verify\" are enforced by shape, with the worker additionally told \"Do not check your own work.\" The source's \"trust failing verifier over passing one\" is absorbed into the clean condition — the run only finishes when instructions are all done AND every outcome criterion passes — which is the correct place for it, since a disagreement can then only resolve toward fixing. The instruction verifier's don't-trust-the-report rule survives verbatim in intent (\"by examining the produced work rather than the report about it\"). The 5-iteration cap survives, including the escape hatch (\"Continue only if the person asks for it\"), matching the source's \"without user permission\". The silent-failure guard is restated in terms of the result rather than the artifact — exactly the transformation the rubric asks for. Statuses, evidence, fix hints, changed-file paths, omissions-with-reasons, resolved ambiguities and the fixer's dispute path all live in the types file, which is proper placement. The outcomes verifier's \"run if runnable, read if readable\" is not spelled out in the body, but the calibration ruling retires that finding, and \"Existence is not achievement\" carries the intent it was protecting. Nothing was invented: the one branch with no literal counterpart in the source's numbered phases (stop when an iteration resolves nothing) is the source's \"Thrashing = escalate, don't grind\" guardrail made decidable.",
+      "losses": []
+    },
+    "minimalism": {
+      "score": 4,
+      "reasoning": "The body carries no field shapes, no report filenames, no per-iteration folder inventory and no progress narration — all the bookkeeping the source spent a whole section on is gone, with only the workspace surviving in frontmatter. Two small things could still come out. First, the iteration cap is stated three times: once as a standing rule and again inside two of the four decision branches. Second, the H1 heading only repeats the frontmatter name. Neither changes behaviour if removed, and neither is a whole class of passenger, so this sits at the top of the band rather than below it.",
+      "passengers": [
+        {
+          "quote": "Run at most 5 work–verification iterations.",
+          "why_it_is_spare": "The two branches immediately below already fully determine the cap — \"If anything is unresolved and fewer than 5 iterations are complete, run the fixer\" and \"If anything is unresolved after 5 iterations, record every unresolved issue in the result and stop.\" The standing sentence adds no case those two do not already decide. The reference states the cap once, before the numbered steps, and never repeats it inside the decision."
+        },
+        {
+          "quote": "# Verification Loop",
+          "why_it_is_spare": "Repeats `name: verification-loop` from the frontmatter one line above it, and heads no section that competes with another for the reader's eye. The reference carries no title heading at all."
+        }
+      ]
+    },
+    "readability": {
+      "score": 4,
+      "reasoning": "Read as a newcomer, this lands almost everywhere on the first pass. Plain words, one idea per sentence, no jargon left undefined, and the repeated `Subagent: <role> (→ Type)` shape makes the four delegated roles findable at a glance. The order matches how the work happens: input, orchestration stance, worker, verification, decision, fixer, output. Lines like \"Existence is not achievement\" do real work in five words. One passage costs a second pass: the four-branch decision block. Its branches are not mutually exclusive and their precedence is carried only by list order, and the second branch's trigger is not defined anywhere — a newcomer has to invent the test for it. A smaller wrinkle: the worker subagent sits above the first `##` heading while the other three phases sit under headings, so the phase rhythm starts one beat late; this is cosmetic and did not slow comprehension.",
+      "friction": [
+        {
+          "quote": "If an iteration resolves nothing, record the unresolved issues in the result and stop.",
+          "why_it_is_hard": "\"Resolves nothing\" has no definition here and no field in the types file to key off — the reader must infer that they are meant to compare this iteration's unresolved set against the previous one's, and must also work out that this branch is checked before the \"fewer than 5 iterations\" branch that would otherwise also match. Every other branch in the block states a test the reader can evaluate directly. The reference sidesteps this by not carrying the source's thrashing guardrail at all, which is a different tradeoff, not a better-stated one."
+        }
+      ]
+    }
+  },
+  "defensible_divergences": [
+    {
+      "topic": "Where the input and output contracts are declared",
+      "candidate": "Body lines: \"Input (→ `Task`)\" at the top and \"Output (→ `LoopResult`(`result.yaml`))\" at the bottom; frontmatter carries only `types` and `workspace`.",
+      "reference": "Frontmatter metadata keys `inputs: Task` and `output: VerificationResult`; no input/output line in the body.",
+      "why_it_costs_nothing": "The contract is equally explicit and uses the established arrow convention. Bracketing the body with input at the top and output at the bottom also matches the reading order, so a newcomer meets the input before the first phase and the output after the last one."
+    },
+    {
+      "topic": "Shape of the terminal result",
+      "candidate": "A single flat `LoopResult` with `iterations`, `changes` and `unresolved`; passed vs stopped is read off whether `unresolved` is empty.",
+      "reference": "A discriminated union `Passed | Stopped` with an explicit `reason: Literal[\"cap_reached\"]`.",
+      "why_it_costs_nothing": "The source's final report needs a one-line result, what changed, and how many issues remain — all three are recoverable from the flat shape. The union is more self-describing, but nothing in the run branches on the discriminant."
+    },
+    {
+      "topic": "Outcome states",
+      "candidate": "Keeps the source's three-way `pass | concern | fail` on `OutcomeCheck`, with the decision rule requiring every criterion to pass.",
+      "reference": "Collapses outcomes to `pass | fail`.",
+      "why_it_costs_nothing": "Because the clean condition demands a pass, `concern` and `fail` route identically to the fixer, so behaviour is unchanged — but the extra state lets the fixer see which findings are soft, which is what the source's fixer instruction (\"Address every missing/partial/fail/concern finding\") assumed."
+    },
+    {
+      "topic": "Types file location and naming",
+      "candidate": "`./contracts.py`, roles named Worker / Instruction Verifier / Outcome Verifier / Fixer.",
+      "reference": "`./scripts/contracts.py`, roles named implementer / Instructions Verifier / Outcomes Verifier / fixer.",
+      "why_it_costs_nothing": "Pure naming and layout. \"Worker\" also matches the source's own vocabulary, so a reader coming from the original skill is not re-taught a term."
+    }
+  ],
+  "source_contradictions": [
+    {
+      "contradiction": "The source's guardrail section says \"Max 5 iterations without user permission\", implying the cap can be lifted by asking. Its decision phase says the opposite: \"Issues + iter == 5: stop, report remaining issues honestly\" — a hard stop with no route past it.",
+      "candidate_resolution": "Hard stop at 5 with every unresolved issue recorded, plus an explicit reopening: \"Continue only if the person asks for it.\" This keeps the decision phase's determinism and restores the permission route the guardrail promised.",
+      "holds_together": true
+    },
+    {
+      "contradiction": "The source makes the run's log files the medium for detecting silent failure (\"Empty/missing `.log` = silent failure\") while those same logs are pure bookkeeping that a sculpt is meant to drop, which would take the guard with them.",
+      "candidate_resolution": "The guard is re-keyed to the result instead of the artifact: \"A subagent that returns no report has failed silently — do not treat its phase as complete.\" The logs go, the guard stays.",
+      "holds_together": true
+    },
+    {
+      "contradiction": "The source's guardrails say \"Thrashing = escalate, don't grind\", but no phase in the source ever detects thrashing or acts on it — the loop only ever exits clean or at the cap.",
+      "candidate_resolution": "Adds a stop-on-no-progress branch to the decision block, making the guardrail reachable. The resolution is coherent in direction but leaves its own trigger undefined, which is the readability cost recorded above; it also converts \"escalate\" into \"record and stop\" rather than handing the choice back to the person.",
+      "holds_together": true
+    }
+  ],
+  "better_than_reference": [
+    "The silent-failure guard survives. The reference drops the source's \"Empty/missing `.log` = silent failure — surface to user\" entirely along with the logs; the candidate keeps the protection and re-expresses it in terms of the result — \"A subagent that returns no report has failed silently\" — which is precisely the restatement the rubric prescribes for artifact-dependent rules.",
+    "The fixer's right of reply survives. The source requires \"If a verifier finding is wrong, say so with evidence — don't silently ignore\"; the candidate carries it as `FixReport.disputed`, described as \"Findings judged wrong, each with the evidence against it.\" The reference has no equivalent, so a wrong verifier finding there has nowhere to go but into a pointless fix.",
+    "The worker is explicitly told not to self-verify (\"Do not check your own work\"), which the source lists as a guardrail and the reference omits. Structure alone does not stop a worker from burning effort grading itself.",
+    "The description states the trigger condition in user terms — \"Use when a task must be proven complete and correct, not only attempted\" — which is a sharper selection cue than the reference's role-shaped \"Use when a task needs separate implementer and verifier roles\"."
+  ],
+  "mean_score": 4.33,
+  "verdict": "sound",
+  "weakest_dimension": "minimalism",
+  "what_to_fix_in_the_sculpting_skill": "Add a rule that a limit or cap is stated exactly once — either as a standing constraint or inside the decision branches that enforce it, never both — and a companion rule that any branch added to a decision must state a test the reader can evaluate from the declared types, or be folded into an adjacent branch rather than standing alone.",
+  "expectations": [
+    {
+      "text": "The essence survived",
+      "passed": true,
+      "evidence": "score 5/5 — every outcome-bearing responsibility binds, including two guardrails the reference dropped (silent-failure detection, the fixer's dispute path); nothing invented beyond making the source's own thrashing guardrail reachable."
+    },
+    {
+      "text": "Nothing spare remains",
+      "passed": true,
+      "evidence": "score 4/5 — no bookkeeping, no field shapes, no narration in the body; two sentences could still go (the standing iteration cap, already fully determined by the branches below it, and the title heading that repeats the frontmatter name)."
+    },
+    {
+      "text": "A person can read it easily",
+      "passed": true,
+      "evidence": "score 4/5 — plain and scannable throughout; the four-branch decision block needs a second pass because its branches overlap, precedence rides on list order, and \"If an iteration resolves nothing\" defines no test."
+    }
+  ],
+  "summary": {"passed": 3, "failed": 0, "total": 3, "pass_rate": 1.0}
+}

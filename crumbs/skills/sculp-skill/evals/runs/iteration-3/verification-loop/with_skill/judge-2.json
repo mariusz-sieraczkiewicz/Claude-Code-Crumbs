@@ -1,0 +1,98 @@
+{
+  "dimensions": {
+    "essence": {
+      "score": 5,
+      "reasoning": "I listed the source's outcome-bearing responsibilities and found all of them carried, either in the body or in the types file. Orchestration-only ('You orchestrate; you never do the work yourself'), verbatim task propagation ('Every subagent receives the task verbatim, never a summary'), per-iteration folders and running logs, status reporting after every phase, the two verifiers running in parallel on the task plus the last work report, independent verification rather than trusting the report, intent-based outcome assessment that runs what can be run and judges quality not existence, the three-way decision with a cap of 5, fixer scope ('resolve every problem found, and change nothing that already passes') and the duty to dispute a mistaken finding with evidence. The reporting detail the source spells out inline is delegated correctly: WorkerReport carries work done / changed files / skipped-with-reason / resolved ambiguities; InstructionCheck and OutcomeCheck carry status sets, evidence and fix_hint; FixReport carries before/after per fix plus disputed findings; VerificationResult carries pass, iterations, changes, unresolved. Two things I looked hard at and passed. First, the final report in the source ends with 'Workspace path for inspection' and the candidate never restates it — but the frontmatter declares the workspace, and the sculpting spec forbids putting execution details into the domain result, so the omission is deliberate and costs a reader almost nothing. Second, 'stop without producing a result' on silent failure is not literally in the source, but the source's guardrail ('Empty/missing .log = silent failure — surface to user') is under-specified and the spec requires every branch to state whether the result is produced, so this is branch completion rather than invention. Nothing was invented that changes what the skill does.",
+      "losses": []
+    },
+    "minimalism": {
+      "score": 4,
+      "reasoning": "The body carries essentially no narration, no reassurance and no field shapes — the types file holds all of that, and the loop mechanics are stated once each. The only removable weight is the closing section, which re-lists in prose the four things VerificationResult already declares and then restates the output path the frontmatter already carries as `output: VerificationResult(verification-result.yaml)`. That is exactly the 'where results go belongs in the frontmatter contract' passenger the rubric names — but it is also the literal pattern the sculpting skill mandates in 'The final section produces the official result', so the fix belongs in the sculpting skill, not in this candidate. Two sentences could go; nothing else could.",
+      "passengers": [
+        {
+          "quote": "Combine the outcome, the number of iterations, the changes made, and the unresolved problems into `VerificationResult`.",
+          "why_it_is_spare": "VerificationResult already declares exactly these four fields (passed, iterations, changes, unresolved), and the frontmatter already names it as the output. The sentence adds no constraint a reader or a run would act on differently."
+        },
+        {
+          "quote": "Return the result and write the same result to `verification-result.yaml`.",
+          "why_it_is_spare": "The frontmatter contract `output: VerificationResult(`verification-result.yaml`)` already states both the type and the destination."
+        }
+      ]
+    },
+    "readability": {
+      "score": 4,
+      "reasoning": "Read cold, this lands. Section names match the order the work happens in (run, verify, decide, fix, produce), each subagent gets a role, a task and a result, the decision has three complete branches, and the prose is plain — 'judge quality rather than existence', 'change nothing that already passes'. The one genuinely elegant line is 'each receiving the task and the report of the subagent that last did the work', which covers both the first pass and every re-verification after a fix without a cross-reference. One passage needs a second read: the preamble sentence that packs iteration numbering, per-iteration folders and per-subagent logging into a single semicolon-joined line, and does so before any step has been introduced, so 'each fix begins the next iteration' is a forward reference to a section the reader has not reached yet.",
+      "friction": [
+        {
+          "quote": "Running the task is iteration 1 and each fix begins the next iteration; give each iteration its own folder, and require each subagent to write its running log into that folder.",
+          "why_it_is_hard": "Three separate constraints — how iterations are counted, that each gets a folder, and that logs go in it — arrive in one sentence, and the first depends on a 'fix' step the reader has not met yet. A newcomer has to hold it and re-read once the Fix section explains what a fix is."
+        }
+      ]
+    }
+  },
+  "defensible_divergences": [
+    {
+      "topic": "Workspace declaration",
+      "candidate": "`workspace: default` in frontmatter, with 'give each iteration its own folder' in the body",
+      "reference": "`workspace: \".verification-loop/$runtime.run_id/\"` plus a body line 'Use a new workspace for each execution.'",
+      "why_it_costs_nothing": "`default` is the sculpting spec's own frontmatter example, so it is an established convention rather than a vague value; per-run isolation comes from the convention and per-iteration isolation is stated in the body. Neither run behaves differently."
+    },
+    {
+      "topic": "Three-valued outcome status",
+      "candidate": "OutcomeCheck keeps the source's pass/concern/fail and disambiguates the cap via the `overall` field description: 'anything short of every check passing is not a pass'",
+      "reference": "Collapses to pass/fail and drops 'concern' entirely",
+      "why_it_costs_nothing": "Both make 'clean' unambiguous. The candidate keeps the source's finer grain for the fixer to act on while removing the ambiguity in the types file rather than the body."
+    },
+    {
+      "topic": "Body shape",
+      "candidate": "Titled H1 plus named sections (Run the task / Verify / Decide / Fix / Produce verification result)",
+      "reference": "Numbered steps with no headings",
+      "why_it_costs_nothing": "Both match the order of work. The headings help a reader find a stage and do not restate the sentences beneath them."
+    },
+    {
+      "topic": "Input declaration",
+      "candidate": "`inputs: \"task: str\"`",
+      "reference": "`inputs: Task` with a `Task` contract in the types file",
+      "why_it_costs_nothing": "A one-field wrapper type for a task string changes nothing about what any subagent receives; the body's 'Every subagent receives the task verbatim' carries the only constraint that matters."
+    }
+  ],
+  "source_contradictions": [
+    {
+      "contradiction": "The guardrail says 'Max 5 iterations without user permission', implying the user can authorise more, while Phase 3 says flatly 'Issues + iter == 5: stop, report remaining issues honestly' with no route past the cap.",
+      "candidate_resolution": "Hard stop: 'If 5 iterations have run, stop and produce the result listing every unresolved problem.'",
+      "holds_together": true
+    },
+    {
+      "contradiction": "Phase 3 defines clean as outcomes `overall == \"pass\"`, but Phase 4 tells the fixer to address `concern` findings — so a report could be overall 'pass' while carrying concerns the source also wants fixed.",
+      "candidate_resolution": "Resolved in the types file rather than the body: `overall` is described as 'Verdict over all the checks together; anything short of every check passing is not a pass', so a concern forces another iteration and reaches the fixer.",
+      "holds_together": true
+    }
+  ],
+  "better_than_reference": [
+    "Keeps the source guardrail 'Trust failing verifier over passing one when they disagree' as 'Where the verifiers disagree about the same point, treat the failing verdict as the correct one.' The reference drops it entirely — that is a loss in the reference, not a difference in taste.",
+    "Keeps the source's silent-failure guardrail ('A subagent that returns no result, or leaves its log empty, has failed silently — report which subagent failed and stop without producing a result'), which the reference does not carry at all, and completes the branch by saying no result is produced.",
+    "Avoids the reference's known fix-hint defect. The reference body tells the fixer to weigh a fix hint while its contracts declare no such field and forbid extras, so no verifier could ever supply one. The candidate declares `fix_hint` on both InstructionCheck and OutcomeCheck with the description 'Where to start when the instruction is not done', carrying the source's 'use fix_hint as a starting point' entirely in the types file, where it actually binds."
+  ],
+  "mean_score": 4.33,
+  "verdict": "sound",
+  "weakest_dimension": "minimalism",
+  "what_to_fix_in_the_sculpting_skill": "The 'The final section produces the official result' pattern mandates a body section that re-lists the result type's contents in prose and then restates the output file path. Both are already carried by the types file and the frontmatter `output` contract, so the rule manufactures the one class of passenger this candidate still has, and will do so in every skill sculpted with it. Change the rule to: the closing section names only what the frontmatter and types file do not already state — omit the 'Combine ... into `X`' enumeration when the type's own fields say it, and omit the 'write the same result to <file>' line whenever `output` already carries the path.",
+  "expectations": [
+    {
+      "text": "The essence survived",
+      "passed": true,
+      "evidence": "score 5/5 — every outcome-bearing responsibility of the source is present, with reporting detail correctly delegated to contracts.py; the only source item not restated (the workspace path in the final report) is already declared in the frontmatter and excluded from the domain result by the spec."
+    },
+    {
+      "text": "Nothing spare remains",
+      "passed": true,
+      "evidence": "score 4/5 — only the two closing sentences could go, and both are the pattern the sculpting skill itself mandates; the rest of the body carries no narration, duplication, or field shapes."
+    },
+    {
+      "text": "A person can read it easily",
+      "passed": true,
+      "evidence": "score 4/5 — clear throughout and ordered as the work happens; one preamble sentence packs three constraints and forward-references the fix step, and needs a second pass."
+    }
+  ],
+  "summary": {"passed": 3, "failed": 0, "total": 3, "pass_rate": 1.0}
+}

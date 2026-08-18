@@ -1,0 +1,118 @@
+{
+  "dimensions": {
+    "essence": {
+      "score": 4,
+      "reasoning": "Every path-determining responsibility of the source survives, and several survive better here than in the reference. The orchestrator-never-implements rule, the verbatim-task rule, the status-after-every-phase rule (stated once instead of the source's twice), the two parallel verifiers with their distinct mandates (decompose imperatives and confirm from the work itself; define success from intent, run what runs, judge quality not existence), the clean/fix/cap-at-5 branching, and the fixer's don't-redo-passing-work and dispute-with-evidence rules are all present and binding. Two source guardrails the reference dropped are kept: 'treat the failing verdict as the correct one' and the empty-log silent-failure rule. Field-level detail (evidence, fix hints, before/after per fix, skipped items with reasons, resolved ambiguities) is delegated to the types file, which is correct placement. One thing genuinely does not arrive: the source's final report ends with 'Workspace path for inspection', and nothing in the candidate ever tells the person where the run's folder is. The result type carries passed/iterations/changes/unresolved and no workspace; the body's closing lines name only `verification-result.yaml`; the frontmatter says `workspace: default`, which is a convention, not a path the user is handed. Small, but a person who wants to read `iter-2/worker.log` is left to guess. Nothing is invented: the addition of 'stop without producing a result' to the silent-failure branch is the sculpting skill's own branch-completeness requirement (condition, action, whether the run continues, whether the official result is produced) applied to a source rule that only said 'surface to user'.",
+      "losses": [
+        {
+          "responsibility": "Final report tells the person the workspace path so the run can be inspected (source: 'Workspace path for inspection')",
+          "what_happened": "lost",
+          "quote": "Return the result and write the same result to `verification-result.yaml`.",
+          "why_it_matters": "The run ends with a verdict and a list of changes but no pointer to the per-iteration logs and verifier JSON, so the person cannot get from the summary to the evidence without knowing the timestamped folder convention. The reference keeps it in both places — body ('Report the terminal result and workspace.') and result type ('workspace: Path')."
+        }
+      ]
+    },
+    "minimalism": {
+      "score": 4,
+      "reasoning": "The body is about 350 words and almost all of it is load-bearing. The source's workspace inventory (task.md, status.md, worker.log, worker-report.md, verifier-*.{log,json}, fixer.*) collapses into one sentence about per-iteration folders and logs; the two JSON schemas printed inline in the source are gone entirely into the types file; the duplicated 'report to user' instructions (source line 8 and line 22) merge into a single sentence; the per-verifier numbered micro-steps become one directive each. The closing section is the only place carrying weight it could delegate: it names in prose the four things `VerificationResult` already declares, and then restates the destination the frontmatter already binds. Both are cheap for a reader — they cost a line, not comprehension — but both are removable without changing behaviour, and both come straight from the sculpting skill's own mandated final-section pattern, which is where the next revision should look.",
+      "passengers": [
+        {
+          "quote": "Combine the outcome, the number of iterations, the changes made, and the unresolved problems into `VerificationResult`.",
+          "why_it_is_spare": "These are precisely the four fields of `VerificationResult` in the types file (passed, iterations, changes, unresolved), each already carrying a description. Anything assembling the result reads the type."
+        },
+        {
+          "quote": "Return the result and write the same result to `verification-result.yaml`.",
+          "why_it_is_spare": "The frontmatter contract already says `output: VerificationResult(`verification-result.yaml`)`, which is exactly the 'add a path to output only when the result must be saved' convention. The body repeats the destination."
+        }
+      ]
+    },
+    "readability": {
+      "score": 4,
+      "reasoning": "Read cold, it works. The order matches how the work happens — run, verify, decide, fix, produce — and the headings are the stages, so a reader looking for 'what happens when a verifier fails' finds it. Sentences are short, plain and mostly one idea each; there is no jargon beyond the arrow convention and the role names, and each role's mandate is stated in ordinary language ('judge quality rather than existence', 'Confirm this from the produced work itself, never from the report'). The three decision branches are parallel in shape and each says what happens to the run. The types file reads as plainly as the body: field names are self-explaining and the descriptions add only what the names cannot carry ('anything short of every check passing is not a pass'). One sentence in the preamble carries three separate ideas and is the only place I had to re-read.",
+      "friction": [
+        {
+          "quote": "Running the task is iteration 1 and each fix begins the next iteration; give each iteration its own folder, and require each subagent to write its running log into that folder.",
+          "why_it_is_hard": "Iteration counting, folder-per-iteration, and the log requirement are three rules in one sentence, and 'its own folder' has no stated parent — the workspace is only named in the frontmatter as `default`, so a newcomer has to infer that the iteration folders sit inside the run workspace."
+        }
+      ]
+    }
+  },
+  "defensible_divergences": [
+    {
+      "topic": "Shape of the input declaration",
+      "candidate": "inputs: \"task: str\"",
+      "reference": "inputs: Task, with a `Task` contract in contracts.py",
+      "why_it_costs_nothing": "The input here is one free-text task. A one-field wrapper type buys nothing, and the raw declaration is immediately clear. Nothing downstream branches on the input's shape."
+    },
+    {
+      "topic": "How 'a done item has no issue' is enforced",
+      "candidate": "One `InstructionCheck` with `status: Literal[\"done\", \"partial\", \"missing\"]` plus `evidence` and optional `fix_hint`",
+      "reference": "Discriminated unions (DoneInstructionCheck with issue: None vs UnresolvedInstructionCheck with issue: str) and Passed/Failed report variants",
+      "why_it_costs_nothing": "The reference makes the invariant structurally unrepresentable; the candidate makes it obvious from the status set and field descriptions. Both produce the same reports, and the candidate's version is markedly easier for a person to read. The types file carries the rule either way."
+    },
+    {
+      "topic": "Terminal-state modelling",
+      "candidate": "Flat `VerificationResult` with `passed: bool`, `iterations`, `changes`, `unresolved`",
+      "reference": "Passed | Stopped union, with cap_reached as an explicit reason and a separate collect_remaining_issues helper",
+      "why_it_costs_nothing": "The source distinguishes only 'passed on iter-N' from 'stopped at cap with K remaining issues', and passed=false plus a non-empty unresolved list says exactly that. No branch reads the distinction."
+    },
+    {
+      "topic": "Stage layout",
+      "candidate": "Named headings — Run the task / Verify / Decide / Fix / Produce verification result",
+      "reference": "A numbered 1-2-3 list with the fixer folded into branch 3",
+      "why_it_costs_nothing": "Both make the loop shape visible. The headings give a reader a place to land when they come back mid-run; the loop's cyclic nature is still carried by 'fix and verify again'."
+    },
+    {
+      "topic": "Completing the silent-failure branch",
+      "candidate": "\"...has failed silently — report which subagent failed and stop without producing a result.\"",
+      "reference": "The rule is absent entirely",
+      "why_it_costs_nothing": "The source only says 'surface to user'. Saying what happens to the run and to the official result is the sculpting skill's own branch-completeness requirement, not an invented policy, and continuing a loop on an empty log has no defensible reading."
+    }
+  ],
+  "source_contradictions": [
+    {
+      "contradiction": "The guardrail 'Max 5 iterations without user permission' implies the person can be asked to authorise more, while Phase 3 says 'Issues + iter == 5: stop, report remaining issues honestly' with no such option.",
+      "candidate_resolution": "Resolves to a hard stop: 'If 5 iterations have run, stop and produce the result listing every unresolved problem.' The cap is stated once, in the branch that acts on it.",
+      "holds_together": true
+    },
+    {
+      "contradiction": "The guardrail 'Trust failing verifier over passing one when they disagree' is nearly inert under Phase 3, where clean already requires both verifiers to be satisfied — so a disagreement between the two reports can never yield 'clean' anyway.",
+      "candidate_resolution": "Rescopes it from whole-run verdicts to individual findings: 'Where the verifiers disagree about the same point, treat the failing verdict as the correct one.' That is the reading in which the rule does work — two verifiers judging the same artifact differently.",
+      "holds_together": true
+    },
+    {
+      "contradiction": "The outcomes verifier may return 'concern', but Phase 3 defines clean only as overall == 'pass', leaving 'concern' unhandled at the decision point even though the fixer is told to address concern findings.",
+      "candidate_resolution": "Keeps concern as a status but settles the ambiguity in the types file — the overall verdict is described as 'anything short of every check passing is not a pass' — and the body's branch reads 'If either verifier found a problem', which sweeps concerns into the fix path.",
+      "holds_together": true
+    }
+  ],
+  "better_than_reference": [
+    "Keeps the source's conflict rule ('treat the failing verdict as the correct one'), which the reference drops entirely. Without it two verifiers splitting on the same finding has no stated resolution.",
+    "Keeps the source's silent-failure guardrail — a subagent returning nothing or leaving an empty log — which the reference drops. This is the source's only detector for a subagent that produced no work at all, and the candidate additionally says what happens to the run.",
+    "Places the fix hint only in the types file, as an optional field on both check types with a description ('Where to start when the instruction is not done'). The reference's body tells the fixer to weigh a fix hint while its types declare no such field and forbid extras, so no verifier can ever supply one; the candidate's arrangement actually works.",
+    "Pins iteration counting explicitly: 'Running the task is iteration 1 and each fix begins the next iteration.' The reference's 'Run at most 5 work–verification iterations' leaves it open whether the initial run consumes one, which is the difference between five fixes and four.",
+    "Carries the source's worker-report content (skipped items with reasons, ambiguities resolved) as named fields in the types file. The reference's WorkingReport (summary/artifacts/claims) quietly drops both."
+  ],
+  "mean_score": 4.0,
+  "verdict": "sound",
+  "weakest_dimension": "essence",
+  "what_to_fix_in_the_sculpting_skill": "Add a rule that when a skill declares a workspace, the closing section must name that run's workspace to the person, even though the workspace path stays out of the domain result. Right now 'The final section produces the official result' says the opposite half only — 'Do not add technical execution details, temporary files, sessions, or backend information to the domain result' — so a sculpt that correctly keeps the path out of `VerificationResult` has nowhere left to put it, and the source's 'Workspace path for inspection' falls out of the skill entirely. Stating both halves (out of the result, into the closing report) would have preserved it.",
+  "expectations": [
+    {
+      "text": "The essence survived",
+      "passed": true,
+      "evidence": "score 4/5 — every path-determining responsibility survives and two guardrails the reference lost (failing-verifier precedence, empty-log silent failure) are kept; only the final report's workspace path is gone."
+    },
+    {
+      "text": "Nothing spare remains",
+      "passed": true,
+      "evidence": "score 4/5 — two inline JSON schemas and the whole workspace file inventory are delegated; the closing section still restates the four result fields and the output path that the types file and frontmatter already bind."
+    },
+    {
+      "text": "A person can read it easily",
+      "passed": true,
+      "evidence": "score 4/5 — plain language, stage-shaped order, roles stated in ordinary terms; one preamble sentence packs iteration counting, folders and logs together and needs a second pass."
+    }
+  ],
+  "summary": {"passed": 3, "failed": 0, "total": 3, "pass_rate": 1.0}
+}

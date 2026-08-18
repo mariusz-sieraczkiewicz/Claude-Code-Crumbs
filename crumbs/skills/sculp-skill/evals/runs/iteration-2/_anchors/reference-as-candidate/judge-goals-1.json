@@ -1,0 +1,128 @@
+{
+  "dimensions": {
+    "essence": {
+      "score": 3,
+      "reasoning": "Most of the outcome-bearing structure survives, and several source guardrails are absorbed intelligently rather than dropped: 'Never skip a verifier run' is enforced structurally by step 2 spawning two verifier subagents; 'Trust failing verifier over passing one' is absorbed into the AND-shaped clean test ('If every instruction is done and the outcome is passed'); 'never let worker/fixer self-verify' is carried by the verifier's 'without trusting the working report'. Those are good absorptions, not losses. Two things do not survive. First, the source states four separate times that the orchestrator reports to the user as it goes ('Report status to the user after every phase', 'Update status.md after every phase', plus two literal per-phase report templates); the candidate reports only at the end ('Report the terminal result and workspace'), so a five-iteration run is silent for its whole duration. The literal wording is progress narration and rightly cut, but the obligation to report is a behaviour and it went with it. Second, the fixer's escape valve — 'If a verifier finding is wrong, say so with evidence — don't silently ignore' — is gone, and in its place is a rule the source never asks for: hints must 'address the root cause'. The subject changed from findings to hints, so a fixer can now drop an issue quietly, which is exactly what the source forbade. Compounding this, 'fix hint' has no referent anywhere in the skill: contracts.py defines `issue: str` on UnresolvedInstructionCheck and `issues: list[str]` on FailedOutcomesReport, and no hint field exists. The body instructs the fixer to use an artifact its own type system never produces — a term kept after the field it named was deleted.",
+      "losses": [
+        {
+          "responsibility": "Report status to the user after every phase, and keep a running status.md log",
+          "what_happened": "lost",
+          "quote": "Report the terminal result and workspace.",
+          "why_it_matters": "The source requires interim reporting in four places. With only a terminal report, a run that grinds through five worker/verify/fix iterations gives the user nothing until it ends, and there is no persisted running log to inspect mid-run. The literal templates ('Worker done. Modified N files. Verifying.') are narration and deserved cutting; the obligation itself is user-visible behaviour."
+        },
+        {
+          "responsibility": "Fixer must contest a wrong verifier finding with evidence rather than silently ignore it",
+          "what_happened": "weakened",
+          "quote": "Use a fix hint only when supported by evidence and it addresses the root cause.",
+          "why_it_matters": "The source's rule is about findings and forces the disagreement to surface. The candidate's rule is about hints and licenses the fixer to skip weak guidance without saying so. A bogus finding can now silently consume iterations up to the cap with nothing in the output explaining why nothing changed. 'Addresses the root cause' is additionally invented — the source says only 'use fix_hint as starting point'."
+        },
+        {
+          "responsibility": "Worker report records anything skipped and why, and ambiguities resolved",
+          "what_happened": "weakened",
+          "quote": "class WorkingReport(Contract):\n    summary: str\n    artifacts: list[str]\n    claims: list[str]",
+          "why_it_matters": "The source's worker-report contract names four contents: what was done, files touched, anything skipped and why, ambiguities resolved. Skipped work and resolved ambiguities have no home in WorkingReport, and 'claims' is vaguer than either. Those two are precisely the inputs the instructions verifier needs to spot a silently narrowed task."
+        },
+        {
+          "responsibility": "Fixer only fixes; does not redo passing work",
+          "what_happened": "lost",
+          "quote": "absent",
+          "why_it_matters": "Scoped narrowly, so listed as minor: 'address every unresolved issue' does most of the work by implication. But nothing now stops a fixer from re-doing already-verified work and regressing it, which is why the source called it out."
+        }
+      ]
+    },
+    "minimalism": {
+      "score": 3,
+      "reasoning": "The cut from 82 lines to 37 is real and most of the mechanical detail (log filenames, per-iteration directory layout, JSON field lists) is properly delegated to contracts.py and the frontmatter workspace token. But two recognisable classes of passenger survive. Field shapes are re-stated in the body twice, in both cases duplicating what the discriminated unions in contracts.py already enforce. And the iteration cap is stated twice, once as a standalone rule and once inside the decide step. There is also a line the frontmatter already guarantees: `workspace: \".verification-loop/$runtime.run_id/\"` is per-run by construction, so telling the reader to use a new workspace each execution adds nothing.",
+      "passengers": [
+        {
+          "quote": "Mark a completed item as done with no issue; mark any other item as partial or missing and explain the issue.",
+          "why_it_is_spare": "contracts.py already forbids every combination this sentence rules out. DoneInstructionCheck pins `status: Literal[\"done\"]` with `issue: None`; UnresolvedInstructionCheck pins `status: Literal[\"partial\", \"missing\"]` with `issue: str`. The union makes an unexplained partial unrepresentable. The only non-inferable residue — don't mark an incomplete item done — is something no competent verifier needs told."
+        },
+        {
+          "quote": "Pass only when there are no issues; otherwise fail and report every issue.",
+          "why_it_is_spare": "PassedOutcomesReport declares `issues: tuple[()]` and FailedOutcomesReport declares `issues: list[str]`, so a pass carrying issues cannot be constructed. The same semantics are then stated a third time in the decide step ('If every instruction is done and the outcome is passed, finish successfully')."
+        },
+        {
+          "quote": "Run at most 5 work–verification iterations.",
+          "why_it_is_spare": "Duplicated by the decide step's 'If iteration 5 has been reached, stop and report every remaining issue', which is the sentence that actually binds behaviour. Either can carry the cap alone; the standalone version is the weaker of the two because it names no consequence."
+        },
+        {
+          "quote": "Use a new workspace for each execution.",
+          "why_it_is_spare": "The frontmatter contract `workspace: \".verification-loop/$runtime.run_id/\"` already resolves to a distinct path per run. This is a rule the structure enforces."
+        },
+        {
+          "quote": "the workspace does not confine task effects",
+          "why_it_is_spare": "Restates the clause immediately before it ('may change the caller's project when the task requires it') in the negative. One of the two halves carries the point."
+        }
+      ]
+    },
+    "readability": {
+      "score": 3,
+      "reasoning": "Read cold, the spine is clear and well ordered: make a workspace, spawn one subagent to do the work, spawn two verifiers in parallel, decide, fix, repeat, cap at five, report. Short sentences, plain words, an order that matches how the work happens. Three things get in the way. The preamble names two roles — 'implementer' and 'fixer' — before either has been introduced; the reader meets 'implementer' first and never meets it again, because step 1 calls it only 'a subagent'. The 'fix hint' sentence points at a concept that exists nowhere in the skill or its types, so the reader cannot resolve it by looking anywhere; they have to guess. And the `(→ Type)` arrow notation and the `$runtime.run_id` token are both internal conventions used without explanation — individually cheap, but they recur.",
+      "friction": [
+        {
+          "quote": "Use a fix hint only when supported by evidence and it addresses the root cause.",
+          "why_it_is_hard": "A newcomer has no idea what a fix hint is. No verifier in this document is told to produce one, and contracts.py has no hint field on any check or report — only `issue: str` and `issues: list[str]`. The reference cannot be resolved by reading further or by reading the types, which is the one place the frontmatter promises the shapes live. This is a leftover from the source's `fix_hint` JSON field after the field itself was dropped."
+        },
+        {
+          "quote": "The implementer and fixer may change the caller's project when the task requires it; the workspace does not confine task effects.",
+          "why_it_is_hard": "Two undefined roles in the first sentence of the body, before the numbered steps that create them. 'Implementer' is used exactly once and never reconnected to 'a subagent to complete the user's task' in step 1, so the reader briefly hunts for a third role. The second clause is abstract enough ('does not confine task effects') to need a re-read to realise it is just restating the first."
+        },
+        {
+          "quote": "1. Spawn a subagent to complete the user’s task. (→ `WorkingReport`)",
+          "why_it_is_hard": "The arrow notation is never explained and appears four times. It is guessable as 'produces', but a newcomer pauses the first time, and it is doing load-bearing work — it is the only thing tying each step to its contract in contracts.py."
+        },
+        {
+          "quote": "workspace: \".verification-loop/$runtime.run_id/\"",
+          "why_it_is_hard": "`$runtime.run_id` is an unexplained template variable. The reader has to assume some harness substitutes it; nothing in the document says so."
+        }
+      ]
+    }
+  },
+  "defensible_divergences": [],
+  "source_contradictions": [
+    {
+      "contradiction": "The guardrail 'Max 5 iterations without user permission' implies the loop may continue if the user consents, but Phase 3 specifies a hard stop: 'Issues + iter == 5: stop, report remaining issues honestly.' The source never says how permission would be requested.",
+      "candidate_resolution": "Treats 5 as an absolute cap — 'Run at most 5 work–verification iterations' and 'If iteration 5 has been reached, stop and report every remaining issue' — and encodes it in the type system as Stopped(reason=Literal[\"cap_reached\"]).",
+      "holds_together": true
+    },
+    {
+      "contradiction": "The loop diagram shows 'fixer → re-verify (back to verifiers)' as a return inside the same cycle, but Phase 4 places the fixer in a new iteration workspace 'iter-(N+1)/'. It is therefore unclear whether a fix-and-reverify pass consumes one of the five iterations or two.",
+      "candidate_resolution": "Drops per-iteration directory naming entirely and defines the unit once as a 'work–verification iteration', with the fixer's output feeding 'the next iteration'. The ambiguity disappears because the counter is attached to the work+verify pair rather than to a directory.",
+      "holds_together": true
+    },
+    {
+      "contradiction": "The guardrail 'Trust failing verifier over passing one when they disagree' is redundant with the Phase 3 clean test, which already requires both verifiers to be clean, so the two verifiers can never disagree in a way the guardrail resolves.",
+      "candidate_resolution": "Keeps only the conjunctive decision rule ('If every instruction is done and the outcome is passed') and drops the guardrail, since the conjunction already makes a failure dominant.",
+      "holds_together": true
+    },
+    {
+      "contradiction": "The source's guardrail 'Empty/missing .log = silent failure — surface to user' depends on the log files that the Workspace section prescribes, but nothing in the source says who checks them or when.",
+      "candidate_resolution": "Removes the log-file layout and the guardrail together, relying on typed reports so a subagent that produces nothing fails to satisfy its contract instead of producing an empty log.",
+      "holds_together": true
+    }
+  ],
+  "better_than_reference": [],
+  "mean_score": 3.0,
+  "verdict": "weak",
+  "weakest_dimension": "essence",
+  "what_to_fix_in_the_sculpting_skill": "Add a rule that obligations addressed to the user — reporting progress, asking permission, escalating — are behaviour, not narration: their literal wording may be cut but the obligation must survive somewhere in the sculpt. The skill currently treats anything shaped like a progress message as a passenger, which is why four separate statements of 'report after every phase' in the source collapsed to a single terminal report. A second, narrower rule worth adding: every noun the body tells an agent to use must resolve to a field in the types file or be defined in the body — that would have caught 'fix hint', which survived after the fix_hint field it named was deleted from the contracts.",
+  "expectations": [
+    {
+      "text": "The essence survived",
+      "passed": false,
+      "evidence": "score 3/5 — per-phase reporting to the user (stated four times in the source) is gone, leaving a five-iteration run silent until it ends; the fixer's duty to contest a wrong finding with evidence was replaced by an invented rule about hints addressing root causes, and that rule refers to a 'fix hint' that no longer exists in contracts.py."
+    },
+    {
+      "text": "Nothing spare remains",
+      "passed": false,
+      "evidence": "score 3/5 — two named classes of passenger survive: field shapes re-stated in the body that the discriminated unions already enforce ('Mark a completed item as done with no issue...', 'Pass only when there are no issues...'), and the iteration cap stated in two places. 'Use a new workspace for each execution' duplicates the per-run frontmatter workspace token."
+    },
+    {
+      "text": "A person can read it easily",
+      "passed": false,
+      "evidence": "score 3/5 — the spine is clear and well ordered, but 'fix hint' is unresolvable from anywhere in the skill or its types, 'implementer' is named before the role exists and never used again, and the (→ Type) arrow notation plus $runtime.run_id are unexplained internal conventions."
+    }
+  ],
+  "summary": {"passed": 0, "failed": 3, "total": 3, "pass_rate": 0.0}
+}

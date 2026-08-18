@@ -25,7 +25,7 @@ visuals:
 sources:
   slack:
     enabled: true
-    access: mcp          # mcp | export | api
+    access: codex        # codex | mcp | export | api
     export_dir: ""       # when access: export
     channels: []         # empty = all the user participates in
   gchat:
@@ -54,7 +54,10 @@ Note: under `visuals:`, `model` is currently pinned by the generator (the knob i
 ## Slack
 
 Pick one:
-- **MCP (recommended):** add a Slack MCP server to your Claude Code config; set `access: mcp`. The adapter then reads via `mcp__slack__*` tools.
+- **Codex CLI (recommended):** install the OpenAI Codex CLI and enable its Slack plugin — Slack must be connected as a connector on the ChatGPT account Codex is logged into (connect it via the Codex desktop app or ChatGPT settings; auth rides on that account, no token or OAuth setup here). Set `access: codex`. Verify with `codex plugin list | grep slack` (expect `slack@openai-curated  installed, enabled`) and a live read-only test:
+  `codex exec --skip-git-repo-check "Using your Slack tools only, list up to 3 channels you can see. Read-only."`
+  The adapter then shells out to `codex exec` per `sources/slack.md`.
+- **MCP:** add a Slack MCP server to your Claude Code config; set `access: mcp`. The adapter then reads via `mcp__slack__*` tools.
 - **Export:** Workspace export → unzip → point `export_dir` at it; set `access: export`. Good for personal/offline use; refresh exports periodically.
 - **Web API:** create a Slack app with `channels:history`, `groups:history`, `im:history`, `users:read`; put the token in `SLACK_TOKEN` (env); set `access: api`.
 

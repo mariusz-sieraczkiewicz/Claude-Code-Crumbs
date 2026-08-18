@@ -1,0 +1,150 @@
+{
+  "dimensions": {
+    "writing_manner": {
+      "score": 3,
+      "reasoning": "Sentence-level register is a strong match: short declaratives, plain vocabulary, no bold, no capitalised imperatives, no ASCII loop diagram, no meta-commentary. What breaks it is that the candidate keeps the source's per-stage sectioning, renamed but positionally intact. The reference dissolves the source's five phase headings entirely and carries the sequence in a bare numbered list (1., 2., 3.) with a two-line preamble; the candidate reproduces the phase spine as five '##' headings that map one-to-one onto the source's Phase 1 / Phase 2 / Phase 3 / Phase 4 / Final Report. The rubric's 3-anchor names per-stage headings explicitly as the persisting source artifact, and here it is the organising device of the whole document rather than one or two leftover decorations.",
+      "divergences": [
+        {
+          "responsibility": "sequencing the stages of the loop",
+          "candidate_form": "## Do the work ... ## Verify the work ... ## Decide ... ## Fix the findings ... ## Produce the verification result",
+          "reference_form": "1. Spawn a subagent to complete the user's task. (→ `WorkingReport`)\n\n2. Verify its result using two subagents in parallel:\n\n... 3. Decide:",
+          "form_difference": "candidate keeps the source's phase-per-section layout as markdown headings, so the document still reads as a staged procedure; reference has no headings at all and expresses the same sequence as three numbered sentences, which collapses 'stage' from a document structure into a single line of prose"
+        },
+        {
+          "responsibility": "fixer re-entry into verification",
+          "candidate_form": "Verify again, with the fixer's report as the work under review.",
+          "reference_form": "Then verify the fixed result in the next iteration.",
+          "form_difference": "same register and length, but the candidate places it as a standalone trailing line of its own heading-delimited section rather than inside the decision branch that triggers it — a positional consequence of the retained section structure"
+        }
+      ]
+    },
+    "altitude": {
+      "score": 3,
+      "reasoning": "Most stages sit at reference altitude — the worker, the two verifiers and the fixer name the responsibility and stop, with field shapes correctly delegated to contracts.py, and all of the source's log files, JSON schemas, iter-N/ directory names and status.md are gone. Two places drill back down into mechanics. First, an entire extra stage exists to serialise the result, naming the file: 'Return the result and write the same result to `verification-result.yaml`', with the same filename repeated in frontmatter as `VerificationResult(`verification-result.yaml`)`. The reference names no filename anywhere; its output is `VerificationResult` and nothing is said about how it is stored. Second, that same stage re-enumerates the result's fields in the body — 'whether the work passed, the number of rounds, the changes made, and the unresolved findings' — which is exactly the field list already declared in contracts.py as VerificationResult(passed, rounds, changes, unresolved), i.e. the one thing the reference delegates most strictly.",
+      "divergences": [
+        {
+          "responsibility": "producing and returning the official result",
+          "candidate_form": "Combine whether the work passed, the number of rounds, the changes made, and the unresolved findings into `VerificationResult`.\n\nReturn the result and write the same result to `verification-result.yaml`.",
+          "reference_form": "Report the terminal result and workspace.",
+          "form_difference": "candidate drops to field level and to storage level — it restates the four fields the types file already defines and names the serialisation target; reference stays at the level of 'what is reported' and lets the declared output type carry both the shape and the fact that it is produced"
+        },
+        {
+          "responsibility": "declaring the workspace",
+          "candidate_form": "workspace: default",
+          "reference_form": "workspace: \".verification-loop/$runtime.run_id/\"\n\nUse a new workspace for each execution.",
+          "form_difference": "not an altitude fault in itself, but the candidate never establishes per-run isolation at any altitude, so the reference's one-line invariant has no counterpart rather than a compressed counterpart"
+        }
+      ]
+    },
+    "conditions": {
+      "score": 4,
+      "reasoning": "The central decision is a closed three-branch set with the loop limit stated immediately above it, matching the reference's construction closely; the branch order differs (fix before cap) but each branch names its condition and its permitted action, and continuation is determinate. Two soft spots. The fix branch says only 'fix it' and leaves re-entry to a sentence in the following section rather than inside the branch, where the reference puts it. More substantially, the candidate declares a fourth terminal path far away from the decision — the missing-report abort in the preamble — whose result is undeclared: 'stop without producing the verification result' has no representation in the declared output, because the candidate's VerificationResult is a single dataclass with no abort variant. The reference makes every terminal state determinate through the type itself (VerificationOutcome = Passed | Stopped), so no branch can end outside the declared result.",
+      "divergences": [
+        {
+          "responsibility": "terminating when a stage yields nothing",
+          "candidate_form": "If any subagent returns no report, report which stage produced nothing and stop without producing the verification result.",
+          "reference_form": "(no counterpart; all terminal states are enumerated by the result type: `VerificationOutcome = Passed | Stopped`)",
+          "form_difference": "candidate states a terminating condition in the preamble, distant from the decision it competes with, and its outcome escapes the declared result type; reference carries determinacy of every ending in the type union rather than in a free-standing prose condition"
+        },
+        {
+          "responsibility": "continuation after a fix",
+          "candidate_form": "- If anything is missing, incomplete, or unsatisfactory and fewer than 5 rounds have run, fix it.",
+          "reference_form": "- Otherwise, spawn a fixer to address every unresolved issue reported by either verifier. ... Then verify the fixed result in the next iteration.",
+          "form_difference": "candidate's branch names the action but not the continuation, which is supplied two sections later; reference closes continuation inside the branch"
+        }
+      ]
+    },
+    "structures": {
+      "score": 4,
+      "reasoning": "Every declarative device the reference uses is present and used correctly: a frontmatter contract naming inputs, output, the types file and a workspace; parallelism announced in prose before the subagents that perform it ('Verify with these two subagents in parallel') rather than encoded as a nested list; all four subagents given a role, the work and a declared result via the `(→ Type)` marker; domain types defined in contracts.py rather than described in the body. One positional break: in the fix section the subagent's data is stated before the subagent is declared, inverting the order used for the other three. The types file itself is thinner than the reference's — plain dataclasses with status Literals versus the reference's discriminated unions that make pass/fail structurally unrepresentable-if-wrong — but a types file with domain types in it is the device the rubric asks for, and it is used.",
+      "divergences": [
+        {
+          "responsibility": "declaring the fixer subagent",
+          "candidate_form": "The Fixer receives the verbatim task, the report under review, and both\nverifications.\n\nSubagent: Fixer (→ `WorkReport`)\n\nAddress every finding from both verifiers ...",
+          "reference_form": "Subagent: Instructions Verifier (→ `VerifyInstructionsReport`)\n\nTurn every imperative into a checklist item and independently verify each ...",
+          "form_difference": "candidate puts the subagent's input data above its declaration line here while putting it below elsewhere, so the same device appears in two positions within one document; reference always leads with the declaration and follows with the work"
+        },
+        {
+          "responsibility": "making the verdict determinate in the types",
+          "candidate_form": "@dataclass\nclass VerificationResult:\n    passed: bool\n    rounds: int\n    changes: list[str]\n    unresolved: list[str]",
+          "reference_form": "VerificationOutcome = Passed | Stopped\n\nclass VerificationResult(Contract):\n    outcome: VerificationOutcome",
+          "form_difference": "candidate's type records the verdict as a flag alongside free lists; reference's type encodes the terminal states as alternatives, which is what lets the body omit restating in each branch whether the official result is produced"
+        }
+      ]
+    },
+    "coverage": {
+      "score": 2,
+      "reasoning": "The core responsibility set matches — delegate the work, verify instructions and outcomes independently and in parallel, decide, fix, cap at five, report. The divergence is entirely on the retention side, which is the failure mode the rubric warns is easy to defend by pointing back at the source. The candidate keeps four things the reference deliberately compressed away: (1) the orchestrator/self-verification guardrails ('Never carry out the task yourself.' and 'No subagent verifies its own work.'), which the reference omits because separate subagent roles already force it and it folds verifier independence into the verifier's own instruction; (2) per-stage progress reporting ('After every stage, tell the participant what that stage found.'), where the reference reports only once, at the end; (3) an abort path for a stage that yields nothing, the generalised descendant of the source's 'Empty/missing `.log` = silent failure'; (4) a serialisation responsibility, writing the result to verification-result.yaml, where the reference produces no file from the body at all. Against that, one reference responsibility is dropped: the scoping constraint that the workspace does not confine task effects, which tells the implementer it may change the caller's project. Five deviations puts this past the two-or-three band, but the loop's observable core is unchanged, so it is not a 1.",
+      "divergences": [
+        {
+          "responsibility": "keeping the participant informed",
+          "candidate_form": "After every stage, tell the participant what that stage found.",
+          "reference_form": "Report the terminal result and workspace.",
+          "form_difference": "candidate retains the source's per-phase reporting obligation as a standing rule; reference compressed reporting down to a single terminal obligation, so the candidate carries a responsibility the reference does not"
+        },
+        {
+          "responsibility": "role separation and non-self-verification",
+          "candidate_form": "Orchestrate this workflow. Never carry out the task yourself.\n\nNo subagent verifies its own work.",
+          "reference_form": "(no free-standing counterpart; independence is folded into the verifier's work: \"independently verify each through source inspection and applicable checks, without trusting the working report\")",
+          "form_difference": "candidate keeps two source guardrails as separate global constraints in addition to its own equivalent inside the verifier stage ('both establish the facts themselves'), so the same guarantee is asserted twice; reference asserts it once, at the point of use"
+        },
+        {
+          "responsibility": "handling a stage that produces nothing",
+          "candidate_form": "If any subagent returns no report, report which stage produced nothing and stop without producing the verification result.",
+          "reference_form": "(absent — the source's \"Empty/missing `.log` = silent failure — surface to user\" is compressed away entirely)",
+          "form_difference": "candidate retains a source failure-handling responsibility, abstracted off the log file but still present as a distinct terminal behaviour the reference does not have"
+        },
+        {
+          "responsibility": "persisting the result",
+          "candidate_form": "Return the result and write the same result to `verification-result.yaml`.",
+          "reference_form": "Report the terminal result and workspace.",
+          "form_difference": "candidate carries a file-writing responsibility; reference produces no artifact from the body, leaving the output declaration in frontmatter to say what is produced"
+        },
+        {
+          "responsibility": "scope of permitted changes",
+          "candidate_form": "(absent)",
+          "reference_form": "The implementer and fixer may change the caller's project when the task requires it; the workspace does not confine task effects.",
+          "form_difference": "a constraint the reference states explicitly, to stop the workspace declaration from being read as a sandbox, has no counterpart in the candidate — the one responsibility dropped rather than retained"
+        }
+      ]
+    }
+  },
+  "mean_score": 3.2,
+  "verdict": "diverged",
+  "weakest_dimension": "coverage",
+  "what_to_fix_in_the_sculpting_skill": "Two rules in the sculpting skill actively produced the largest divergences, and both need changing. (1) The 'most practical rule' at the end — 'every sentence should define at least one of a responsibility, input data, a decision, a constraint, or a required result' — is written as a floor and reads as a licence: any source guardrail can be relabelled 'a constraint' and kept. That is why 'Never carry out the task yourself', 'No subagent verifies its own work', 'After every stage, tell the participant...' and the missing-report abort all survived. Add the ceiling to that rule: a constraint survives only if the declared subagent roles, branches and result types leave room to violate it; delete any constraint that merely restates what the structure already forces, and never state the same guarantee both globally and inside the stage that performs it. (2) The frontmatter template hardcodes `output: ReviewResult(`review-result.yaml`)` plus `workspace: default`, and the '## The final section produces the official result' template mandates a closing section that re-lists the result's fields and writes it to a named file. Followed literally — as this candidate did — that guarantees every sculpt ships a filename, a field enumeration duplicating contracts.py, and a serialisation responsibility, all three of which the reference has none of. Make the path on `output` conditional on the caller actually requiring a saved artifact (the rule 'Add a path to `output` only when the result must be saved' exists but is contradicted by the example), and rewrite the final-section template so it names the result type without re-listing its fields."
+  ,
+  "expectations": [
+    {
+      "text": "Writing manner matches the reference form",
+      "passed": false,
+      "evidence": "score 3/5 — sentence register and vocabulary match closely, but the source's five-phase structure survives as five '##' per-stage headings ('## Do the work', '## Verify the work', '## Decide', '## Fix the findings', '## Produce the verification result') where the reference has no headings and carries the sequence in three numbered sentences."
+    },
+    {
+      "text": "Level of detail matches the reference altitude",
+      "passed": false,
+      "evidence": "score 3/5 — worker, verifiers and fixer sit at reference altitude with field shapes delegated to contracts.py, but the closing stage drops to mechanics: it names the serialisation target ('write the same result to `verification-result.yaml`') and re-enumerates the four fields of VerificationResult that the types file already declares."
+    },
+    {
+      "text": "Conditions and branches are declared as in the reference",
+      "passed": true,
+      "evidence": "score 4/5 — closed three-branch decision with the 5-round limit stated immediately above it; deductions are that the fix branch defers its continuation to the next section, and that the preamble's 'stop without producing the verification result' opens a terminal path the declared result type cannot represent."
+    },
+    {
+      "text": "Structural declarations match the reference",
+      "passed": true,
+      "evidence": "score 4/5 — frontmatter contract, prose-announced parallelism, all four subagents declared with role, work and a `(→ Type)` result, and domain types in contracts.py; one device sits in a different position, with the Fixer's input data stated above its 'Subagent: Fixer' declaration while the other three follow the declaration-first pattern."
+    },
+    {
+      "text": "Responsibility coverage matches the reference",
+      "passed": false,
+      "evidence": "score 2/5 — four responsibilities retained past the reference's line (orchestrator/self-verification guardrails, per-stage reporting, missing-report abort, writing the result to a file) and one dropped (the scoping constraint that the workspace does not confine task effects)."
+    }
+  ],
+  "summary": {
+    "passed": 2,
+    "failed": 3,
+    "total": 5,
+    "pass_rate": 0.4
+  }
+}

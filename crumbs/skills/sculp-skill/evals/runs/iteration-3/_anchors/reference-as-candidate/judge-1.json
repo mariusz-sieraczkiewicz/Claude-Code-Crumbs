@@ -1,0 +1,110 @@
+{
+  "dimensions": {
+    "essence": {
+      "score": 4,
+      "reasoning": "Every path-determining responsibility of the source survives: orchestration by delegation, one implementer subagent, two independent verifiers run in parallel, the AND-shaped clean test (all instructions done AND outcomes passed) which structurally encodes the source's 'trust the failing verifier', the 5-iteration cap, the fixer, and the loop back into verification. Independence is carried by structure — the verifiers are separate subagents and are told not to trust the working report — so the source's 'never let worker/fixer self-verify' binds without being restated. Status/verdict vocabulary is delegated cleanly to the types file, which is the right home for it. One responsibility does not bind, and it is the same sentence in both roles it touches. The source tells the fixer to 'use `fix_hint` as a starting point' and, separately, 'if a verifier finding is wrong, say so with evidence — don't silently ignore.' The candidate compresses both into 'Use a fix hint only when supported by evidence and it addresses the root cause.' Two things go wrong there. First, the fixer's licence to push back on a wrong finding is gone: the preceding clause orders it to 'address every unresolved issue reported by either verifier', so a false positive now has to be fixed rather than disputed, and a run that hits one will burn iterations toward the cap instead of ending. Second, and this is the load-bearing part, neither `fix_hint` nor any evidence field exists anywhere in `scripts/contracts.py`. `DoneInstructionCheck` and `UnresolvedInstructionCheck` carry `instruction`, `status`, `issue`; the outcomes reports carry `status`, `issues`, `summary`. So the verifiers structurally cannot emit a fix hint, and the fixer is being told how to weigh an input it will never be handed. This is not a case of a rule being properly delegated to the types file — it is the opposite, a body rule about a field the types file forbids (`extra=\"forbid\"` on `Contract` makes it not merely absent but unrepresentable). Everything else survives in binding form; nothing was invented beyond this clause.",
+      "losses": [
+        {
+          "responsibility": "Fixer uses the verifier's `fix_hint` as a starting point (source Phase 4, step 1)",
+          "what_happened": "weakened",
+          "quote": "Use a fix hint only when supported by evidence and it addresses the root cause.",
+          "why_it_matters": "`scripts/contracts.py` declares no `fix_hint` field and no evidence field on any verifier report, and `Contract` sets `model_config = ConfigDict(extra=\"forbid\")`, so a conforming verifier cannot produce one. The fixer is given a rule for weighing an input the contract cannot deliver; the run either ignores the sentence or the fixer waits on something that never arrives. Either the field belongs in the types file or the sentence should not be in the body."
+        },
+        {
+          "responsibility": "Fixer may reject a verifier finding it believes is wrong, with evidence, rather than silently ignoring it (source Phase 4, step 4)",
+          "what_happened": "lost",
+          "quote": "spawn a fixer to address every unresolved issue reported by either verifier",
+          "why_it_matters": "The source builds an escape valve for verifier false positives. Without it the fixer must act on every reported issue, including wrong ones; the next verification round re-raises the same disagreement, and the loop grinds toward the iteration-5 cap on an issue that was never real. The source's own guardrail 'Thrashing = escalate, don't grind' exists precisely for this, and neither half of it is carried."
+        }
+      ]
+    },
+    "minimalism": {
+      "score": 4,
+      "reasoning": "The cut is deep and mostly clean. The whole workspace file inventory (`task.md`, `status.md`, `worker.log`, `worker-report.md`, four verifier files, `fixer.{log,report.md}`) is gone, replaced by one frontmatter line; the JSON field shapes spelled out inline in the source are gone into the types file; the per-phase user-facing narration ('Worker done. Modified N files. Verifying.', 'Instructions: X/Y done.') is gone, and that is correct — it is progress narration and it never changed an outcome. The ASCII loop diagram is gone with no loss, because the numbered steps already carry the same order. Three sentences still look like they are riding along. 'Use a new workspace for each execution' repeats what the frontmatter already guarantees: the workspace path is `.verification-loop/$runtime.run_id/`, and a run id is by definition new each run — the structure enforces the rule the sentence states. The workspace-effects sentence says one thing twice: 'may change the caller's project when the task requires it' and 'the workspace does not confine task effects' are the same claim from two directions; the first alone would do, and the clarification itself is worth keeping because a frontmatter `workspace:` field genuinely does invite the wrong reading. 'Report the terminal result and workspace' overlaps the output contract, where `Passed` and `Stopped` both already carry `workspace`, `iteration` and their issues. None of these costs a run; together they are about two sentences' worth, which is a 4 rather than a 3. No recognisable class of passenger — no narration, no field shapes in the body, no duplicated behavioural rule — survives.",
+      "passengers": [
+        {
+          "quote": "Use a new workspace for each execution.",
+          "why_it_is_spare": "The frontmatter already pins the workspace to `.verification-loop/$runtime.run_id/`. A per-run id cannot collide across executions, so the rule is enforced by the path template and the sentence adds nothing a reader would act on differently."
+        },
+        {
+          "quote": "the workspace does not confine task effects",
+          "why_it_is_spare": "Restates the clause immediately before it ('may change the caller's project when the task requires it') in the negative. The point is worth making once; the second half is the same rule in two places."
+        },
+        {
+          "quote": "Report the terminal result and workspace.",
+          "why_it_is_spare": "`VerificationResult` wraps `Passed | Stopped`, and both carry `workspace`, `iteration`, the reports and (for `Stopped`) `remaining_issues`. The frontmatter names `VerificationResult` as the output, so what gets reported is already fixed by the contract."
+        }
+      ]
+    },
+    "readability": {
+      "score": 4,
+      "reasoning": "Read cold, as someone who has never seen the source: the shape lands on one pass. Three numbered steps in the order the work happens, the two verifiers set off as named subagent blocks so you can see they are siblings rather than a sequence, and each verifier gets exactly two sentences — what to do, and what makes it pass. Sentences are short, one idea each, and the vocabulary is plain ('turn every imperative into a checklist item', 'assess quality rather than existence'). The decision step is a three-way branch written as three bullets in priority order, which is how a reader actually needs to consume it. The `(→ Type)` arrows keep the body free of shapes without breaking the sentence flow. One passage costs a second pass, and it is the fixer bullet: 'Use a fix hint only when supported by evidence and it addresses the root cause.' A newcomer stops here — a fix hint from whom, arriving how? They will look at the verifier steps above, which never mention producing one, then open `contracts.py`, where no report type has such a field. There is no way to resolve it from the skill, so the reader either invents a convention or skips the sentence. Beyond that, nothing needs re-reading, and the loop-back ('Then verify the fixed result in the next iteration') closes the structure without a diagram.",
+      "friction": [
+        {
+          "quote": "Use a fix hint only when supported by evidence and it addresses the root cause.",
+          "why_it_is_hard": "Introduces two artifacts — a fix hint and its supporting evidence — that appear nowhere else. Neither verifier step is told to produce a hint, and `scripts/contracts.py` has no field for one on any report type, so the reader cannot find where it would come from and cannot tell whether they have missed something."
+        }
+      ]
+    }
+  },
+  "defensible_divergences": [
+    {
+      "topic": "Per-phase status reporting and the running `status.md` log",
+      "candidate": "Reports only at the end: 'Report the terminal result and workspace.' No `status.md`, no per-phase user updates.",
+      "reference": "Same file — this is the calibration run, so the comparison here is against the source, which demands 'Report status to the user after every phase' and 'Update `status.md` after every phase.'",
+      "why_it_costs_nothing": "Interim reporting is progress narration: it changes what a user watches, never what a run produces or which branch it takes. Dropping it is the intended kind of cut, not a loss."
+    },
+    {
+      "topic": "The `pass|fail|concern` third state for outcomes",
+      "candidate": "Collapses to `pass | fail` in the types file; 'Pass only when there are no issues; otherwise fail and report every issue.'",
+      "reference": "Same file (calibration run). The source carries a `concern` status alongside `pass`/`fail`.",
+      "why_it_costs_nothing": "In the source, `concern` behaves exactly like `fail` — it blocks 'clean' (which requires `overall == \"pass\"`) and it must be addressed by the fixer. A state that never branches differently is not a state, and removing it makes the decision step shorter without changing any run."
+    },
+    {
+      "topic": "Per-iteration log and report files",
+      "candidate": "No `worker.log`, `fixer.log`, `iter-N/` layout, or `.json` filenames; artifacts are named only by type.",
+      "reference": "Same file (calibration run). The source enumerates a nine-file workspace layout.",
+      "why_it_costs_nothing": "Where results go is the frontmatter's job and what they contain is the types file's job; the body spelling out filenames would be the defect. The source's log-related guardrail ('Empty/missing `.log` = silent failure') falls away with the logs it guarded, and a silently-failed implementer is still caught, because the verifiers inspect the source rather than the working report."
+    }
+  ],
+  "source_contradictions": [
+    {
+      "contradiction": "The guardrail says 'Max 5 iterations without user permission', implying the loop may continue if the user permits, while Phase 3 says at iteration 5 'stop, report remaining issues honestly' with no permission path.",
+      "candidate_resolution": "Hard cap. 'Run at most 5 work–verification iterations' plus 'If iteration 5 has been reached, stop and report every remaining issue', matched in the types file by `Stopped.reason: Literal[\"cap_reached\"]` as the only non-success terminal state.",
+      "holds_together": true
+    },
+    {
+      "contradiction": "The source counts iterations ambiguously: the fixer is given 'new iteration workspace `iter-(N+1)/`', which makes a fix its own iteration, but Phase 2 then re-runs with the fixer report standing in as the worker report, which makes fix-plus-verify one iteration.",
+      "candidate_resolution": "Defines the unit explicitly as a 'work–verification iteration', so a fix and the verification that follows it count as one — consistent with 'Then verify the fixed result in the next iteration'.",
+      "holds_together": true
+    },
+    {
+      "contradiction": "'Clean' is defined as no `missing`/`partial` instructions AND outcomes `overall == \"pass\"`, which leaves `concern` outside the definition of a failure, yet Phase 4 requires the fixer to address every `concern`.",
+      "candidate_resolution": "Removes the third state. Outcomes are `pass` or `fail`, 'Pass only when there are no issues', and every unresolved issue from either verifier goes to the fixer.",
+      "holds_together": true
+    }
+  ],
+  "better_than_reference": [],
+  "mean_score": 4.0,
+  "verdict": "sound",
+  "weakest_dimension": "essence",
+  "what_to_fix_in_the_sculpting_skill": "Add a referential-integrity rule between the body and the types file: every artifact or field the body tells a role to produce, consume or weigh must be declared in the types file, and anything the types file does not declare must not be named in the body. Here the body says 'Use a fix hint only when supported by evidence' while `contracts.py` declares no `fix_hint` and no evidence field on any verifier report — and because `Contract` sets `extra=\"forbid\"`, a conforming verifier cannot even add one. The sculpting skill currently pushes field detail out of the body but has no step that checks the body afterwards for names left pointing at fields that went away, so a rule about a dropped field can survive the field itself. The check belongs at the end of sculpting: reread the body and confirm every named artifact resolves to a declared field.",
+  "expectations": [
+    {
+      "text": "The essence survived",
+      "passed": true,
+      "evidence": "score 4/5 — delegation, parallel independent verification, the AND-shaped clean test, the 5-iteration cap and the fix-then-reverify loop all bind; the fixer's `fix_hint` guidance names a field `contracts.py` does not declare, and the source's licence to dispute a wrong verifier finding is gone."
+    },
+    {
+      "text": "Nothing spare remains",
+      "passed": true,
+      "evidence": "score 4/5 — file inventory, JSON shapes, loop diagram and per-phase narration are all gone; about two sentences remain that the frontmatter or the output contract already enforces ('Use a new workspace for each execution', 'Report the terminal result and workspace')."
+    },
+    {
+      "text": "A person can read it easily",
+      "passed": true,
+      "evidence": "score 4/5 — three ordered steps, short single-idea sentences, verifiers visibly parallel; one passage needs a second pass because the 'fix hint' it asks the fixer to weigh cannot be traced to any step or field."
+    }
+  ],
+  "summary": {"passed": 3, "failed": 0, "total": 3, "pass_rate": 1.0}
+}

@@ -1,0 +1,81 @@
+[build-system]
+requires = ["hatchling==1.28.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "human-skill-runtime"
+version = "0.1.0"
+description = "Human-readable skills, executable Python IR, and Claude Agent SDK Harness"
+requires-python = ">=3.11"
+dependencies = [
+  "claude-agent-sdk==0.2.132",
+  "mcp==1.29.0",
+  "pydantic==2.13.4",
+  "PyYAML==6.0.3",
+]
+
+[project.scripts]
+human-skill = "human_skill_builder.cli:main"
+human-skill-ci = "human_skill_builder.ci:main"
+
+[dependency-groups]
+dev = [
+  "pyright==1.1.411",
+  "ruff==0.16.2",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = [
+  "human_skill_builder",
+  "human_skill_validator",
+  "human_skill_runtime",
+]
+exclude = ["**/*.publication.lock"]
+
+[tool.pyright]
+pythonVersion = "3.11"
+ignore = ["human_skill_validator/validator.py"]
+include = [
+  "human_skill_builder",
+  "human_skill_validator",
+  "human_skill_runtime",
+  "docs/examples/adaptive-record-review/scripts/contracts.py",
+  "docs/examples/adaptive-record-review/scripts/workflow.ir.py",
+  "docs/examples/adaptive-record-resolution/scripts/contracts.py",
+  "docs/examples/adaptive-record-resolution/scripts/ports.py",
+  "docs/examples/adaptive-record-resolution/scripts/workflow.ir.py",
+  "docs/examples/verification-loop/scripts/contracts.py",
+  "docs/examples/verification-loop/scripts/workflow.ir.py",
+  "docs/examples/express-intent/scripts/contracts.py",
+  "docs/examples/express-intent/scripts/adapters.py",
+  "docs/examples/express-intent/scripts/ports.py",
+  "docs/examples/express-intent/scripts/workflow.ir.py",
+  "docs/examples/express-intent/application.py",
+  "docs/examples/express-intent/dependency_adapters.py",
+  "docs/examples/express-intent/cli.py",
+  "human_skill_builder/canonicalize-human-skill/scripts/contracts.py",
+  "human_skill_builder/canonicalize-human-skill/scripts/ports.py",
+  "human_skill_builder/canonicalize-human-skill/scripts/workflow.ir.py",
+  "crumbs/skills/verification-loop-human/scripts/contracts.py",
+  "crumbs/skills/verification-loop-human/scripts/ports.py",
+  "crumbs/skills/verification-loop-human/scripts/workflow.ir.py",
+  "tests/fixtures/verification_loop_human_application.py",
+]
+
+[tool.ruff]
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]
+ignore = ["E501", "E741"]
+
+[tool.ruff.lint.isort]
+known-first-party = [
+  "adapters",
+  "contracts",
+  "human_skill_builder",
+  "human_skill_validator",
+  "human_skill_runtime",
+  "ports",
+]
+known-third-party = ["claude_agent_sdk"]

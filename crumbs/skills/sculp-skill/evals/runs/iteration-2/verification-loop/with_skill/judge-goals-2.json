@@ -1,0 +1,142 @@
+{
+  "dimensions": {
+    "essence": {
+      "score": 3,
+      "reasoning": "Every decision-bearing responsibility of the loop itself survives and survives well: delegation to a worker, two verifiers running in parallel and reaching findings independently of the worker's report, the split between 'was each instruction carried out' and 'does the result serve the intent', the definition of clean (anything not recorded as done or passing is outstanding, which also absorbs the source's 'trust the failing verifier'), the five-round cap with escalation to the user, the fixer's three rules (settle every finding, leave passing work alone, push back on a wrong finding with evidence), and the loop back into verification. It also carries the source's verbatim-task rule, which the reference drops. One outcome-bearing responsibility is gone outright: the run workspace. The source devotes a section to it ('Create .verification-loop/<UTC-timestamp>/ with task.md ... and status.md') and makes the path part of the deliverable ('3. Workspace path for inspection'). The candidate has no workspace in the frontmatter, no mention in the body, and no workspace field in VerificationResult, so a run produces no inspectable evidence trail and the user is left unable to check the verifiers' work. Separately, the outcomes verifier's 'run if runnable, read if readable' is stated only glancingly, via a field description in the types file.",
+      "losses": [
+        {
+          "responsibility": "A per-run workspace holding the task, a running status log and per-iteration reports, whose path is part of the final report",
+          "what_happened": "lost",
+          "quote": "absent — frontmatter is `inputs / output / types` only, and `VerificationResult` carries `verified, rounds, changes, unresolved`",
+          "why_it_matters": "The source ends with 'Workspace path for inspection' and the reference keeps both `workspace: \".verification-loop/$runtime.run_id/\"` in metadata and `workspace: Path` on Passed/Stopped. Without it the run leaves nothing on disk: no task.md, no per-iteration verifier findings, no status trail. A user who is told 'verified: false, 2 unresolved' has no artifact to go look at, and a second run has no isolation from the first. The sculpt appears to have dropped the workspace along with the log-file mechanics it was described through, but the location where results land is a contract, not mechanics."
+        },
+        {
+          "responsibility": "Outcomes verifier must exercise artifacts — run what is runnable, read what is readable — rather than inspect statically",
+          "what_happened": "weakened",
+          "quote": "Establish what success means for the person who asked, rather than what the task literally says, then judge whether what the work produced achieves it.",
+          "why_it_matters": "The source is specific: 'Assess artifacts — run if runnable, read if readable, judge quality not just existence.' The candidate's body sentence is satisfiable by reading alone, so a broken-but-plausible script passes. It is not fully lost — `OutcomeCheck.evidence` is described as 'What was inspected, run or read to reach this status' — but a field description on the report is a weak place to put an instruction about how to verify, and it may not bind. The reference states it in the body: 'read each readable artifact, run each runnable artifact, and assess quality rather than existence.'"
+        },
+        {
+          "responsibility": "Orchestrator never implements",
+          "what_happened": "weakened",
+          "quote": "absent — no explicit prohibition; conveyed only by every step being a named subagent",
+          "why_it_matters": "The source states it outright ('You orchestrate — never implement'). Noted rather than deducted twice: the reference also leaves it implicit, and the candidate's structure — Worker, two Reviewers, Fixer, each with its own report type — makes it hard to read the skill as an invitation to do the work inline."
+        }
+      ]
+    },
+    "minimalism": {
+      "score": 4,
+      "reasoning": "The body carries no field shapes, no status enumerations, no JSON schemas and no progress narration — all of the source's 'Report to user: \"Worker done. Modified N files. Verifying.\"' lines and all of the `{\"instructions\": [...]}` literals are gone, with the vocabulary living only in `contracts.py`. That is the cleanest part of this sculpt, and slightly cleaner than the reference, which still restates 'mark any other item as partial or missing' in prose. What remains that could go is small: a final heading whose body sentence just repeats it, over a rule the decision branches have already stated three times, plus one invented clause in the escalation branch.",
+      "passengers": [
+        {
+          "quote": "## Produce the verification result\n\nReport the verification result.",
+          "why_it_is_spare": "The three decision branches above already end the run — 'the work is verified and the result is produced' and 'the result is produced with those findings unresolved'. The heading restates its own single sentence, and the sentence restates the branches. The reference does this in one trailing line with no heading ('Report the terminal result and workspace')."
+        },
+        {
+          "quote": "and what another round would attempt",
+          "why_it_is_spare": "Nothing in the source asks the escalation to forecast the next round; the source guardrail is only 'Max 5 iterations without user permission' and 'stop, report remaining issues honestly'. Presenting the open findings and asking whether to carry on is enough for the user to answer."
+        },
+        {
+          "quote": "## Check the work\n\nCheck the work with these two subagents in parallel.",
+          "why_it_is_spare": "Minor: the heading is the first three words of the sentence under it. It does help scanning to the verification stage, so it is close to earning its place — but one of the two could carry the whole load."
+        }
+      ]
+    },
+    "readability": {
+      "score": 4,
+      "reasoning": "Read as someone who has never seen the source: the register is deliberately plain and almost jargon-free — 'the person who asked for the task', 'outstanding', 'settle every outstanding finding' — and the order matches how the work happens (do it, check it, fix it, report). The three-branch block under 'Fix and check again' is the one place needing a second pass, because the cap sentence, the branches and the Fixer definition are three separate things stacked together and the reader meets 'fix it and check again' one line before learning who fixes. Two smaller snags: 'the result is produced' is passive enough that a newcomer does not know who produces it or for whom until the last line; and 'done or passing' silently references two different status vocabularies that exist only in the types file. Neither blocks action.",
+      "friction": [
+        {
+          "quote": "- If something is outstanding after the fifth check, present the open findings and what another round would attempt, and ask whether to carry on. Continue only on a yes; otherwise the result is produced with those findings unresolved.",
+          "why_it_is_hard": "Three clauses and two conditionals in one bullet, sitting under a cap sentence ('Check at most five times unless the person who asked for the task agrees to more') that already implies part of it. A newcomer has to read it twice to see that this bullet IS the mechanism by which that 'unless' is exercised."
+        },
+        {
+          "quote": "Anything a review does not record as done or passing is outstanding.",
+          "why_it_is_hard": "'done' and 'passing' are literal enum values living in `contracts.py` (`done|partial|missing` and `pass|concern|fail`), and the body never says so. A reader of SKILL.md alone can guess the intent but cannot tell that 'concern' is deliberately counted as outstanding — which is the whole point of the sentence."
+        },
+        {
+          "quote": "Subagent: Worker (→ `WorkReport`)",
+          "why_it_is_hard": "The `(→ Type)` arrow is never explained. Shared with the reference, so it is a house convention rather than a candidate fault, but a first-time reader has to infer 'produces a value of this type, defined in the types file'."
+        }
+      ]
+    }
+  },
+  "defensible_divergences": [
+    {
+      "topic": "Role names",
+      "candidate": "Worker / Instruction Reviewer / Outcome Reviewer / Fixer",
+      "reference": "implementer / Instructions Verifier / Outcomes Verifier / fixer",
+      "why_it_costs_nothing": "Same four roles, same boundaries. 'Reviewer' reads slightly more plainly than 'Verifier' and the skill name still anchors the concept."
+    },
+    {
+      "topic": "How the 'clean' condition is expressed",
+      "candidate": "Flat pydantic models with `Literal` statuses, plus one prose rule: 'Anything a review does not record as done or passing is outstanding.'",
+      "reference": "Discriminated unions (Passed/FailedInstructionsReport, Passed/FailedOutcomesReport) with `all_done()` / `overall_pass()` helpers making a passing report structurally unable to hold issues.",
+      "why_it_costs_nothing": "Both bind the same decision. The reference makes it unrepresentable-by-construction; the candidate states it once in the body. The candidate's version is easier to read and keeps the types file to 45 lines against the reference's 130, at the price of the invariant being a sentence rather than a type."
+    },
+    {
+      "topic": "Shape of the terminal result",
+      "candidate": "One flat `VerificationResult` with `verified`, `rounds`, `changes`, `unresolved`",
+      "reference": "`Passed | Stopped` union, with `reason: Literal[\"cap_reached\"]` and full nested reports on each",
+      "why_it_costs_nothing": "The source's final report asks for three things — 'passed on iter-N / stopped at cap with K remaining issues', what changed, and the workspace. `verified` + `rounds` + `unresolved` + `changes` carries the first two exactly. (The third, workspace, is missing from both this type and the frontmatter — that is scored as a loss above, not as this divergence.)"
+    },
+    {
+      "topic": "Status vocabulary placement",
+      "candidate": "Enum values appear only in `contracts.py`; the body speaks of 'done or passing' and 'outstanding'",
+      "reference": "Body spells out 'mark any other item as partial or missing', types repeat it",
+      "why_it_costs_nothing": "The candidate's split is the stricter delegation and removes a duplicated rule. It trades a little standalone readability of SKILL.md for a body that carries no schema at all."
+    },
+    {
+      "topic": "Verbatim task propagation",
+      "candidate": "'Every subagent receives the task exactly as the person who asked for it wrote it.' — one line, before any role",
+      "reference": "dropped entirely",
+      "why_it_costs_nothing": "The source repeats 'verbatim task' at every spawn point; the candidate collapses four repetitions into one rule at the top. This is a real source requirement that costs one sentence, and it prevents the orchestrator from paraphrasing the task into the verifiers — which would quietly defeat independent verification."
+    }
+  ],
+  "source_contradictions": [
+    {
+      "contradiction": "The guardrail says 'Max 5 iterations without user permission' — implying the user can authorise more — but Phase 3 says 'Issues + iter == 5: stop, report remaining issues honestly', with no route to continuing.",
+      "candidate_resolution": "At the cap the orchestrator presents the open findings and asks the user whether to carry on: 'Continue only on a yes; otherwise the result is produced with those findings unresolved.' Both halves of the source are honoured — the honest report of remaining issues happens either way, and the 'without user permission' clause becomes an actual branch.",
+      "holds_together": true
+    },
+    {
+      "contradiction": "Phase 2 hands each verifier the worker report while simultaneously requiring independence ('Both receive: ... worker report' vs. 'Independently verify each — read files, grep, run checks (don't trust worker report)').",
+      "candidate_resolution": "'Each reaches its findings from what the work produced; the worker's report is context, not evidence.' One sentence, applied to both reviewers, that keeps the report available without letting it stand in for verification.",
+      "holds_together": true
+    },
+    {
+      "contradiction": "The source's independence guardrails are framed around log files ('Empty/missing .log = silent failure — surface to user'), which only exist because of the logging mechanics the source also treats as incidental.",
+      "candidate_resolution": "Logging is dropped wholesale, and with it the guardrail. Coherent in itself — with no logs there is no empty-log failure mode — but it took the workspace with it, which was not incidental.",
+      "holds_together": false
+    }
+  ],
+  "better_than_reference": [
+    "Keeps the source's escalation at the cap. The reference flattens 'Max 5 iterations without user permission' into a bare 'Run at most 5 work-verification iterations' / 'If iteration 5 has been reached, stop', silently deleting the user's ability to authorise more. The candidate preserves it as a real branch.",
+    "Keeps the verbatim-task rule the reference drops, and does it in one line rather than the source's four repetitions.",
+    "Cleaner body/types split: no status enum values leak into the body, where the reference still restates 'done', 'partial or missing' in prose. The types file is a third the size and correspondingly easier to hold in your head.",
+    "Resolves the trust-the-report tension more sharply than the reference. 'the worker's report is context, not evidence' says in six words what the reference says as a trailing qualifier ('without trusting the working report'), and it is stated once for both reviewers rather than inside one of them.",
+    "The description names the trigger in the user's terms — 'when a task must satisfy both what was asked for and what was meant before it can be accepted' — which distinguishes this skill from ordinary review better than the reference's 'when a task needs separate implementer and verifier roles'."
+  ],
+  "mean_score": 3.67,
+  "verdict": "sound",
+  "weakest_dimension": "essence",
+  "what_to_fix_in_the_sculpting_skill": "Add a rule that separates a source's persistence contract from its logging mechanics: any directory, path or artifact location the source declares as a run's output — here `.verification-loop/<UTC-timestamp>/` plus 'Workspace path for inspection' in the final report — must be preserved as a frontmatter field (`metadata.workspace`) and as a field on the result type, even when every step that wrote into it is cut. Today the skill's guidance that mechanics and logging are droppable fires on the whole workspace section, because in the source the workspace is only ever described through the files written into it. The rule should be phrased as a test the sculptor can apply: 'if the source's final report hands the user a path, that path is an output, not a mechanic.'",
+  "expectations": [
+    {
+      "text": "The essence survived",
+      "passed": false,
+      "evidence": "score 3/5 — the whole loop, the independence rule, the cap-with-escalation and all three fixer rules survive and bind, but the run workspace is gone from the frontmatter, the body and `VerificationResult`, so the source's 'Workspace path for inspection' cannot be delivered and no evidence trail is left on disk; separately, the outcomes verifier's 'run if runnable' survives only as a field description in the types file."
+    },
+    {
+      "text": "Nothing spare remains",
+      "passed": true,
+      "evidence": "score 4/5 — no progress narration, no JSON schemas, no status enums in the body. What could still go: the '## Produce the verification result / Report the verification result.' heading-plus-restatement of a rule the decision branches already state, and the invented clause 'and what another round would attempt'."
+    },
+    {
+      "text": "A person can read it easily",
+      "passed": true,
+      "evidence": "score 4/5 — plain register, sensible order, terms land. One passage needs a second pass: the five-check cap sentence, the three decision branches and the Fixer definition are stacked so that 'fix it and check again' arrives before the reader learns who fixes."
+    }
+  ],
+  "summary": {"passed": 2, "failed": 1, "total": 3, "pass_rate": 0.67}
+}

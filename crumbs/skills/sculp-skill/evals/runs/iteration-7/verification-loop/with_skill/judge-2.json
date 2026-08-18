@@ -1,0 +1,104 @@
+{
+  "dimensions": {
+    "essence": {
+      "score": 5,
+      "reasoning": "Every outcome-bearing responsibility in the source survives in binding form, and several that the reference dropped are still here. Orchestration-not-implementation ('You arrange the work and never carry it out yourself'), the verbatim-task rule ('Keep the task in the person's own words and give that same wording to every subagent'), the no-self-verification rule, per-phase reporting to the user, parallel verification, the don't-trust-the-worker's-account rule, the two verifier mandates (decompose imperatives; define success beyond literal wording, run what is runnable, judge quality not existence), the clean condition, the 5-round cap, the full fixer mandate including the rebuttal-with-evidence rule, and the hand-back of the fixer's account to the verifiers are all present. The two artifact-dependent guardrails are handled exactly as the rubric prescribes: the empty-log guard is restated in terms of the result ('If a subagent returns nothing, treat that as a failure and tell the person') rather than in terms of a log file, and the disagreement rule survives verbatim in meaning ('If the two checks disagree, the failing one prevails'). Statuses, evidence, repair hints and before/after are held by fields in scripts/contracts.py, which is proper placement. Nothing is invented beyond a small elaboration of the cap branch, which the source's own 'without user permission' clause licenses.",
+      "losses": []
+    },
+    "minimalism": {
+      "score": 4,
+      "reasoning": "The body is close to bare. Field shapes, status sets, evidence and repair hints all sit in the types file; the workspace sits in the frontmatter; execution mechanics (yaml serialisation, file-based subagent communication, workspace layout) are delegated to the conventions file the method supplies. Two sentences could still come out. One is a run's own bookkeeping, which is ruled execution detail. The other restates, in the body, information the worker's output type already carries in its field descriptions. Neither is a recurring class, so this sits at 4 rather than 3.",
+      "passengers": [
+        {
+          "quote": "Keep each round's records separately so the history stays inspectable.",
+          "why_it_is_spare": "This is the source's per-iteration `iter-N/` folder rule in abstract clothing. The calibration ruling is explicit that per-iteration folders and artifact inventories are execution detail and that a workspace declared in the frontmatter is the whole of what a sculpt keeps about where a run writes. The frontmatter already declares `./.verification-loop/<timestamp-id>`, and nothing in the loop's behaviour changes if this sentence is deleted."
+        },
+        {
+          "quote": "Report anything you left undone and why, and every ambiguity you decided for yourself.",
+          "why_it_is_spare": "The worker's output type already enforces exactly this: `deliberately_skipped` is described as 'Anything left undone, mapped to the reason it was left undone' and `ambiguities_resolved` as 'Ambiguities in the task the worker decided on its own'. A required field the subagent must populate binds harder than a sentence, so the body sentence is a duplicated rule. The reference's worker step is a single clause ('Spawn a subagent to complete the user's task') for the same reason."
+        }
+      ]
+    },
+    "readability": {
+      "score": 4,
+      "reasoning": "Read as a newcomer, this is plain and confident. Short sentences, ordinary words, no jargon, no internal identifiers, and the three headings ('Do the work', 'Check the work', 'Decide and repeat') match the order the work actually happens in, so a reader can find a stage without hunting. Every subagent gets its mandate in two or three sentences directly under its name. One passage needs a second pass: the opening paragraph stacks five unrelated standing rules into a single block of prose, so a reader scanning for 'am I allowed to do this myself?' or 'does the user get told anything?' has to parse the whole block. A second, smaller wobble is that the decision bullets say 'have them fixed and checked again' before the Fixer's mandate is defined below them, so the reader holds an unexplained instruction for a few lines. Neither costs comprehension, only a re-read.",
+      "friction": [
+        {
+          "quote": "You arrange the work and never carry it out yourself. Keep the task in the person's own words and give that same wording to every subagent. No subagent checks its own work. Tell the person what happened after each phase. Keep each round's records separately so the history stays inspectable.",
+          "why_it_is_hard": "Five independent standing rules in one undifferentiated paragraph. Each is clear on its own, but they do not build on one another, so the reader cannot skim them and cannot later find one by eye. As a bulleted set they would scan at a glance; as prose they read as a single wall the reader must take in whole."
+        }
+      ]
+    }
+  },
+  "defensible_divergences": [
+    {
+      "topic": "What happens at the iteration cap",
+      "candidate": "Presents the unresolved issues and what a further round would attempt, asks the person whether to continue or stop, stops unless the person allows more rounds, and still produces the result.",
+      "reference": "'If iteration 5 has been reached, stop and report every remaining issue.' A hard stop.",
+      "why_it_costs_nothing": "The source contains both readings — the guardrail says 'Max 5 iterations without user permission', which implies permission can extend the cap, while Phase 3 says stop at 5. The candidate honours the guardrail's clause, the reference honours the phase. Both are coherent, and the candidate's version still terminates by default ('Stop unless the person allows more rounds'), so it cannot grind."
+    },
+    {
+      "topic": "Keeping the task verbatim",
+      "candidate": "'Keep the task in the person's own words and give that same wording to every subagent.'",
+      "reference": "Does not mention verbatim wording at all; its Task type holds only `description: str`.",
+      "why_it_costs_nothing": "One extra sentence that carries a real behavioural constraint from the source ('verbatim task' appears four times there). This is a divergence in the candidate's favour, not a passenger."
+    },
+    {
+      "topic": "Where the terminal report lives",
+      "candidate": "No explicit final-report step; the closing 'Output (→ LoopResult(`loop-result.yaml`))' plus a result type carrying exit reason, final round, unresolved issues and consolidated changes, with the workspace in the frontmatter.",
+      "reference": "An explicit closing line, 'Report the terminal result and workspace.'",
+      "why_it_costs_nothing": "The source's final report is three items: a one-line result, what changed, and the workspace path. The first two are exactly the `exit_reason`/`final_round` and `all_changes` fields of the result type, and the third is the frontmatter workspace. Per the ruling that anything the types file or frontmatter contract carries is properly placed, restating it in the body would have been the defect. The standing rule 'Tell the person what happened after each phase' also covers the delivery."
+    },
+    {
+      "topic": "Naming the roles",
+      "candidate": "Names four subagents — Worker, Instruction Verifier, Outcome Verifier, Fixer — each as its own declared block.",
+      "reference": "Names the two verifiers and the fixer but leaves the first as an unnamed 'subagent to complete the user's task'.",
+      "why_it_costs_nothing": "Four consistently declared roles is easier to hold in the head than three-plus-one, and the naming costs one line each. Different decomposition, same altitude."
+    }
+  ],
+  "source_contradictions": [
+    {
+      "contradiction": "The source's guardrail says 'Max 5 iterations without user permission', which implies the cap can be lifted by asking; but Phase 3 says flatly 'Issues + iter == 5: stop, report remaining issues honestly', with no ask.",
+      "candidate_resolution": "Runs at most 5 rounds by default, and at the cap presents the unresolved issues, asks the person whether to continue, and stops unless the person allows more. Both halves of the source are satisfied and the default is still termination.",
+      "holds_together": true
+    },
+    {
+      "contradiction": "The source never says whether the first pass counts toward the five iterations — 'Max 5 iterations' against a loop whose first leg is the worker, not a fix.",
+      "candidate_resolution": "States it outright: 'Run at most 5 rounds, counting the first pass as round one.'",
+      "holds_together": true
+    },
+    {
+      "contradiction": "The source's outcomes verifier reports three statuses (pass/fail/concern) but 'clean' is defined only as overall == 'pass', leaving 'concern' unaddressed as a decision input, while the fixer is told to address 'concern' findings.",
+      "candidate_resolution": "Keeps all three statuses in the outcome type and defines clean as 'the outcome is judged successful', so anything short of a pass — including a concern — routes to the fixer. Consistent with both the source's clean test and its fixer mandate.",
+      "holds_together": true
+    }
+  ],
+  "better_than_reference": [
+    "The silent-failure guard survives here and does not in the reference. The source's 'Empty/missing .log = silent failure — surface to user' is a real guard against a subagent that dies quietly; the candidate performs precisely the transformation the rubric asks for, dropping the artifact and keeping the result — 'If a subagent returns nothing, treat that as a failure and tell the person.' The reference dropped the guard along with the log.",
+    "The verifier-disagreement rule survives here and does not in the reference. 'If the two checks disagree, the failing one prevails' decides a case that will actually occur — one verifier passes, the other fails — and without it the orchestrator has no tiebreak.",
+    "Per-phase reporting to the user survives here ('Tell the person what happened after each phase') and does not in the reference, even though the source states it in its very first paragraph and then again after every phase.",
+    "The verbatim-task requirement survives here and does not in the reference. It changes what the subagents receive, so it is behaviour, not colour."
+  ],
+  "mean_score": 4.33,
+  "verdict": "sound",
+  "weakest_dimension": "minimalism",
+  "what_to_fix_in_the_sculpting_skill": "Add a rule that a subagent's mandate in the body may state only what its output type cannot hold — if a required field or field description already obliges the subagent to report something, the body sentence saying so must be cut (this is what left 'Report anything you left undone and why, and every ambiguity you decided for yourself' in the body while the worker type's `deliberately_skipped` and `ambiguities_resolved` fields already demanded it).",
+  "expectations": [
+    {
+      "text": "The essence survived",
+      "passed": true,
+      "evidence": "score 5/5 — every outcome-bearing responsibility binds, including four the reference lost: verbatim task wording, per-phase reporting, the failing-verifier-wins tiebreak, and the silent-failure guard restated as 'If a subagent returns nothing, treat that as a failure and tell the person.'"
+    },
+    {
+      "text": "Nothing spare remains",
+      "passed": true,
+      "evidence": "score 4/5 — two sentences could go: a per-round record-keeping rule that the frontmatter workspace already covers and the calibration ruling classes as execution detail, and a worker-report instruction that the worker output type's field descriptions already enforce."
+    },
+    {
+      "text": "A person can read it easily",
+      "passed": true,
+      "evidence": "score 4/5 — plain words, no jargon, headings that match the order of work; one passage needs a second pass, the opening paragraph that stacks five independent standing rules into one block of prose."
+    }
+  ],
+  "summary": {"passed": 3, "failed": 0, "total": 3, "pass_rate": 1.0}
+}

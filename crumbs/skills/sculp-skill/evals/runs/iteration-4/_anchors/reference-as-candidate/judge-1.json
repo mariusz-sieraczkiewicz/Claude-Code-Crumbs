@@ -1,0 +1,94 @@
+{
+  "dimensions": {
+    "essence": {
+      "score": 3,
+      "reasoning": "Almost every outcome-bearing responsibility from the source survives, and several survive better than the source stated them. Delegation-only orchestration is carried by structure (every stage is a spawned subagent). Independent verification is carried explicitly ('without trusting the working report') plus separate verifier subagents, which is what the source's 'never let worker/fixer self-verify' was protecting. The 'trust the failing verifier over the passing one' guardrail is correctly absorbed into the clean condition (finish only when instructions are all done AND outcomes passed), so a single failure always wins. The 5-iteration cap, the two verifier definitions (checklist-of-imperatives vs intent-and-quality), parallel verification, and the cap-reached stop-and-report branch are all intact. The workspace mechanics are properly delegated to the frontmatter. The 'empty/missing .log means silent failure' guard was dropped along with the log artifact, which the rubric explicitly permits.\n\nThe deduction is for one sentence in the fixer branch, which carries two problems at once. First, it is inoperable: it tells the fixer to weigh a 'fix hint', but the types file declares no such field on any verifier report, and every contract inherits extra='forbid', so no verifier can legally emit one. A grep of the types file for 'hint' returns nothing. The rule therefore cannot bind at run time. Second, the source responsibility it appears to have replaced — the fixer must push back on a verifier finding it believes is wrong, with evidence, rather than silently skipping it — did not survive in any usable form. The reference instead says the fixer must 'address every unresolved issue reported by either verifier', unconditionally, which removes the sanctioned escape route the source gave. Both problems live in one sentence, so this is one loss's worth of damage, not two — hence 3 rather than 2.",
+      "losses": [
+        {
+          "responsibility": "Fixer must challenge a verifier finding it judges wrong, with evidence, instead of silently ignoring it (source: 'If a verifier finding is wrong, say so with evidence — don't silently ignore')",
+          "what_happened": "lost",
+          "quote": "Otherwise, spawn a fixer to address every unresolved issue reported by either verifier. Use a fix hint only when supported by evidence and it addresses the root cause.",
+          "why_it_matters": "The source gave the fixer a defined path for a bad finding: rebut it on the record. The candidate instead makes addressing every reported issue unconditional. A fixer that meets a spurious finding now has no sanctioned option except to force a change it believes is wrong, or to skip it silently — the exact outcome the source guardrail existed to prevent. The output contract (WorkingReport: summary, artifacts, claims) has somewhere a rebuttal could sit, but nothing in body or types requires one."
+        },
+        {
+          "responsibility": "Fixer uses each verifier finding's repair suggestion as a starting point (source: verifier JSON carries fix_hint; fixer instruction 1 says 'use fix_hint as a starting point')",
+          "what_happened": "weakened",
+          "quote": "Use a fix hint only when supported by evidence and it addresses the root cause.",
+          "why_it_matters": "Verified against the types file: DoneInstructionCheck and UnresolvedInstructionCheck carry only instruction/status/issue, the outcomes reports carry only status/issues/summary, and the shared base sets model_config = ConfigDict(extra='forbid'). No verifier output can contain a fix hint. The rule names a thing that cannot exist, so it governs nothing, and a reader who opens the types file to find the field comes back empty-handed."
+        }
+      ]
+    },
+    "minimalism": {
+      "score": 4,
+      "reasoning": "The heavy passengers are gone and the delegation is aggressive in the right places. The source's whole workspace inventory — timestamped folder, task.md, status.md running log, per-iteration folders, worker.log, worker-report.md, the four verifier files, fixer logs — collapses to one frontmatter line, which is exactly the ruling. Both verifier JSON schemas, spelled out field by field in the source, are gone from the body and live in the types file. Per-phase progress reports to the user ('Worker done. Modified N files. Verifying.') are correctly treated as narration and dropped. What remains is close to the floor.\n\nTwo sentences could still go. The clearest is the instruction to use a fresh workspace, which the frontmatter path template already guarantees by construction. The second is the marking rule for instruction checks, which restates a distinction the discriminated union already makes impossible to violate. I considered the outcomes sentence and the closing report line as passengers too and passed both: 'report every issue' is a completeness duty no type can enforce, and the closing line names an action, not a shape. That is one or two sentences, not a surviving class of passenger, so 4.",
+      "passengers": [
+        {
+          "quote": "Use a new workspace for each execution.",
+          "why_it_is_spare": "The frontmatter already declares workspace: \".verification-loop/$runtime.run_id/\". The run id differs per execution by definition, so the path template alone produces a new workspace every time. Removing the sentence changes nothing about where a run writes."
+        },
+        {
+          "quote": "Mark a completed item as done with no issue; mark any other item as partial or missing and explain the issue.",
+          "why_it_is_spare": "The types file already forbids every state this sentence rules out. DoneInstructionCheck pins status to the literal \"done\" and issue to None; UnresolvedInstructionCheck pins status to \"partial\" or \"missing\" and requires issue as a non-optional string; the union of the two is the only shape a check can take. A verifier cannot emit a done item carrying an issue, nor an unresolved item without one. The body adds no criterion for choosing partial over missing, so it adds nothing the union does not already hold."
+        }
+      ]
+    },
+    "readability": {
+      "score": 4,
+      "reasoning": "Read cold, as someone who has never seen the source: the shape of the work is obvious on one pass. A numbered spine — spawn, verify with two named subagents in parallel, decide — matches the order the work actually happens in, each subagent's job is one short paragraph directly under its name, and the decide step lists its three branches in the order they are tested, terminal cases first. No jargon, no decoration, no idea split across two places. The (→ Type) arrows are the established convention and cost nothing.\n\nOne passage costs a second pass, and it is the same fixer sentence. 'Fix hint' arrives with no prior mention, lower-case and unbacticked, which reads like a field name that ought to be in the verifier reports. A conscientious reader opens the types file to find it, finds nothing, and has to decide whether they misread the contract or the instruction is stale. That is a real stumble with no payoff at the end of it. Everything else lands first time, which is 4.",
+      "friction": [
+        {
+          "quote": "Use a fix hint only when supported by evidence and it addresses the root cause.",
+          "why_it_is_hard": "An internal term introduced without explanation, and with no referent anywhere in the skill. A newcomer cannot tell whether a fix hint is a field on the verifier report, free prose inside the issue string, or something the fixer invents for itself. Checking the types file resolves nothing, because the field does not exist there. The rest of the document never uses the term again."
+        }
+      ]
+    }
+  },
+  "defensible_divergences": [
+    {
+      "topic": "Calibration run — candidate and reference are the same artifact",
+      "candidate": "The reference sculpt of verification-loop, judged as a candidate against the source.",
+      "reference": "The same file.",
+      "why_it_costs_nothing": "There is no divergence to record. Every observation above is measured against the source skill and the rubric, not against the reference, which is what the rubric asks for in any case. Reported as empty rather than padded so the results viewer does not read absence as a finding."
+    }
+  ],
+  "source_contradictions": [
+    {
+      "contradiction": "The source's guardrails say 'Max 5 iterations without user permission', which implies a run may continue past 5 if the user allows it. Its decide phase says the opposite: at iteration 5 with issues outstanding, 'stop, report remaining issues honestly' — no route past the cap.",
+      "candidate_resolution": "Resolved as a hard cap. 'Run at most 5 work–verification iterations' at the top, and a decide branch reading 'If iteration 5 has been reached, stop and report every remaining issue.' The types file backs this: Stopped pins reason to the single literal \"cap_reached\" and requires remaining_issues, so the only non-success terminal state the contract can express is the cap. Body and types agree.",
+      "holds_together": true
+    },
+    {
+      "contradiction": "The source never fixes what an 'iteration' counts. The loop diagram shows worker → verifiers → fixer → re-verify, and the fixer writes into iter-(N+1) before returning to the verify phase, so it is unclear whether a fix-then-reverify cycle consumes one iteration or two, and whether the initial worker pass counts at all.",
+      "candidate_resolution": "Resolved by naming the unit: a 'work–verification iteration'. Work and its verification are one unit, the first worker pass is iteration 1, and each fixer pass plus its verification is the next — stated as 'Then verify the fixed result in the next iteration.' The cap becomes countable.",
+      "holds_together": true
+    },
+    {
+      "contradiction": "The source guardrail 'Trust failing verifier over passing one when they disagree' presumes the two verifiers can disagree, but they are given different questions — one checks that instructions were executed, the other that the result satisfies intent — so they have no shared proposition to disagree about.",
+      "candidate_resolution": "Dropped as a standalone rule and absorbed into the success branch: 'If every instruction is done and the outcome is passed, finish successfully.' Success requires both, so any failure is decisive without needing a tie-break rule. The under-defined guardrail disappears and its effect survives.",
+      "holds_together": true
+    }
+  ],
+  "better_than_reference": [],
+  "mean_score": 3.67,
+  "verdict": "sound",
+  "weakest_dimension": "essence",
+  "what_to_fix_in_the_sculpting_skill": "Add a rule closing the loop between the body and the types file: every field the body tells an agent to read, weigh, or fill must exist in the types file. When a field from the source's schemas is not carried into the types, any rule naming it must be restated against a surviving field or dropped with it — the same treatment the skill already gives artifacts like logs. Here the source's verifier schemas carried fix_hint, the sculpted types dropped it (and forbid extras), but the fixer rule that named it was kept, so the body now instructs an agent to weigh something no verifier can produce. A cheap mechanical check — grep every noun the body asks an agent to consume against the field names in the types file — would have caught it, and would also have forced the real source responsibility behind that sentence (the fixer rebutting a wrong finding with evidence) to be restated instead of quietly absorbed.",
+  "expectations": [
+    {
+      "text": "The essence survived",
+      "passed": false,
+      "evidence": "score 3/5 — all orchestration, verification and cap responsibilities survive, but the fixer branch loses the source's 'if a verifier finding is wrong, say so with evidence' duty and replaces it with a rule about a 'fix hint' field that the types file does not declare and, with extra='forbid', cannot accept."
+    },
+    {
+      "text": "Nothing spare remains",
+      "passed": true,
+      "evidence": "score 4/5 — the source's entire workspace inventory and both verifier JSON schemas are correctly delegated to the frontmatter and types file, and per-phase progress narration is gone. Two sentences could still go: the fresh-workspace instruction (already guaranteed by the run-id path template) and the done/partial/missing marking rule (already enforced by the discriminated union)."
+    },
+    {
+      "text": "A person can read it easily",
+      "passed": true,
+      "evidence": "score 4/5 — a newcomer gets the whole flow in one pass from the numbered spine and the named subagent blocks. One passage costs a second pass: 'fix hint' appears once, unexplained, and looking it up in the types file yields nothing."
+    }
+  ],
+  "summary": {"passed": 2, "failed": 1, "total": 3, "pass_rate": 0.67}
+}

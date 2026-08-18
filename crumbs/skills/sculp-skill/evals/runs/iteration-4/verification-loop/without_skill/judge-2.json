@@ -1,0 +1,113 @@
+{
+  "dimensions": {
+    "essence": {
+      "score": 5,
+      "reasoning": "Every outcome-bearing responsibility in the source survives in a form that still binds. The orchestrator-never-implements stance, the report-after-every-phase duty, the single general-purpose worker given the verbatim task, the two verifiers spawned in parallel in one message with an explicit ban on trusting the working report, the two distinct verification lenses (imperative-by-imperative compliance vs. intent-level outcome quality), the Clean predicate, the three-way decision, the fixer's scope limits and its duty to push back on a wrong finding with evidence, and the return to verification after fixing are all present. The two source guardrails that look dropped are absorbed by structure rather than lost: 'Trust failing verifier over passing one when they disagree' is fully determined by the candidate's Clean predicate ('no missing/partial instruction AND outcomes overall == pass'), so a disagreement can only resolve toward the failing verifier; and 'never let worker/fixer self-verify' is stated for the worker ('It must not self-verify') and enforced for the fixer structurally ('Then return to phase 2'). The reference resolves both the same way. Nothing was invented that the source did not ask for.",
+      "losses": []
+    },
+    "minimalism": {
+      "score": 2,
+      "reasoning": "This is where the candidate pays. Two whole classes of passenger survive almost verbatim from the source. First, the run's own bookkeeping: the body names the workspace path convention, task.md, status.md, the per-iteration folder, the per-subagent logs, worker-report.md, fixer-report.md and both verifier JSON filenames, and it instructs the orchestrator to update status.md and the worker to append to its log as it works. The rubric rules exactly this list out of the body. Second, field shapes: both verifier JSON schemas are pasted into the body as key-only pseudo-JSON, which is precisely the 'field shapes spelled out in the body' passenger. Neither could be delegated, because the candidate declares no frontmatter contract at all — no inputs, no output, no types file, no workspace — so the description line is the whole contract and every mechanical detail had nowhere to go but the prose. Real cutting did happen (the guardrail list, the ASCII loop diagram, the scripted per-phase report strings and the separate Final Report section are gone; 82 lines down to 39), so this is not 'the source with smaller words'. But several classes survive and the body still carries mechanics it could delegate.",
+      "passengers": [
+        {
+          "quote": "Workspace: `.verification-loop/<UTC-timestamp>/` holding `task.md` (the verbatim task), `status.md` (running log), and one `iter-N/` per iteration for each subagent's log, report, and verifier JSON.",
+          "why_it_is_spare": "A declared workspace is the whole of what a sculpt keeps about where a run writes. Naming the timestamp scheme, the two top-level files, the per-iteration folder and its contents is an artifact inventory — execution detail supplied by the runtime and by convention. The reference reduces all of it to one frontmatter line, workspace: \".verification-loop/$runtime.run_id/\", plus 'Use a new workspace for each execution.'"
+        },
+        {
+          "quote": "{\"instructions\":[{\"id\",\"instruction\",\"status\":\"done|missing|partial\",\"evidence\",\"fix_hint\"}],\"summary\":{\"total\",\"done\",\"missing\",\"partial\"}}",
+          "why_it_is_spare": "Shape and field detail belongs in a types file. The reference carries the same information as VerifyInstructionsReport with DoneInstructionCheck / UnresolvedInstructionCheck variants, so its body only has to say what the verifier must judge — 'Mark a completed item as done with no issue; mark any other item as partial or missing and explain the issue.' The second blob, {\"criteria\":[...],\"overall\":\"pass|fail|concern\",\"summary\"}, is the same passenger again."
+        },
+        {
+          "quote": "An empty or missing log means the subagent failed silently — surface that to the user.",
+          "why_it_is_spare": "The guard is real but stated in terms of an artifact the body should not be tracking. Restated against the result — a subagent that returns no result has failed — the guard survives and the log does not."
+        },
+        {
+          "quote": "After every phase, update `status.md` and report to the user.",
+          "why_it_is_spare": "Half of this is essence (report to the user) and half is bookkeeping (maintaining a running-log file). The status file is a run artifact; keeping one is inferable from having a workspace at all."
+        },
+        {
+          "quote": "appends to its log as it works, and writes `worker-report.md`",
+          "why_it_is_spare": "Both are filename-level bookkeeping. What binds is that the worker returns a report with the listed content; where it lands and how it streams progress is execution detail."
+        }
+      ]
+    },
+    "readability": {
+      "score": 4,
+      "reasoning": "Read cold, this is a clear, short, well-ordered document. The opening line sets the stance in nine words, the four numbered phases match the order the work actually happens, each phase is one dense-but-parseable paragraph, and the Decide section's three bullets are the clearest part of the whole thing — a newcomer can act on it confidently after one pass. The passage that needs a second pass is the pair of JSON schema lines: they are compressed key-only shorthand that is not valid JSON, so the reader must work out that \"id\",\"instruction\" are field names rather than values, and the status vocabulary the Decide step turns on (missing, partial, pass, fail, concern) is defined nowhere except inside those blobs. The workspace sentence also stacks four ideas and then appends a behavioural guard. Neither forces the reader to reconstruct intent, so this stays at 4 rather than 3.",
+      "friction": [
+        {
+          "quote": "{\"criteria\":[{\"id\",\"criterion\",\"status\":\"pass|fail|concern\",\"evidence\",\"fix_hint\"}],\"overall\":\"pass|fail|concern\",\"summary\"}",
+          "why_it_is_hard": "Key-only pseudo-JSON on one line. It is not valid JSON, it mixes bare field names with typed enums, and it is the only place the outcome vocabulary used by the Decide step is defined — so a newcomer has to parse a dense literal to learn the words the control flow depends on."
+        },
+        {
+          "quote": "Workspace: `.verification-loop/<UTC-timestamp>/` holding `task.md` (the verbatim task), `status.md` (running log), and one `iter-N/` per iteration for each subagent's log, report, and verifier JSON. An empty or missing log means the subagent failed silently — surface that to the user.",
+          "why_it_is_hard": "One sentence carries a path convention, three artifact kinds and a nested per-iteration structure; an escalation rule is then appended to the same paragraph, so a behavioural guard hides inside a paragraph about directory layout."
+        }
+      ]
+    }
+  },
+  "defensible_divergences": [
+    {
+      "topic": "Where the tie-break between disagreeing verifiers lives",
+      "candidate": "Drops the source's 'Trust failing verifier over passing one' and lets the Clean predicate carry it: 'Clean = no missing/partial instruction AND outcomes overall == \"pass\".'",
+      "reference": "Does the same thing: 'If every instruction is done and the outcome is passed, finish successfully.'",
+      "why_it_costs_nothing": "A conjunction over both verdicts makes the failing verifier decisive by construction. Stating the tie-break separately would be a duplicated rule, so removing it is a gain rather than a loss."
+    },
+    {
+      "topic": "Naming the subagent type",
+      "candidate": "Spawn one `general-purpose` subagent",
+      "reference": "Spawn a subagent to complete the user's task.",
+      "why_it_costs_nothing": "The source names the type; keeping it is faithful and removes a decision from the runtime, dropping it delegates to convention. Either reads fine and neither changes what the run produces."
+    },
+    {
+      "topic": "Where the final report lives",
+      "candidate": "Folded into the Decide branch — 'Clean → stop. Final summary: passed on iter-N, what changed, workspace path.'",
+      "reference": "Keeps a separate closing line: 'Report the terminal result and workspace.'",
+      "why_it_costs_nothing": "Attaching the reporting duty to the branch that triggers it is at least as easy to follow, and the cap branch's 'report the remaining issues honestly' covers the other terminal state."
+    },
+    {
+      "topic": "Stating the report-to-user duty once instead of per phase",
+      "candidate": "One standing line up front: 'After every phase, update status.md and report to the user.'",
+      "reference": "Carries no per-phase user-reporting duty at all.",
+      "why_it_costs_nothing": "The source scripts three literal report strings ('Worker done. Modified N files. Verifying.', 'Instructions: X/Y done. Outcomes: <overall>.'). Collapsing them into one standing rule keeps the obligation and sheds three passengers."
+    }
+  ],
+  "source_contradictions": [
+    {
+      "contradiction": "The source's guardrail says 'Max 5 iterations without user permission', implying the loop may continue if the user agrees. Its Phase 3 says the opposite for the same situation: 'Issues + iter == 5: stop, report remaining issues honestly' — an unconditional halt with no route past it.",
+      "candidate_resolution": "Merges both into one branch: 'Not clean, iter == 5 → stop and report the remaining issues honestly. Continuing needs the user's permission.' The default is a hard stop with an honest report, and permission is named as the only way past the cap.",
+      "holds_together": true
+    },
+    {
+      "contradiction": "The source forbids self-verification ('Never let worker/fixer self-verify') while also asking the fixer to adjudicate the verifiers' work ('If a verifier finding is wrong, say so with evidence').",
+      "candidate_resolution": "Keeps both without collision — the fixer may dispute a finding with evidence, but the loop still routes back to phase 2, so the fixer never decides whether its own work passed.",
+      "holds_together": true
+    }
+  ],
+  "better_than_reference": [
+    "The candidate preserves the escape hatch at the iteration cap — 'Continuing needs the user's permission' — which is what the source's guardrail actually grants. The reference drops it ('If iteration 5 has been reached, stop and report every remaining issue') and with it the source's only sanctioned way to keep going; its types file also hard-codes the single stop reason cap_reached. The candidate resolves the source's cap contradiction more faithfully than the reference does.",
+    "The candidate still catches the silent-failure mode; the reference drops that guard entirely. The rubric permits dropping an artifact-bound rule, so the reference is not at fault, but a subagent that produces nothing is a real failure mode and the candidate is the only one of the two that still handles it — it just states it in terms of the log file rather than the missing result."
+  ],
+  "mean_score": 3.67,
+  "verdict": "weak",
+  "weakest_dimension": "minimalism",
+  "what_to_fix_in_the_sculpting_skill": "The skill needs a rule that makes the frontmatter contract the mandatory destination for mechanical detail, and makes the body's freedom from that detail checkable. Concretely: 'Every sculpt declares inputs, output, types and workspace in frontmatter. After sculpting, no filename, directory name, path template, log, status file or JSON field name may remain in the body — each is either a field in the types file, the declared workspace, or deleted. A rule that depends on such an artifact must be restated in terms of the result it stands for (\"an empty log means silent failure\" becomes \"a subagent that returns no result has failed\") or dropped with the artifact.' No such rule fired here: with no types file to delegate to, both verifier JSON schemas and the whole workspace inventory had nowhere to go and stayed in the prose. That single gap accounts for all of the minimalism loss and most of the readability friction.",
+  "expectations": [
+    {
+      "text": "The essence survived",
+      "passed": true,
+      "evidence": "score 5/5 — every outcome-bearing responsibility binds, including the two guardrails ('trust the failing verifier', 'no self-verification') that are absorbed by the Clean predicate and the loop-back rather than restated; nothing invented."
+    },
+    {
+      "text": "Nothing spare remains",
+      "passed": false,
+      "evidence": "score 2/5 — two classes of passenger survive: the full run-bookkeeping inventory (workspace path, task.md, status.md, iter-N/, logs, report and JSON filenames) and both verifier JSON field shapes pasted into the body. With no frontmatter contract or types file declared, none of it could be delegated."
+    },
+    {
+      "text": "A person can read it easily",
+      "passed": true,
+      "evidence": "score 4/5 — short, plainly written and ordered the way the work happens; only the two key-only JSON schema lines and the clause-stacked workspace sentence need a second pass."
+    }
+  ],
+  "summary": {"passed": 2, "failed": 1, "total": 3, "pass_rate": 0.67}
+}

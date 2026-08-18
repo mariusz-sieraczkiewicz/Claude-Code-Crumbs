@@ -1,0 +1,63 @@
+{
+  "skill_name": "sculp-skill",
+  "grading": {
+    "method": "llm-as-a-judge",
+    "rubric": "evals/rubric.md",
+    "judge_agent": "evals/agents/judge.md",
+    "judges_per_run": 3,
+    "aggregation": "median score per dimension",
+    "note": "Graded against the three goals of sculpting \u2014 the essence survives, nothing spare remains, and a person can read it easily. The reference sculpt is a calibration sample, not a template: resemblance to it is never scored, and a candidate that serves the goals differently loses nothing.",
+    "dimensions": [
+      "essence",
+      "minimalism",
+      "readability"
+    ]
+  },
+  "calibration": {
+    "source": "rulings from the person the sculpting is for, made while reviewing verdicts from iteration 2 onward",
+    "rulings": [
+      "Anything the types file carries is properly placed \u2014 a rule held by a field, a status set or a field description is delegated, not weakened. Never deduct because the reader must open the types file.",
+      "The (\u2192 Type) arrow is an established convention and needs no explanation.",
+      "Judges have been too strict. Deduct only where a reader or a run would actually pay for it; when a call is close, pass it.",
+      "A run's own bookkeeping is execution detail: status logs, running logs, per-iteration folders, report filenames and artifact inventories do not belong in the skill body. A workspace declared in the frontmatter is all a sculpt keeps about where a run writes. A guard that depended on such an artifact is restated in terms of the result, or dropped with it."
+    ],
+    "findings_retired_by_these_rulings": [
+      "outcome reviewer's run/read requirement surviving only as a field description",
+      "the outstanding-status rule requiring the types file to interpret",
+      "the (\u2192 Type) arrow being unexplained",
+      "earlier judges scoring status.md, per-iteration folders and log requirements as preserved essence"
+    ]
+  },
+  "baseline": {
+    "purpose": "Shows whether the sculpting skill is doing the work or the model is. Only valid when isolated.",
+    "judges": "same count as the candidate \u2014 a one-judge baseline against a three-judge candidate is not a comparison",
+    "isolation": [
+      "Copy the source skill to a scratch directory outside this repository and run the baseline there, so the other skills, the reference sculpts and the rubric are unreachable rather than merely forbidden.",
+      "Forbid borrowing in the prompt: no skill, plugin or command invocation; no opening any other skill, template, checklist or example; no reproducing a named method.",
+      "Verify from the run transcript before trusting the score: no skill invocations, no file opened outside the scratch directory."
+    ],
+    "known_leak": "The harness lists installed skill names and one-line descriptions in every agent's context and a prompt cannot suppress it. Running outside the repository keeps the exposure to names only.",
+    "prompt_clause": "Work only from the task and the source file. Do not invoke any skill, plugin or command. Do not open any other skill, template, checklist or example, here or anywhere else on this machine. Do not reproduce a named method you already know. Decide what to cut from the source text itself."
+  },
+  "evals": [
+    {
+      "id": 1,
+      "name": "verification-loop",
+      "prompt": "Sculpt the skill at .agents/skills/sculp-skill/evals/source-skills/verification-loop so only its essence remains.",
+      "source_skill": "evals/source-skills/verification-loop",
+      "reference_generation": "evals/reference-generations/verification-loop",
+      "scope": [
+        "SKILL.md",
+        "the types file named in the frontmatter"
+      ],
+      "expected_output": "A sculpted copy that keeps every responsibility determining what the skill produces, carries nothing whose removal would leave behaviour unchanged, and reads cleanly to someone who has never seen the source.",
+      "expectations": [
+        "The essence survived",
+        "Nothing spare remains",
+        "A person can read it easily"
+      ],
+      "why_this_source": "The source is a phase-structured procedural skill carrying log files, directory layouts and inline data schemas, and it contradicts itself in three places. It gives the sculpting skill something to remove on every dimension and something to resolve, so a weak sculpt cannot pass by accident.",
+      "files": []
+    }
+  ]
+}

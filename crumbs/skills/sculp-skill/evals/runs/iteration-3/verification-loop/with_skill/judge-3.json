@@ -1,0 +1,123 @@
+{
+  "dimensions": {
+    "essence": {
+      "score": 4,
+      "reasoning": "Every outcome-bearing responsibility in the source survives, and several that the reference dropped survive here: orchestrator-never-implements, verbatim task to every subagent, worker must not self-verify, status reported to the user after every phase, the failing-verifier-wins tie-break, the silent-failure guardrail, the 5-iteration cap, fixer addresses every finding and may dispute one with evidence. Report shapes are delegated cleanly to the types file (WorkerReport carries the source's four required report sections verbatim in field descriptions; OutcomeReview.overall carries the source's 'clean means overall == pass' rule as a field description, so a `concern` correctly blocks). The one real gap is not a cut but an addition: the body creates a third terminal branch — abort on silent subagent failure — that the declared output type cannot represent, so a run that takes that branch has no defined thing to return or write.",
+      "losses": [
+        {
+          "responsibility": "Silent failure handling (source: \"Empty/missing `.log` = silent failure — surface to user.\")",
+          "what_happened": "invented",
+          "quote": "A subagent that returns no result, or leaves its log empty, has failed silently — report which subagent failed and stop without producing a result.",
+          "why_it_matters": "The source only says surface it. The candidate turns it into a terminal abort, which is a sensible reading — you cannot verify work that does not exist — but the frontmatter declares `output: VerificationResult(verification-result.yaml)` and the types file's VerificationResult has only `passed / iterations / changes / unresolved`. There is no status for 'aborted', and no `passed: false` framing that fits, because the run never reached a verdict. A runner hitting this branch has to invent its own contract: emit nothing (violating the declared output), or fake `passed: false` (indistinguishable from a genuine cap-out). The reference avoids the shape of this problem by typing terminal states as a union (`VerificationOutcome = Passed | Stopped`, with `Stopped.reason: Literal[\"cap_reached\"]`) — though it pays for that by dropping the silent-failure guardrail altogether, which is the worse trade."
+        }
+      ]
+    },
+    "minimalism": {
+      "score": 4,
+      "reasoning": "The body is tight and delegates well: report field lists, status enums, evidence and fix-hint semantics, and the before/after fix record all live in the types file rather than the prose, and the source's per-phase 'Report to user: ...' scripts collapse into a single standing rule. The one recognisable passenger is the closing section, whose two sentences say only what the frontmatter and the types file already say — the fields of the output, and where the output goes.",
+      "passengers": [
+        {
+          "quote": "Combine the outcome, the number of iterations, the changes made, and the unresolved problems into `VerificationResult`.",
+          "why_it_is_spare": "This enumerates VerificationResult's four fields (`passed`, `iterations`, `changes`, `unresolved`) in prose. The types file already declares them, with descriptions that are more precise than the prose ('One entry per meaningful change made across every iteration'). Nothing behaves differently if the sentence goes."
+        },
+        {
+          "quote": "Return the result and write the same result to `verification-result.yaml`.",
+          "why_it_is_spare": "The frontmatter contract already reads `output: VerificationResult(`verification-result.yaml`)`, which is exactly 'return this type, write it to this file'. Restating the destination in the body is the duplication the frontmatter exists to prevent."
+        }
+      ]
+    },
+    "readability": {
+      "score": 4,
+      "reasoning": "Read cold, this is easy to act on. The sections follow the order the work happens (run, verify, decide, fix), each subagent is announced in the same two-part form — role line, then what it must do — and the standing rules that apply everywhere sit at the top rather than being repeated per phase. Plain words throughout; no undefined internal names beyond `status.md`, whose location is obvious from the workspace declaration. One sentence needs a second pass.",
+      "friction": [
+        {
+          "quote": "Running the task is iteration 1 and each fix begins the next iteration; give each iteration its own folder, and require each subagent to write its running log into that folder.",
+          "why_it_is_hard": "Three separate obligations in one sentence — how iterations are counted (which the cap in Decide depends on), one folder per iteration, and a running log per subagent (which the silent-failure rule two lines later depends on). A newcomer reads it as setup detail, then has to come back to it twice: once at 'fewer than 5 iterations have run' and once at 'leaves its log empty'. Splitting the counting rule from the logging rule would cost nothing."
+        }
+      ]
+    }
+  },
+  "defensible_divergences": [
+    {
+      "topic": "How 'a verifier passed' is enforced",
+      "candidate": "Flat models with status enums, plus a field description doing the work: `OutcomeReview.overall` is described as 'Verdict over all the checks together; anything short of every check passing is not a pass.'",
+      "reference": "Discriminated unions that make the illegal state unrepresentable — `PassedOutcomesReport.issues: tuple[()]` alongside `FailedOutcomesReport.issues: list[str]`, unioned into `OutcomesVerdict`.",
+      "why_it_costs_nothing": "The reference's encoding is stronger typing, but the candidate's rule is carried by the types file too, which is where it belongs. The source's own definition of clean ('no missing/partial AND overall == pass') is preserved either way, including the awkward `concern` status, which the candidate handles by keeping `concern` as a value and letting the field description rule it out of a pass."
+    },
+    {
+      "topic": "Where the fix hint lives",
+      "candidate": "`fix_hint: str | None` on both `InstructionCheck` and `OutcomeCheck`, described as 'Where to start when the instruction is not done'; the body says nothing about hints.",
+      "reference": "The body tells the fixer to 'Use a fix hint only when supported by evidence and it addresses the root cause.'",
+      "why_it_costs_nothing": "The source's 'use `fix_hint` as starting point' is advice about a field, and the field description states it. Putting it in the body as well would be the duplication. The candidate's placement is the correct one here — see better_than_reference."
+    },
+    {
+      "topic": "Workspace declaration",
+      "candidate": "`workspace: default`, with the body adding only the per-iteration folder rule.",
+      "reference": "`workspace: \".verification-loop/$runtime.run_id/\"` plus an explicit 'Use a new workspace for each execution.'",
+      "why_it_costs_nothing": "The source's `.verification-loop/<UTC-timestamp>/` naming is mechanics, and naming a workspace is precisely what the frontmatter contract is for. The candidate leans on the platform default rather than pinning a path; the freshness-per-run property the reference spells out comes with that default rather than being restated."
+    },
+    {
+      "topic": "Input declaration",
+      "candidate": "`inputs: \"task: str\"` — no Task type at all.",
+      "reference": "`inputs: Task`, with `class Task(Contract): description: str`.",
+      "why_it_costs_nothing": "A single-field wrapper around a string adds a type the skill never branches on. The candidate's inline declaration says the same thing with one fewer class."
+    },
+    {
+      "topic": "Threading the fixer's report back into verification",
+      "candidate": "One clause in the Verify section: 'each receiving the task and the report of the subagent that last did the work'.",
+      "reference": "Handled positionally — step 3 ends 'Then verify the fixed result in the next iteration.'",
+      "why_it_costs_nothing": "Both replace the source's clumsy 'return to Phase 2 with fixer-report as the \"worker report\" input'. The candidate's version states the rule once at the point the verifiers are described, so the Fix section needs no back-reference."
+    },
+    {
+      "topic": "Section headings vs numbered steps",
+      "candidate": "Named `##` sections (Run the task / Verify / Decide / Fix / Produce verification result).",
+      "reference": "A numbered 1-2-3 list.",
+      "why_it_costs_nothing": "Both make the order of work obvious. The candidate's headings are scannable and none of them merely restates the sentence below it."
+    }
+  ],
+  "source_contradictions": [
+    {
+      "contradiction": "The source's guardrail says 'Max 5 iterations without user permission', implying the loop can continue if the user allows it — but Phase 3 gives no such branch: 'Issues + iter == 5: stop, report remaining issues honestly.'",
+      "candidate_resolution": "Hard cap, no escalation path: 'If 5 iterations have run, stop and produce the result listing every unresolved problem.' The unresolved findings are carried in `VerificationResult.unresolved`, so the honest report the source asks for is structurally guaranteed.",
+      "holds_together": true
+    },
+    {
+      "contradiction": "The source names an empty or missing `.log` as a silent failure to 'surface to user', but no phase says what happens to the loop afterwards — the Loop diagram and Phase 3 have no branch for it.",
+      "candidate_resolution": "Treats it as a terminal abort — name the failing subagent and stop. Coherent as a decision, and the more useful reading, but the declared output type has no state for it (see essence).",
+      "holds_together": false
+    },
+    {
+      "contradiction": "Verifier-outcomes may report `overall: \"concern\"`, but Phase 3 defines clean as `overall == \"pass\"` while Phase 4 tells the fixer to address `concern` findings — so `concern` is simultaneously a non-failing status and a blocking one.",
+      "candidate_resolution": "Keeps `concern` as a check status, and resolves the blocking question in the type: 'anything short of every check passing is not a pass'. So a concern blocks, and the fixer's 'resolve every problem found' picks it up.",
+      "holds_together": true
+    }
+  ],
+  "better_than_reference": [
+    "Keeps the source's tie-break rule, which the reference drops entirely: 'Where the verifiers disagree about the same point, treat the failing verdict as the correct one.' This is outcome-bearing — it decides whether a run ends or loops when the two parallel verifiers conflict, which is the one situation the two-verifier design exists to create. The reference has no answer for it.",
+    "Keeps the source's silent-failure guardrail at all ('Never skip a verifier run' has a sibling in 'Empty/missing `.log` = silent failure'). The reference drops both the log requirement and the failure handling, so a reference run whose subagent dies quietly just proceeds. The candidate's version over-specifies the exit, but detecting the condition is worth more than the contract gap costs.",
+    "Keeps 'Report status to the user after every phase' as a single standing rule — 'After each step below, tell the user what happened and record it in `status.md`.' The reference drops user-facing progress reporting and `status.md` entirely, even though the source states it in its opening line and repeats it in the Workspace section.",
+    "Avoids the reference's fix-hint hole. The reference's body tells the fixer to weigh a fix hint, but its `InstructionCheck` / outcomes reports declare no such field and `ConfigDict(extra=\"forbid\")` blocks one, so no verifier can ever emit the thing the fixer is told to use. The candidate declares `fix_hint: str | None` on both check types and lets the field description carry the guidance, so the hint is actually producible."
+  ],
+  "mean_score": 4.0,
+  "verdict": "sound",
+  "weakest_dimension": "essence",
+  "what_to_fix_in_the_sculpting_skill": "Add a rule that every way the body can end a run must be representable in the declared output type: when the sculpt introduces or preserves a terminal branch (cap reached, aborted on a failed subagent, finished clean), the types file must carry a status or variant for it, and the body must not say 'stop without producing a result' while the frontmatter declares an output. The candidate's silent-failure abort is a good guardrail rescued from the source, but nothing in the sculpting skill made it check the new branch against the contract it had just written, so the skill ends up with three exits and a type that models two.",
+  "expectations": [
+    {
+      "text": "The essence survived",
+      "passed": true,
+      "evidence": "score 4/5 — every outcome-bearing responsibility from the source is present, including three the reference lost (failing-verifier tie-break, silent-failure detection, status reporting to the user); the one defect is an added terminal branch ('stop without producing a result') that VerificationResult cannot represent."
+    },
+    {
+      "text": "Nothing spare remains",
+      "passed": true,
+      "evidence": "score 4/5 — report shapes, statuses and hint semantics are all delegated to the types file; only the closing two sentences are spare, restating VerificationResult's fields and the output destination the frontmatter already declares."
+    },
+    {
+      "text": "A person can read it easily",
+      "passed": true,
+      "evidence": "score 4/5 — plain, well-ordered, consistent subagent blocks, standing rules stated once up front; one packed sentence bundles iteration counting, per-iteration folders and per-subagent logs, and later rules depend on two of the three."
+    }
+  ],
+  "summary": {"passed": 3, "failed": 0, "total": 3, "pass_rate": 1.0}
+}

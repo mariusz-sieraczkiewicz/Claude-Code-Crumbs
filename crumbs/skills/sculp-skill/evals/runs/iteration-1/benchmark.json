@@ -1,0 +1,41 @@
+{
+  "metadata": {
+    "skill_name": "sculp-skill",
+    "eval": "verification-loop",
+    "iteration": 1,
+    "judges_with_skill": 3,
+    "judges_without_skill": 1
+  },
+  "anchors": {
+    "source_as_candidate": 1.4,
+    "reference_as_candidate": 5.0
+  },
+  "with_skill": {
+    "by_dimension": {
+      "writing_manner": 3,
+      "altitude": 3,
+      "conditions": 3,
+      "structures": 4,
+      "coverage": 2
+    },
+    "mean": 3.0
+  },
+  "without_skill": {
+    "by_dimension": {
+      "writing_manner": 3,
+      "altitude": 3,
+      "conditions": 2,
+      "structures": 2,
+      "coverage": 2
+    },
+    "mean": 2.4
+  },
+  "delta_by_dimension": {
+    "writing_manner": 0,
+    "altitude": 0,
+    "conditions": 1,
+    "structures": 2,
+    "coverage": 0
+  },
+  "delta_mean": 0.6
+}

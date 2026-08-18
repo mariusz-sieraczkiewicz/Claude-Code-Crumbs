@@ -1,0 +1,161 @@
+{
+  "dimensions": {
+    "writing_manner": {
+      "score": 3,
+      "reasoning": "The candidate is a genuine rewrite, not a lightly edited source: the source's per-phase headings, numbered imperative lists and inline JSON schemas are gone, sentences are short, declarative and plainly worded, and there is no meta-commentary. But source decoration survives in quantity — a document title heading, the pipeline code block carried over almost verbatim from the source's Loop section, four bold role labels, two italicised sub-labels, and a separate '## Constraints' heading over a bullet checklist. The reference carries none of these: it has no headings at all after the frontmatter, no emphasis markers, no diagram, and its only list is the three-branch decision. Anchor 4 permits 'one or two leftover decorations'; this is five or six kinds, which is anchor 3's 'source artifacts persist — per-stage headings, bullet checklists, bold warnings, or an ASCII diagram'.",
+      "divergences": [
+        {
+          "responsibility": "presenting the overall loop shape",
+          "candidate_form": "```\nworker → [verifier-instructions ‖ verifier-outcomes] → clean? done : fixer → re-verify\n```",
+          "reference_form": "1. Spawn a subagent to complete the user’s task. (→ `WorkingReport`)\n\n2. Verify its result using two subagents in parallel:",
+          "form_difference": "Candidate keeps the source's diagram block as a second, redundant encoding of the workflow alongside the prose. Reference has no diagram; the sequence is carried by the numbered steps themselves, so the shape is stated exactly once."
+        },
+        {
+          "responsibility": "introducing each actor in the loop",
+          "candidate_form": "**Worker** — one subagent executes the task and reports what it did.",
+          "reference_form": "Subagent: Instructions Verifier (→ `VerifyInstructionsReport`)",
+          "form_difference": "Candidate uses bold emphasis plus an em-dash gloss, a typographic device. Reference uses an unemphasised declaration line with a fixed keyword and a result marker. Same information, different register: one decorates, one declares."
+        },
+        {
+          "responsibility": "guardrails / operating limits",
+          "candidate_form": "## Constraints\n\n- Five iterations maximum without the user's go-ahead. Thrashing means escalate, not grind.",
+          "reference_form": "Run at most 5 work–verification iterations.",
+          "form_difference": "Candidate segregates limits into a headed bullet checklist at the end of the document — the source's 'Guardrails' section under a new name. Reference has no such section; the limit is a bare sentence sitting at the point in the text where it governs."
+        }
+      ]
+    },
+    "altitude": {
+      "score": 3,
+      "reasoning": "Most of the candidate sits at reference altitude: the source's `worker.log`, `worker-report.md`, `verifier-instructions.{log,json}`, the two inline JSON schemas and the numbered per-subagent instruction lists are all compressed away, and the verifier roles are described by responsibility rather than by procedure. Two places drill below the reference line. First, the body names the on-disk directory layout including the per-iteration subdirectory; the reference mentions storage only as a frontmatter token and never names an iteration directory. Second, the body enumerates the shape of a finding — status, evidence, fix hint — which is precisely the field-level detail the reference pushes into the types file. There is also one restatement of a fact a competent model already applies (passing the task verbatim rather than paraphrased). Anchor 3: 'one or two stages drill into mechanics (files, logs, JSON shapes, directory names)'.",
+      "divergences": [
+        {
+          "responsibility": "where iteration artifacts live",
+          "candidate_form": "Persist each iteration's reports and findings under `.verification-loop/<UTC-timestamp>/iter-N/` so later subagents and the user can read them.",
+          "reference_form": "workspace: \".verification-loop/$runtime.run_id/\"\n...\nUse a new workspace for each execution.",
+          "form_difference": "Candidate states directory layout, per-iteration subdirectory naming, and the timestamp format as a body instruction. Reference declares a workspace once in the frontmatter contract and says only that each execution gets a new one; internal layout is left to the runtime."
+        },
+        {
+          "responsibility": "the shape of a verifier finding",
+          "candidate_form": "Each finding carries a status, the evidence behind it, and a hint for fixing it.",
+          "reference_form": "Subagent: Instructions Verifier (→ `VerifyInstructionsReport`)  [with `InstructionCheck`, `status`, `issue` defined in ./scripts/contracts.py]",
+          "form_difference": "Candidate describes the record's fields in prose in the body. Reference names a result type and lets the types file carry the fields, so the body never descends to field level."
+        },
+        {
+          "responsibility": "how the task reaches subagents",
+          "candidate_form": "Every subagent receives the task verbatim, never your paraphrase of it.",
+          "reference_form": "inputs: Task",
+          "form_difference": "Candidate spends a standalone sentence on a mechanical handoff detail. Reference declares the input once in the frontmatter contract and never discusses how it is transmitted."
+        }
+      ]
+    },
+    "conditions": {
+      "score": 2,
+      "reasoning": "The candidate's explicit decision has only two branches — clean stops, otherwise fixer — and is closed on those two. The third branch, the iteration cap, is not part of that decision: it sits in the '## Constraints' checklist ten lines further down, and its consequence (stop and report the outstanding issues) is split off again into the final reporting bullet. So the condition that governs whether the fixer branch may be taken lives outside the branch set it controls. Worse, that condition carries an open-ended escape — the cap applies only 'without the user's go-ahead' — which opens an undeclared branch: nothing states what happens when the go-ahead is given. This is anchor 2 almost literally: the decision is closed but its governing conditions sit outside it, stated far from the branches they control, with an open-ended escape. The reference by contrast puts all three branches in one ordered list, each with its condition, action and continuation, and states the loop limit as a flat cap with no escape.",
+      "divergences": [
+        {
+          "responsibility": "the terminate-or-continue decision",
+          "candidate_form": "**Clean** = no instruction missing or partial, and outcomes pass. Clean → stop. Otherwise → fixer.\n... (10 lines later) ...\n- Five iterations maximum without the user's go-ahead.",
+          "reference_form": "3. Decide:\n\n- If every instruction is done and the outcome is passed, finish successfully.\n- If iteration 5 has been reached, stop and report every remaining issue.\n- Otherwise, spawn a fixer to address every unresolved issue reported by either verifier. ... Then verify the fixed result in the next iteration.",
+          "form_difference": "Candidate expresses a two-branch decision and relocates the third condition to a separate constraints section, so the branch set is not closed where it is written. Reference makes the cap a peer branch inside the same ordered decision, each branch carrying condition, action and whether the workflow continues."
+        },
+        {
+          "responsibility": "the loop limit",
+          "candidate_form": "Five iterations maximum without the user's go-ahead. Thrashing means escalate, not grind.",
+          "reference_form": "Run at most 5 work–verification iterations.",
+          "form_difference": "Candidate's limit is conditional on an unspecified user action, leaving the post-go-ahead path undeclared, and adds an unquantified qualitative trigger ('thrashing'). Reference states an unconditional numeric limit whose exit is fully covered by the branch list."
+        }
+      ]
+    },
+    "structures": {
+      "score": 2,
+      "reasoning": "Measured against the reference's device set — frontmatter contract naming inputs, output, types file and workspace; parallelism announced before the subagents; each subagent declared with role, work and result; results marked `(→ Type)`; domain types defined in a types file — the candidate carries one. Parallelism is announced ('two subagents spawned in parallel in a single message'), but the source already did that, so the candidate introduces no declarative device the source did not have. The frontmatter is the source's frontmatter unchanged, description included: no metadata block, no inputs, no output, no workspace, no types pointer. There is no types file at all, so field shapes are described inline. No result is declared for any subagent, so the workflow's data flow is implicit in prose. In their place the candidate substitutes typographic devices — bold labels, italic sub-labels, a nested bullet list under 'Verifiers' — which anchor 3 names as the failure, not the target. Anchor 3 assumes the frontmatter contract holds while other devices lapse; here the contract is the thing that is missing, and four of five devices are absent, so this lands below 3.",
+      "divergences": [
+        {
+          "responsibility": "declaring the skill's interface",
+          "candidate_form": "---\nname: verification-loop\ndescription: Execute a task in a worker subagent, independently verify instruction compliance and outcome quality in parallel, fix issues, repeat until clean or max 5 iterations.\n---",
+          "reference_form": "---\nname: verification-loop\ndescription: Orchestrates delegated execution, independent instruction and outcome verification, and evidence-based repair. Use when a task needs separate implementer and verifier roles or repeated verification after fixes.\nmetadata:\n  inputs: Task\n  output: VerificationResult\n  types: \"./scripts/contracts.py\"\n  workspace: \".verification-loop/$runtime.run_id/\"\n---",
+          "form_difference": "Candidate leaves the source frontmatter untouched — the description still narrates the procedure step by step rather than naming a capability and its trigger, and nothing declares an input, an official output, a types file or a workspace. Reference turns the frontmatter into the contract that the whole body then relies on."
+        },
+        {
+          "responsibility": "declaring what each subagent produces",
+          "candidate_form": "- *instructions* — decompose the task into discrete imperatives; confirm each one was actually executed.\n- *outcomes* — decide what success looks like, then judge whether the artifacts achieve it.",
+          "reference_form": "Subagent: Instructions Verifier (→ `VerifyInstructionsReport`)\n\nTurn every imperative into a checklist item and independently verify each ...\n\nSubagent: Outcomes Verifier (→ `VerifyOutcomesReport`)\n\nDefine success from user intent, read each readable artifact ...",
+          "form_difference": "Candidate encodes the two verifiers as italicised entries in a nested bullet list under a bold heading, with no declared result. Reference gives each its own named subagent declaration with an explicit `(→ Type)` result marker, making the data flowing out of each subagent a typed, checkable thing."
+        },
+        {
+          "responsibility": "defining the domain types",
+          "candidate_form": "Each finding carries a status, the evidence behind it, and a hint for fixing it. ... **Clean** = no instruction missing or partial, and outcomes pass.",
+          "reference_form": "types: \"./scripts/contracts.py\"  — with `DoneInstructionCheck` / `UnresolvedInstructionCheck`, `PassedInstructionsReport` / `FailedInstructionsReport`, `Passed` / `Stopped`, `VerificationResult` defined there",
+          "form_difference": "Candidate has no types artifact; the type distinctions (done vs partial/missing, pass vs fail, passed vs stopped-at-cap) are asserted in body prose. Reference makes them a union of model classes in a separate file, so the body can name a type instead of restating its contents — which is also what lets the reference's decision branches stay short."
+        }
+      ]
+    },
+    "coverage": {
+      "score": 2,
+      "reasoning": "The core responsibility set is right — delegate, verify on two independent axes in parallel, decide, fix, cap, report — and several source responsibilities the reference compressed away are correctly gone (the empty/missing `.log` silent-failure guardrail, the JSON schema authorship, the workspace file inventory, `task.md` / `status.md` bookkeeping). But the timid-sculpt failure is present in volume: the candidate keeps a string of source guardrails the reference deliberately dropped. Outcome-bearing retentions: the verifier-disagreement tie-break, per-phase user status reporting, the fixer's evidence-backed rebuttal duty, and the 'without the user's go-ahead' escape on the cap. Non-outcome-bearing retentions add to the count: the orchestrator-never-implements role statement, the worker's do-not-self-verify rule, and the verbatim-task rule. Against that, two things the reference carries are missing: the constraint that a fix hint be used only when evidence-supported and root-cause-addressing, and the scoping note that task effects are not confined to the workspace. By count this is past anchor 2's 'two or three'; it stays at 2 rather than 1 because the loop's terminal behaviour — what gets built, checked, fixed and reported — is the same as the reference's.",
+      "divergences": [
+        {
+          "responsibility": "resolving disagreement between the two verifiers",
+          "candidate_form": "When verifiers disagree, the failing one is right.",
+          "reference_form": "(absent — the reference's decision reads 'If every instruction is done and the outcome is passed, finish successfully', so a failing verifier already blocks completion)",
+          "form_difference": "Candidate retains the source guardrail as a standalone rule. Reference compressed it away by making the pass condition conjunctive, so the tie-break is a consequence of the decision rather than an extra responsibility."
+        },
+        {
+          "responsibility": "keeping the user informed during the run",
+          "candidate_form": "Tell the user where you are after each phase, and end with an honest result: passed on iteration N, or stopped at the cap with these issues outstanding.",
+          "reference_form": "Report the terminal result and workspace.",
+          "form_difference": "Candidate retains the source's per-phase progress reporting — a genuine behavioural difference, since it makes the orchestrator emit output at four points per iteration. Reference carries reporting only at the terminus."
+        },
+        {
+          "responsibility": "how the fixer treats a verifier's fix hint",
+          "candidate_form": "A finding the fixer believes is wrong must be rebutted with evidence, never silently dropped.",
+          "reference_form": "Use a fix hint only when supported by evidence and it addresses the root cause.",
+          "form_difference": "The two carry different responsibilities under the same heading. Candidate retains the source's rebuttal duty (a reporting obligation on rejected findings) and drops the reference's gate on accepting hints (a quality constraint on the fix itself), so the fixer is told when it may push back but not when a hint is trustworthy."
+        },
+        {
+          "responsibility": "scope of change permitted to implementer and fixer",
+          "candidate_form": "(absent)",
+          "reference_form": "The implementer and fixer may change the caller's project when the task requires it; the workspace does not confine task effects.",
+          "form_difference": "Candidate names the workspace as the place where reports are persisted but never resolves whether it bounds the work; reference states the interpretation limit explicitly so the workspace declaration cannot be read as a sandbox."
+        }
+      ]
+    }
+  },
+  "mean_score": 2.4,
+  "verdict": "diverged",
+  "weakest_dimension": "structures",
+  "what_to_fix_in_the_sculpting_skill": "The sculpting skill needs a rule that makes the declarative apparatus a required artifact, not a stylistic preference: every sculpt must emit a separate types file, name it in frontmatter metadata alongside inputs, the official output and a workspace, and declare each subagent's produced result with a `(→ Type)` marker pointing into that file. This candidate rewrote the prose competently but left the frontmatter byte-identical to the source and produced no types file, and that single omission cascades — with nowhere to put field shapes, the body falls back to describing status/evidence/fix-hint inline (altitude), and with no result type to carry pass-vs-fail-vs-stopped, the branch conditions scatter into a trailing constraints list (conditions). A second, smaller rule should follow: the decision's branch list must contain every condition that determines whether the loop continues, including the iteration cap, and caps are stated unconditionally — an escape such as 'unless the user approves' opens a branch the skill never declares.",
+  "expectations": [
+    {
+      "text": "Writing manner matches the reference form",
+      "passed": false,
+      "evidence": "score 3/5 — short declarative sentences and plain vocabulary are right, but the source's pipeline diagram block, a document title heading, a trailing '## Constraints' bullet checklist, and bold/italic role labels all survive; the reference uses no headings, no emphasis and no diagram."
+    },
+    {
+      "text": "Level of detail matches the reference altitude",
+      "passed": false,
+      "evidence": "score 3/5 — log files, report filenames and inline JSON schemas are correctly gone, but two places drill into mechanics: the on-disk directory layout including `iter-N/` is stated in the body, and the finding's fields (status, evidence, fix hint) are enumerated in prose where the reference delegates them to the types file."
+    },
+    {
+      "text": "Conditions and branches are declared as in the reference",
+      "passed": false,
+      "evidence": "score 2/5 — the written decision has only two branches (clean → stop, otherwise → fixer); the cap branch and its consequence sit in a separate constraints section far from the branches they govern, and 'without the user's go-ahead' opens an undeclared branch."
+    },
+    {
+      "text": "Structural declarations match the reference",
+      "passed": false,
+      "evidence": "score 2/5 — the source frontmatter is unchanged (no inputs, output, types or workspace), there is no types file, and no subagent declares a result; only the parallelism announcement survives, and the source already had that."
+    },
+    {
+      "text": "Responsibility coverage matches the reference",
+      "passed": false,
+      "evidence": "score 2/5 — four outcome-bearing responsibilities the reference compressed away are retained (verifier tie-break, per-phase status reporting, fixer rebuttal duty, user-approval escape on the cap), and two the reference carries are missing (evidence/root-cause gate on fix hints, the workspace-does-not-confine-effects scoping note)."
+    }
+  ],
+  "summary": {
+    "passed": 0,
+    "failed": 5,
+    "total": 5,
+    "pass_rate": 0.0
+  }
+}

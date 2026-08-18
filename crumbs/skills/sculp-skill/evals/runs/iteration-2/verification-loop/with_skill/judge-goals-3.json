@@ -1,0 +1,145 @@
+{
+  "dimensions": {
+    "essence": {
+      "score": 3,
+      "reasoning": "Almost every outcome-bearing responsibility from the source survives, and several survive in a stronger form than the reference: delegation to a worker, two independent reviewers running in parallel, independence from the worker's own report, the three-way instruction statuses and the outcome statuses, the union rule that decides cleanliness, the fixer's mandate to settle every finding without redoing passing work and to push back on a wrong finding with evidence, the fixer's report re-entering the same verification step (encoded by giving Worker and Fixer the same `WorkReport` type), the five-round cap with the user-permission escape, and the verbatim-task rule. What is lost is the entire run-artifact contract. The source devotes a section to it ('Create `.verification-loop/<UTC-timestamp>/` with `task.md` (verbatim task) and `status.md` (running log). Each iteration gets `iter-N/` ...'), makes it a guardrail ('Empty/missing `.log` = silent failure — surface to user'), and ends the run with it ('Workspace path for inspection'). The candidate has no workspace field in its frontmatter, no mention of a workspace in the body, and no workspace in `VerificationResult`. A run therefore leaves no inspectable trail and the user is never told where anything is — a different result from the source's. The reference shows this did not need a section to survive: it becomes one frontmatter line, `workspace: \".verification-loop/$runtime.run_id/\"`, plus 'Use a new workspace for each execution' and 'Report the terminal result and workspace.' Separately, the outcome reviewer's instruction to judge quality rather than mere existence is only implied ('judge whether what the work produced achieves it'), where the source is explicit ('judge quality not just existence'); the 'run it if runnable' half is rescued by the types file, whose `OutcomeCheck.evidence` reads 'What was inspected, run or read to reach this status.' The candidate's small addition at the cap — 'what another round would attempt' — is not in the source, but it is the information a user needs to grant or withhold permission, so it reads as part of a coherent resolution rather than an invention.",
+      "losses": [
+        {
+          "responsibility": "A durable per-run workspace: a timestamped directory holding the verbatim task, a running status log, and per-iteration worker/verifier/fixer artifacts",
+          "what_happened": "lost",
+          "quote": "absent",
+          "why_it_matters": "Nothing in the candidate causes any artifact to be written anywhere. The source's whole audit trail — the evidence a human would open when the loop stops at the cap — simply never comes into existence, and the run's only output is whatever the orchestrator holds in context."
+        },
+        {
+          "responsibility": "Reporting the workspace path in the final report ('3. Workspace path for inspection')",
+          "what_happened": "lost",
+          "quote": "Report the verification result.",
+          "why_it_matters": "Even if a workspace existed, the terminal report would not point at it, so the user cannot inspect the run. The reference keeps this in four words: 'Report the terminal result and workspace.'"
+        },
+        {
+          "responsibility": "Treating an empty or missing log as a silent subagent failure and surfacing it to the user",
+          "what_happened": "lost",
+          "quote": "absent",
+          "why_it_matters": "This is the source's only defence against a subagent that dies without reporting. Without it, a worker that produces nothing is indistinguishable from a worker that found nothing to do, and the reviewers would be verifying an empty run as though it were real. Note the reference drops this too — it is a loss against the source, not against the reference."
+        },
+        {
+          "responsibility": "The outcome reviewer judging quality rather than existence",
+          "what_happened": "weakened",
+          "quote": "Establish what success means for the person who asked, rather than what the task literally says, then judge whether what the work produced achieves it.",
+          "why_it_matters": "The half about intent-over-literal-wording is carried well; the half that stops a reviewer from ticking a criterion because a file exists is only implicit. The reference binds it directly: 'assess quality rather than existence.'"
+        }
+      ]
+    },
+    "minimalism": {
+      "score": 4,
+      "reasoning": "The body carries no progress narration, no field shapes, and no restated schema — every status name, evidence field and fix hint lives in the types file where it belongs, and the loop's re-entry after a fix is expressed by type reuse rather than by a sentence. That is genuinely well-delegated. Two things could still come out. The closing section is a heading that restates the single sentence under it, and that sentence restates a fact the frontmatter already fixes (`output: VerificationResult`) and that the decision bullets have already stated twice ('the result is produced'). And the round cap is stated once as a rule and then again, in full, as a branch. Neither is large, but both are removable with no change in behaviour.",
+      "passengers": [
+        {
+          "quote": "## Produce the verification result\n\nReport the verification result.",
+          "why_it_is_spare": "The heading and its sentence say the same thing, and the frontmatter's `output: VerificationResult` already makes producing that result the contract. The two decision bullets above have also already said it — 'the work is verified and the result is produced' and 'the result is produced with those findings unresolved'. Removing the section changes nothing."
+        },
+        {
+          "quote": "unless the person who asked for the task agrees to more",
+          "why_it_is_spare": "The third decision bullet already specifies exactly this — ask at the fifth check, 'Continue only on a yes' — with more precision than the clause. The clause is the same rule stated a second time, four lines earlier."
+        }
+      ]
+    },
+    "readability": {
+      "score": 4,
+      "reasoning": "Read cold, this is easy going. The register is deliberately plain — 'the person who asked', 'outstanding', 'rounds', 'settle every outstanding finding' — and it avoids the internal vocabulary the source leans on ('iter-N', 'overall == \"pass\"', 'fix_hint'), so nothing has to be decoded. Each subagent is announced in the same shape, name plus the report it returns, which makes the cast of four legible at a glance. Two things cost it a clean read. First, the section 'Fix and check again' opens with the cap and the three decision branches, and only then introduces the Fixer — so the reader meets the instruction 'fix it and check again' before knowing that a fixer subagent exists, and has to look forward to resolve it. Second, the worker step sits above the first heading with no heading of its own, so a reader scanning the headings sees checking, fixing and reporting but not doing; the asymmetry makes the overall shape of the loop something you assemble rather than see. The third bullet is the densest sentence on the page and needs a second pass, but it is precise and the effort is repaid.",
+      "friction": [
+        {
+          "quote": "- If something is outstanding and fewer than five checks have run, fix it and check again.",
+          "why_it_is_hard": "'Fix it' refers to a Fixer subagent that is only introduced two lines later, after all three branches. A newcomer reads a forward reference and has to backtrack once the Fixer heading appears to confirm that this bullet is what spawns it."
+        },
+        {
+          "quote": "Anything a review does not record as done or passing is outstanding.",
+          "why_it_is_hard": "The rule spans two different vocabularies — 'done' belongs to the instruction reviewer, 'passing' to the outcome reviewer — and the reader has to open the types file to learn which other statuses exist ('partial', 'missing', 'concern', 'fail') before the rule's reach is clear. It is the right rule and it is correctly stated by negation; it just cannot be fully understood from the body alone."
+        }
+      ]
+    }
+  },
+  "defensible_divergences": [
+    {
+      "topic": "Modelling pass and fail in the types file",
+      "candidate": "Flat models: `InstructionCheck` with `status: Literal[\"done\", \"partial\", \"missing\"]` and `OutcomeCheck` with `status: Literal[\"pass\", \"concern\", \"fail\"]`, plus one body sentence — 'Anything a review does not record as done or passing is outstanding' — that turns statuses into the loop decision.",
+      "reference": "Discriminated unions (`PassedInstructionsReport | FailedInstructionsReport`, `Passed | Stopped`) that make an empty issue list structurally impossible on a pass, plus helper methods `all_done()` / `overall_pass()`.",
+      "why_it_costs_nothing": "Both make the same decision at the same point. The reference makes the invariant unrepresentable in the type system; the candidate states it once in one sentence that also happens to absorb 'concern' — a status the reference's outcome model drops entirely. Different taste in where the invariant lives, same behaviour."
+    },
+    {
+      "topic": "Per-phase status reporting to the user",
+      "candidate": "Dropped; only the final verification result is reported.",
+      "reference": "Also dropped.",
+      "why_it_costs_nothing": "The source's 'Report status to the user after every phase' and its scripted lines ('Worker done. Modified N files. Verifying.') are progress narration. Nothing downstream branches on them, so removing them changes no outcome."
+    },
+    {
+      "topic": "The loop diagram",
+      "candidate": "No diagram; the sequence is carried by section order and the decision bullets.",
+      "reference": "No diagram; the sequence is carried by numbered steps 1–3.",
+      "why_it_costs_nothing": "The source's ASCII arrow sketch duplicates what the phases already say. Both sculpts convey the same control flow in prose."
+    },
+    {
+      "topic": "Typing the input",
+      "candidate": "`inputs: \"task: str\"` — no Task model.",
+      "reference": "`inputs: Task` with `class Task(Contract): description: str`.",
+      "why_it_costs_nothing": "A single-field wrapper around a string carries no constraint the bare string lacks. Nothing in either skill branches on the task's shape."
+    },
+    {
+      "topic": "Where the fix hint lives",
+      "candidate": "`fix_hint: str | None` on both check types, described as 'Where fixing should start, when not done' — no body rule about it.",
+      "reference": "A body rule: 'Use a fix hint only when supported by evidence and it addresses the root cause.'",
+      "why_it_costs_nothing": "The source says only 'use `fix_hint` as starting point'. The candidate encodes exactly that in the field's own description, so the fixer sees it at the point of use. The reference's extra caution is a defensible addition, not a requirement the candidate dropped."
+    }
+  ],
+  "source_contradictions": [
+    {
+      "contradiction": "The guardrail allows going past five iterations with the user's consent ('Max 5 iterations without user permission'), but Phase 3 hard-stops at the cap with no consent path ('Issues + iter == 5: stop, report remaining issues honestly').",
+      "candidate_resolution": "Both survive as one branch: at the fifth check the loop presents the open findings and what another round would attempt, asks whether to carry on, continues only on a yes, and otherwise produces the result with the findings recorded as unresolved. The `VerificationResult` type backs this with `verified: bool`, `rounds: int` and `unresolved: list[str]`, so an honest stop is representable.",
+      "holds_together": true
+    },
+    {
+      "contradiction": "Phase 3 defines clean as outcomes `overall == \"pass\"`, which leaves the 'concern' verdict unclassified, while Phase 4 explicitly sends 'concern' to the fixer.",
+      "candidate_resolution": "One rule replaces both: 'Anything a review does not record as done or passing is outstanding.' Concern is neither done nor passing, so it is outstanding and goes to the fixer — matching Phase 4 and closing Phase 3's gap.",
+      "holds_together": true
+    },
+    {
+      "contradiction": "The guardrail 'Trust failing verifier over passing one when they disagree' presumes the two verifiers can disagree, but they check different things (instructions vs outcomes), so there is nothing for them to disagree about.",
+      "candidate_resolution": "Reframed as a union rather than a tie-break: outstanding findings from either review block completion. This produces the behaviour the guardrail was reaching for without asserting a disagreement that cannot occur.",
+      "holds_together": true
+    }
+  ],
+  "better_than_reference": [
+    "The candidate keeps the source's consent path at the iteration cap. The reference collapses 'Max 5 iterations without user permission' into an unconditional 'If iteration 5 has been reached, stop and report every remaining issue', silently discarding the user's ability to authorise more. The candidate keeps both halves of the source's intent and spells out what the user is being asked to decide.",
+    "The candidate's `WorkReport` carries the whole of the source's required report: `done`, `changed_files` ('Absolute paths of files created or modified'), `not_done` ('Anything left undone, each with its reason') and `judgement_calls` ('Points where the task allowed more than one reading, and the reading chosen'). The reference's `WorkingReport` is `summary / artifacts / claims`, which loses the source's explicit 'anything skipped and why' and 'ambiguities resolved' — precisely the two fields a verifier needs to know what not to be surprised by.",
+    "The candidate states the verbatim-task rule once, up front and for all four subagents: 'Every subagent receives the task exactly as the person who asked for it wrote it.' The source repeats 'verbatim task' at each phase; the reference drops it and leaves independence resting only on 'without trusting the working report'.",
+    "The candidate's prose is plainer than the reference's for a reader who has never seen this system. 'The person who asked', 'outstanding', 'rounds' and 'leave work that already passed untouched' land on first read, where the reference's 'the terminal result', 'the implementer' and 'Pass only when there are no issues' ask slightly more of the reader.",
+    "The candidate's outcome model keeps a 'concern' status; the reference's `OutcomesVerdict` is pass-or-fail only, so the source's third verdict — the one Phase 4 explicitly routes to the fixer — has nowhere to be recorded."
+  ],
+  "mean_score": 3.67,
+  "verdict": "sound",
+  "weakest_dimension": "essence",
+  "what_to_fix_in_the_sculpting_skill": "Add a rule that run artifacts are relocated, never dropped: if the source names a place where the run writes durable output — a workspace directory, per-iteration files, a status or run log, or a path handed back to the user — that must reappear either as a frontmatter field (e.g. `workspace:`) or as a field on the output type, and the terminal report must name it. The candidate deleted the source's entire `.verification-loop/<UTC-timestamp>/` workspace, its per-iteration artifacts, the 'empty/missing log = silent failure' guardrail that depends on them, and 'Workspace path for inspection' from the final report — because the current skill treats all of that as mechanics eligible for removal, with no rule distinguishing 'mechanics the reader can infer' from 'the run's persistent output contract'. The reference shows the whole thing survives in one frontmatter line and two clauses, so this loss cost the candidate essence without buying it any minimalism.",
+  "expectations": [
+    {
+      "text": "The essence survived",
+      "passed": false,
+      "evidence": "score 3/5 — every role, status, decision rule and the fixer's mandate survive, several more faithfully than in the reference (the user-consent path at the cap, the verbatim-task rule, 'not done and why' and 'ambiguities resolved' on the work report). But the source's run-artifact contract is gone in full: no workspace directory, no per-iteration files, no status log, no 'empty/missing log = silent failure' guardrail, and no workspace path in the final report. A run leaves nothing behind to inspect."
+    },
+    {
+      "text": "Nothing spare remains",
+      "passed": true,
+      "evidence": "score 4/5 — no progress narration, no field shapes in the body, no schema restatement; statuses, evidence and fix hints all sit in the types file, and the fixer's report re-entering verification is expressed by type reuse rather than prose. Two removable items: the closing 'Produce the verification result' heading whose one sentence restates it and duplicates the frontmatter's `output:` contract, and the round cap stated once as a rule and again as a branch."
+    },
+    {
+      "text": "A person can read it easily",
+      "passed": true,
+      "evidence": "score 4/5 — plain register throughout, internal jargon replaced with ordinary words, and each subagent announced in the same name-plus-report shape. Friction: the decision bullets say 'fix it and check again' two lines before the Fixer is introduced, and the worker step sits above the first heading so the doing-the-work stage is invisible when scanning headings."
+    }
+  ],
+  "summary": {
+    "passed": 2,
+    "failed": 1,
+    "total": 3,
+    "pass_rate": 0.67
+  }
+}

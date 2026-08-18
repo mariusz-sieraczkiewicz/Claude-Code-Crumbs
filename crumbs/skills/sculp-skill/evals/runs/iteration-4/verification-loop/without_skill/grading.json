@@ -1,0 +1,26 @@
+{
+  "per_judge": {
+    "essence": [
+      5,
+      4,
+      5
+    ],
+    "minimalism": [
+      2,
+      2,
+      2
+    ],
+    "readability": [
+      4,
+      4,
+      4
+    ]
+  },
+  "median": {
+    "essence": 5,
+    "minimalism": 2,
+    "readability": 4
+  },
+  "mean": 3.67,
+  "verdict": "slaby"
+}

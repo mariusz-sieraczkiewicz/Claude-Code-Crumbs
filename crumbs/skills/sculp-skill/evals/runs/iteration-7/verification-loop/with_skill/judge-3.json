@@ -1,0 +1,98 @@
+{
+  "dimensions": {
+    "essence": {
+      "score": 5,
+      "reasoning": "Every outcome-bearing responsibility in the source survives in a form that still binds. Orchestrator-never-implements, verbatim task to every subagent, no self-verification, report after each phase, two verifiers in parallel that do not trust the worker's account, the clean condition, the 5-round cap, the fixer's four rules (address every finding, start from the suggested repair, leave passing work alone, rebut wrong findings with evidence), and the hand-off where the fixer's report replaces the worker's as the verifiers' input — all present. Two things the candidate does especially well. First, the source's guardrail 'Empty/missing .log = silent failure — surface to user' is a rule anchored to a run artifact; the candidate restates it at result level as 'If a subagent returns nothing, treat that as a failure and tell the person', which is exactly the transformation the rubric prescribes and which the reference simply drops. Second, the tie-break 'Trust failing verifier over passing one when they disagree' survives verbatim in intent as 'If the two checks disagree, the failing one prevails' — also absent from the reference. The per-check statuses, evidence requirement, repair hints, before/after fix records and the final consolidated change list are held by fields in the types file, which is proper delegation. Nothing was invented that the source did not ask for: the one addition, asking the person for permission to continue past round 5, is a resolution of a contradiction the source itself contains ('Max 5 iterations without user permission' vs 'iter == 5: stop').",
+      "losses": []
+    },
+    "minimalism": {
+      "score": 4,
+      "reasoning": "The body carries no field shapes, no filenames, no folder layout, no progress-narration templates — all of which the source spelled out at length. Structured shapes sit in the types file and the write location sits in the frontmatter workspace declaration, which is where they belong. One sentence is a genuine passenger, and it is one the calibration ruling names directly: run bookkeeping. The candidate abstracted the source's 'Each iteration gets iter-N/ containing...' into intent language rather than deleting it, and the abstraction kept it alive. One further sentence says the same thing twice within itself. Neither costs a run anything, so this is a two-sentence trim, not a class of passenger.",
+      "passengers": [
+        {
+          "quote": "Keep each round's records separately so the history stays inspectable.",
+          "why_it_is_spare": "This is the source's per-iteration `iter-N/` folder rule, paraphrased into intent language instead of dropped. The ruling is explicit that per-iteration folders and artifact inventories are execution detail, and that the workspace declared in the frontmatter — here `./.verification-loop/<timestamp-id>` — is the whole of what a sculpt keeps about where a run writes. No behaviour changes if this line goes; the reference has no equivalent."
+        },
+        {
+          "quote": "Neither may rely on the worker's own account; both establish what actually happened from the files themselves.",
+          "why_it_is_spare": "The clause after the semicolon restates the clause before it. 'May not rely on the worker's account' already tells a verifier to go to the source material; saying it a second time in the positive adds no constraint."
+        }
+      ]
+    },
+    "readability": {
+      "score": 4,
+      "reasoning": "Read cold, as someone who has never seen the source: the shape of the work is obvious on one pass. Plain words throughout, no jargon, no internal names, no abbreviations. The three headings — do the work, check the work, decide and repeat — match the order the work actually happens in, and each subagent gets its own short block naming what it must produce. The opening paragraph front-loads five standing rules before any phase begins, which is the right place for them. One passage cost me a second pass: the round-cap branch stacks three separate obligations into two sentences, and the trailing clause about the result still being produced arrives without a signpost. A smaller wrinkle in the same section: the bullet 'If issues remain, have them fixed and checked again' forward-references a Fixer subagent that is only introduced two lines further down, so a reader briefly wonders who is doing the fixing. Neither is enough to make a newcomer hesitate about what to do.",
+      "friction": [
+        {
+          "quote": "If issues remain after the last round, present the unresolved issues and what a further round would attempt, and ask the person whether to continue or to stop there. Stop unless the person allows more rounds; the result is still produced.",
+          "why_it_is_hard": "Four requirements — list the unresolved issues, describe what another round would try, ask the person, default to stopping — packed into two clause-stacked sentences, with a fifth ('the result is still produced') hung off a semicolon. This is the one place where the reader has to slow down and count the obligations rather than absorb them."
+        }
+      ]
+    }
+  },
+  "defensible_divergences": [
+    {
+      "topic": "How the 5-round cap ends",
+      "candidate": "Presents unresolved issues, asks the person whether to continue, and stops unless permission is given — 'Stop unless the person allows more rounds; the result is still produced.'",
+      "reference": "Hard stop: 'If iteration 5 has been reached, stop and report every remaining issue.'",
+      "why_it_costs_nothing": "The source contains both readings — the guardrail says 'Max 5 iterations without user permission' while the decide phase says stop flat. Either resolution is coherent. The candidate's costs nothing and is closer to the guardrail's own wording; the reference's is simpler. This is taste, not a defect."
+    },
+    {
+      "topic": "Where the loop is drawn",
+      "candidate": "Named prose sections (do the work / check the work / decide and repeat) with the Fixer declared inside the decide section.",
+      "reference": "Numbered steps 1-3 with the fixer folded into the third decide bullet.",
+      "why_it_costs_nothing": "Both make the cycle legible. The candidate's headings help a reader find a stage; the reference's numbering makes the cycle count explicit. Neither loses the loop."
+    },
+    {
+      "topic": "Shape of the verification verdicts in the types file",
+      "candidate": "Flat models with `Literal` status sets and an optional `repair_hint` per check.",
+      "reference": "Discriminated unions (passed/failed report variants) that make an empty issue list unrepresentable when the status is pass.",
+      "why_it_costs_nothing": "The reference's union encodes the pass/issues invariant in the type system, which is stronger. But the candidate's status sets still carry every distinction the body relies on, and the body never depends on the invariant being type-enforced. A difference in how much the types file is asked to prove, not a loss."
+    },
+    {
+      "topic": "Conventions delegated to a separate file",
+      "candidate": "Opens with a pointer to a fixed conventions file, so serialization, file-based subagent communication and the type-arrow notation never appear in the body.",
+      "reference": "Carries the same delegation implicitly through frontmatter metadata keys.",
+      "why_it_costs_nothing": "Both keep mechanics out of the body. Not scored as the candidate's work either way."
+    }
+  ],
+  "source_contradictions": [
+    {
+      "contradiction": "The guardrails cap iterations at 5 'without user permission' and say thrashing should escalate rather than grind, but the decide phase says that at iteration 5 the run simply stops and reports remaining issues — no escalation, no permission asked.",
+      "candidate_resolution": "Stops by default at round 5, but first presents the unresolved issues and asks the person whether to continue; more rounds only happen with permission, and the result is emitted either way.",
+      "holds_together": true
+    },
+    {
+      "contradiction": "The outcome verifier may return 'concern', and the fixer is told to address 'concern' findings, but the clean test is written only as outcomes overall == 'pass' — the source never states outright that a concern blocks completion.",
+      "candidate_resolution": "Clean requires the outcome to be 'judged successful', which against the pass/fail/concern status set in the types file means pass only; and the fixer must repair 'every issue the checks raised', which sweeps up concerns.",
+      "holds_together": true
+    }
+  ],
+  "better_than_reference": [
+    "The source's silent-failure guardrail is anchored to an artifact ('Empty/missing .log = silent failure'). The candidate performs exactly the translation the rubric asks for — 'If a subagent returns nothing, treat that as a failure and tell the person' — keeping the guard while dropping the log. The reference drops the guard along with the artifact, so a reference-driven run has no rule for a subagent that comes back empty.",
+    "The candidate keeps the verifier tie-break, 'If the two checks disagree, the failing one prevails.' The reference has no equivalent, so when one verifier passes and the other fails, a reference-driven run has to invent a policy.",
+    "The candidate's cap behaviour honours the source's 'without user permission' qualifier, which the reference silently converts into an unconditional stop."
+  ],
+  "mean_score": 4.33,
+  "verdict": "sound",
+  "weakest_dimension": "minimalism",
+  "what_to_fix_in_the_sculpting_skill": "Add a rule that the frontmatter workspace declaration is the ONLY permitted statement about where or how a run stores anything — and that this applies to paraphrases as well as to literal filenames, so a source line like 'each iteration gets iter-N/ containing ...' must be deleted outright rather than abstracted into intent language such as 'keep each round's records separately'; only a guard whose failure a person would act on may be re-expressed, and then in terms of the result, never the artifact.",
+  "expectations": [
+    {
+      "text": "The essence survived",
+      "passed": true,
+      "evidence": "score 5/5 — every outcome-bearing responsibility binds, including two the reference lost: the empty-return failure guard and the failing-verifier tie-break."
+    },
+    {
+      "text": "Nothing spare remains",
+      "passed": true,
+      "evidence": "score 4/5 — two sentences could go: one paraphrased run-bookkeeping rule about keeping each round's records separately, and a self-restating clause in the verifier paragraph."
+    },
+    {
+      "text": "A person can read it easily",
+      "passed": true,
+      "evidence": "score 4/5 — plain, well-ordered and jargon-free throughout; only the round-cap branch stacks enough obligations into one passage to need a second pass."
+    }
+  ],
+  "summary": {"passed": 3, "failed": 0, "total": 3, "pass_rate": 1.0}
+}

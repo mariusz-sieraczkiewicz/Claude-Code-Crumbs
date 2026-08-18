@@ -1,0 +1,121 @@
+{
+  "dimensions": {
+    "essence": {
+      "score": 4,
+      "reasoning": "Every path-determining responsibility from the source is present: orchestrator-never-implements, per-phase reporting to the person, worker must not self-verify, two verifiers in parallel, the conjunctive clean gate (which is how 'trust the failing verifier over the passing one' actually binds), the 5-iteration cap with the user-permission escape, fixer touches only what failed, and re-verification after a fix. Three things the reference dropped are kept here and kept well: the thrashing escalation, the silent-failure guard, and the 'without user permission' qualifier on the cap. The source's silent-failure guard was restated in terms of the result rather than the artifact — 'A subagent that returns no report has failed silently' — which is exactly the transformation the rubric asks for. Report-shape detail (files as absolute paths, omissions with reasons, ambiguities and the interpretation chosen, fix hints, disputed findings with evidence) is properly delegated to the types file. Two items land lightly rather than absent, which is why this is 4 and not 5.",
+      "losses": [
+        {
+          "responsibility": "The outcome verifier must exercise artifacts, not just look at them — 'run if runnable, read if readable'.",
+          "what_happened": "weakened",
+          "quote": "Establish what success means for this task, then judge whether the produced work achieves it. Existence is not achievement.",
+          "why_it_matters": "'Existence is not achievement' rules out counting a file as a pass, but it does not tell a verifier to execute a runnable artifact. The types file does not carry it either — `OutcomeCheck.evidence` is described only as 'What was inspected to reach this state', and inspecting is what reading is. A verifier could read a script carefully, never run it, and still fill the contract honestly. The reference binds this explicitly: 'read each readable artifact, run each runnable artifact, and assess quality rather than existence.'"
+        },
+        {
+          "responsibility": "Give the person the workspace path so they can inspect the run.",
+          "what_happened": "lost",
+          "quote": "absent",
+          "why_it_matters": "The source's final report ends with 'Workspace path for inspection'; the reference ends with 'Report the terminal result and workspace.' In the candidate the workspace appears only as a frontmatter declaration, and `LoopResult` carries iterations, changes and unresolved — no path. The person is left without the pointer to the evidence. This is light: the path is derivable and the frontmatter declares it, so it is noted rather than treated as a full responsibility gone."
+        }
+      ]
+    },
+    "minimalism": {
+      "score": 4,
+      "reasoning": "No recognisable class of passenger survives. There is no progress narration, no reassurance, no rule stated twice, and no field shape spelled out in the body — the JSON schemas, status vocabularies and per-field descriptions that bulk out the source are all in the types file, and the per-iteration folders, worker.log, verifier JSON filenames and status.md running log are gone entirely, which is what the ruling on run bookkeeping asks for. What remains that could still come out is two small placements rather than two ideas: a concrete output filename in the body, and the input/output contract stated in the body instead of the frontmatter. That is 'one or two sentences could go'.",
+      "passengers": [
+        {
+          "quote": "Output (→ `LoopResult`(`result.yaml`))",
+          "why_it_is_spare": "`result.yaml` is a report filename. The ruling on this source is explicit that report filenames are execution detail and that a workspace declared in the frontmatter is the whole of what a sculpt keeps about where a run writes. The type name alone carries the contract; the filename adds nothing a run would behave differently without, and it is the one place the candidate reintroduces the artifact vocabulary it otherwise removed."
+        },
+        {
+          "quote": "Input (→ `Task`)",
+          "why_it_is_spare": "The frontmatter is where the input and output contract belongs, and this candidate's frontmatter carries only `types` and `workspace`. The reference puts the same two facts in the frontmatter as `inputs: Task` / `output: VerificationResult`, leaving the body to describe only flow. Two body lines are doing frontmatter's job; moving them costs nothing and shortens the readable text."
+        }
+      ]
+    },
+    "readability": {
+      "score": 4,
+      "reasoning": "Read as a newcomer, this is easy going. Plain words, one idea per sentence, no jargon left unexplained, and the order matches how the work happens: input, the standing rules, worker, verification, decide, fix, output. The repeated 'Subagent: <role> (→ `Type`)' shape makes the four roles findable at a glance, and the two headings mark the two places a reader needs to jump to. Sentences like 'Existence is not achievement' and 'change nothing that already passes' land on the first read. One bullet in the decision list is genuinely ambiguous on first pass, and the fixer is invoked one line before it is introduced, which is why this is 4 rather than 5.",
+      "friction": [
+        {
+          "quote": "If an iteration resolves nothing, record the unresolved issues in the result and stop.",
+          "why_it_is_hard": "A newcomer reads the decision bullets in order and hits this second, before the bullet that says to keep going. On the first iteration nothing has been 'resolved' yet — there was nothing to resolve, only work to do — so it is not obvious whether a first pass that turns up problems has 'resolved nothing' and should therefore stop immediately. The intended meaning (a fix round that moves no finding) has to be reconstructed. Placing it after the continue-if-under-5 bullet, or naming the trigger as 'a fix round', would remove the doubt. The reference has no equivalent rule at all, so it does not face the problem — but it also loses the source's escalate-don't-grind guardrail, which the candidate keeps."
+        },
+        {
+          "quote": "If anything is unresolved and fewer than 5 iterations are complete, run the fixer and verify again.",
+          "why_it_is_hard": "The fixer is named and invoked here, but the block that says what a fixer does appears four lines later. A reader meeting the word for the first time has to hold it and read on. Minor, and resolved within a few seconds of reading."
+        }
+      ]
+    }
+  },
+  "defensible_divergences": [
+    {
+      "topic": "Shape of the terminal result",
+      "candidate": "One flat `LoopResult` with `iterations`, `changes` and `unresolved` (defaulting to empty).",
+      "reference": "A discriminated union `Passed | Stopped` with a `reason` literal, both carrying the task, workspace and all three reports.",
+      "why_it_costs_nothing": "An empty `unresolved` list means the run passed and a non-empty one means it did not, so the same fact is recoverable, and the body already states which conditions produce each. The flat model is smaller and a reader does not have to hold two variants in mind. The union is more precise about *why* a run stopped, but the candidate's body distinguishes the three stopping conditions in prose, so no behaviour depends on encoding it in the type."
+    },
+    {
+      "topic": "How the workspace directory is named",
+      "candidate": "`./.verification-loop/<UTC-timestamp>` — the source's own placeholder.",
+      "reference": "`.verification-loop/$runtime.run_id/`.",
+      "why_it_costs_nothing": "Both give a fresh directory per run, which is the only property the flow depends on. The candidate's form is self-explaining to a newcomer who has never seen the runtime variable."
+    },
+    {
+      "topic": "Verifier statuses",
+      "candidate": "Kept the source's three-way vocabularies — `done | partial | missing` for instructions and `pass | concern | fail` for outcomes — as plain `Literal` fields with a nullable `fix_hint`.",
+      "reference": "Collapsed each into passed/failed report variants where a passing report structurally cannot carry issues.",
+      "why_it_costs_nothing": "The clean gate in the candidate's body is stated in terms the vocabulary supports — 'every instruction was carried out and every outcome criterion passes' — so the same decision comes out. The reference makes the invariant unbreakable in the type; the candidate makes it a one-line rule in the body. Both bind, and the candidate's is the shorter thing to read."
+    },
+    {
+      "topic": "Standing rules placement",
+      "candidate": "The orchestrate-don't-implement rule, the per-phase reporting duty and the silent-failure guard sit as three loose lines before the first subagent.",
+      "reference": "A short preamble about workspace scope, then straight into the numbered flow.",
+      "why_it_costs_nothing": "The three lines are rules that apply across every phase, and putting them ahead of the phases is the natural reading order for rules with that scope. No heading is spent on them, so they cost three lines and no structure."
+    }
+  ],
+  "source_contradictions": [
+    {
+      "contradiction": "The source's guardrail says 'Max 5 iterations without user permission', which implies the cap can be lifted by asking. Its Phase 3 says only 'Issues + iter == 5: stop, report remaining issues honestly' — no permission, no continuation.",
+      "candidate_resolution": "Keeps both halves and orders them: 'If anything is unresolved after 5 iterations, record every unresolved issue in the result and stop. Continue only if the person asks for it.' Stopping and reporting is the default; the person, not the orchestrator, reopens the loop.",
+      "holds_together": true
+    },
+    {
+      "contradiction": "The source forbids the fixer self-verifying ('Never let worker/fixer self-verify') but then instructs the fixer to judge the verifiers: 'If a verifier finding is wrong, say so with evidence.' Disputing a finding is a verification judgement.",
+      "candidate_resolution": "The body gives the fixer only the do-the-work instruction — 'Resolve every finding both verifications left open and change nothing that already passes' — and pushes the dispute into a `disputed` field on the fix report, described as 'Findings judged wrong, each with the evidence against it.' A dispute becomes something the fixer records for the loop to weigh, not a verdict it acts on. The loop's re-verification still runs regardless.",
+      "holds_together": true
+    },
+    {
+      "contradiction": "The source's guardrails demand escalation on thrashing ('Thrashing = escalate, don't grind') but its Phase 3 decision table has no thrash branch — only clean, under-cap, and at-cap.",
+      "candidate_resolution": "Adds the missing branch to the decision list: 'If an iteration resolves nothing, record the unresolved issues in the result and stop.' The guardrail becomes a real exit rather than an unenforced aspiration.",
+      "holds_together": true
+    }
+  ],
+  "better_than_reference": [
+    "The silent-failure guard survives in exactly the form the ruling on run bookkeeping calls for. The source tied it to an artifact — 'Empty/missing `.log` = silent failure' — and the candidate restates it as a property of the result: 'A subagent that returns no report has failed silently — do not treat its phase as complete.' The log is gone, the guard is not. The reference dropped both, so a reference-driven run has no protection against a subagent that returns nothing.",
+    "The thrashing guardrail survives as an actual decision branch. The reference has no equivalent, so a reference-driven run grinds to the 5-iteration cap even when successive fix rounds move nothing.",
+    "The 'without user permission' qualifier on the cap survives — 'Continue only if the person asks for it.' The reference's 'If iteration 5 has been reached, stop and report every remaining issue' makes the cap absolute, which is a quieter reading of the source than the source supports.",
+    "The `description` is written for someone deciding whether to reach for this skill — 'Use when a task must be proven complete and correct, not only attempted' names the situation rather than the mechanism. The reference's description leads with machinery ('Orchestrates delegated execution, independent instruction and outcome verification, and evidence-based repair')."
+  ],
+  "mean_score": 4.0,
+  "verdict": "sound",
+  "weakest_dimension": "minimalism",
+  "what_to_fix_in_the_sculpting_skill": "The skill has no rule saying the input and output contracts are declared in the frontmatter (`inputs:` / `output:`) and never in the body, and that a type reference may never be annotated with a filename — the workspace declaration is the only place a path appears. That single rule removes both surviving passengers here: it moves `Input (→ Task)` and `Output (→ LoopResult)` into the frontmatter contract where the rubric places them, and it kills `result.yaml`, the one spot where this otherwise-clean sculpt reintroduces the run-bookkeeping vocabulary it had correctly stripped everywhere else.",
+  "expectations": [
+    {
+      "text": "The essence survived",
+      "passed": true,
+      "evidence": "score 4/5 — every path-determining responsibility is present, including three the reference dropped (thrash escalation, silent-failure guard, user permission beyond the cap). Two land lightly: the outcome verifier is told to judge achievement but never told to run a runnable artifact, and the workspace path is no longer reported back to the person."
+    },
+    {
+      "text": "Nothing spare remains",
+      "passed": true,
+      "evidence": "score 4/5 — no class of passenger survives; all run bookkeeping (per-iteration folders, logs, JSON filenames, status.md) is gone and all field shapes are delegated to the types file. Two placements could still come out: the `result.yaml` filename in the output line, and the Input/Output lines that belong in the frontmatter contract."
+    },
+    {
+      "text": "A person can read it easily",
+      "passed": true,
+      "evidence": "score 4/5 — plain words, one idea per sentence, order matches the work, roles findable at a glance. One decision bullet ('If an iteration resolves nothing') is ambiguous on a first read about whether it can fire on iteration one, and the fixer is invoked a few lines before it is introduced."
+    }
+  ],
+  "summary": {"passed": 3, "failed": 0, "total": 3, "pass_rate": 1.0}
+}

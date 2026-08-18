@@ -1,0 +1,132 @@
+{
+  "dimensions": {
+    "essence": {
+      "score": 5,
+      "reasoning": "The candidate is the unsculpted source, so nothing could have been lost or invented. Every outcome-bearing responsibility is present and in binding form: orchestrator never implements; one worker executes and is forbidden to self-verify; two verifiers run in parallel and must confirm independently rather than trust the worker report; the instructions verifier decomposes the task into imperatives with done/missing/partial; the outcomes verifier judges intent and quality, not existence; the clean test is 'no missing/partial AND outcomes overall == pass'; the loop is capped at 5; the fixer addresses every finding, only fixes, and must push back with evidence rather than silently ignore; after a fix the run returns to verification with the fixer report standing in for the worker report; and a terminal report names the result, the changes and the workspace. Two tie-break rules that shape behaviour are also carried explicitly — 'Trust failing verifier over passing one when they disagree' and the silent-failure check on empty logs. Scored 5 by construction; this dimension cannot discriminate on this anchor.",
+      "losses": []
+    },
+    "minimalism": {
+      "score": 1,
+      "reasoning": "Nothing was removed — this is the source itself, and it carries every class of passenger the rubric names. Artifact schemas are spelled out field by field in the body where a types file would hold them. The workspace section is a file inventory that a frontmatter workspace contract would carry. Scripted progress narration appears three times ('Report status to the user after every phase', plus two literal sentences the orchestrator is told to say). The Guardrails block states rules that the phases then state again, and the ASCII loop diagram restates Phases 1-4 in symbols. Roughly half the document could come out with no change in behaviour.",
+      "passengers": [
+        {
+          "quote": "3. Write `verifier-instructions.json`: `{\"instructions\": [{\"id\", \"instruction\", \"status\": \"done|missing|partial\", \"evidence\", \"fix_hint\"}], \"summary\": {\"total\", \"done\", \"missing\", \"partial\"}}`",
+          "why_it_is_spare": "A literal field list and status vocabulary in the body. This is exactly what a types file holds — the reference carries the identical information in `InstructionCheck` / `VerifyInstructionsReport` in `scripts/contracts.py` and the body says only `(→ VerifyInstructionsReport)`. The same applies to the outcomes JSON on the following line."
+        },
+        {
+          "quote": "Each iteration gets `iter-N/` containing: `worker.log`, `worker-report.md`, `verifier-instructions.{log,json}`, `verifier-outcomes.{log,json}`, `fixer.{log,report.md}` (if needed).",
+          "why_it_is_spare": "A file manifest the run does not need stated: each phase already says what it produces, and where output goes belongs to the frontmatter workspace contract (the reference declares `workspace: \".verification-loop/$runtime.run_id/\"` and says nothing further)."
+        },
+        {
+          "quote": "Report status to the user after every phase.",
+          "why_it_is_spare": "Progress narration, and stated three times over: again as 'Update `status.md` after every phase', then instantiated as two scripted lines — 'Worker done. Modified N files. Verifying.' and 'Instructions: X/Y done. Outcomes: <overall>.' A competent orchestrator narrates without being told the sentence."
+        },
+        {
+          "quote": "- Never skip a verifier run. Never let worker/fixer self-verify.\n- Max 5 iterations without user permission.",
+          "why_it_is_spare": "Both rules are enforced where they act: Phase 1 already ends with 'Do NOT self-verify', and Phase 3 already branches on `iter == 5`. The Guardrails block is a second copy of rules the structure holds, and the duplication is where the two versions of the 5-iteration rule drift apart (see contradictions)."
+        },
+        {
+          "quote": "```\nworker → verifier-instructions + verifier-outcomes (parallel)\n  → clean? done : fixer → re-verify (back to verifiers)\n```",
+          "why_it_is_spare": "A symbolic restatement of Phases 1-4, which follow it immediately and say the same thing in words. It earns a little as a scanning aid but changes no behaviour."
+        },
+        {
+          "quote": "2. Append running log to `worker.log` — one line per action, written regularly",
+          "why_it_is_spare": "Logging mechanics. Nothing downstream reads `worker.log` — Phase 2 consumes `worker-report.md` — so its granularity cannot change a run. It exists only to feed the 'empty `.log` = silent failure' guardrail, which is itself a mechanism the skill invented for itself."
+        },
+        {
+          "quote": "1. One-line result: passed on iter-N / stopped at cap with K remaining issues\n2. What changed — bulleted, from iteration reports\n3. Workspace path for inspection",
+          "why_it_is_spare": "The shape of the final report is the output contract. The reference reduces the whole section to 'Report the terminal result and workspace' and lets `VerificationResult` (`Passed | Stopped`, with `iteration`, `workspace`, `remaining_issues`) carry the fields."
+        },
+        {
+          "quote": "Delegate work to subagents, verify independently, fix, repeat.",
+          "why_it_is_spare": "A restatement of the frontmatter description one line above it."
+        }
+      ]
+    },
+    "readability": {
+      "score": 3,
+      "reasoning": "Read cold, the shape lands fast: the phase headings and the loop diagram let a newcomer see the control flow in seconds, and the prose is plain and short-sentenced. What gets in the way is recurring rather than one-off. Rules arrive twice — once abstractly in Guardrails, once operationally in a phase — so the reader has to hold both copies and reconcile them, and in the 5-iteration case the two copies disagree. The inline JSON schemas are the densest lines on the page and have to be parsed character by character to recover the field names. And the file-shorthand `verifier-instructions.{log,json}` introduces a brace-expansion notation without saying so, for a `.log` file no phase ever tells anyone to write — yet a guardrail fires on its absence. A newcomer can act on this, but not on a single pass.",
+      "friction": [
+        {
+          "quote": "`{\"instructions\": [{\"id\", \"instruction\", \"status\": \"done|missing|partial\", \"evidence\", \"fix_hint\"}], \"summary\": {\"total\", \"done\", \"missing\", \"partial\"}}`",
+          "why_it_is_hard": "It is not valid JSON — the objects are written as sets of bare key names — so a reader has to work out that this is a field sketch rather than a literal example, then mentally unpack a nested structure from one unbroken line. The outcomes schema on the next line repeats the exercise."
+        },
+        {
+          "quote": "`verifier-instructions.{log,json}`, `verifier-outcomes.{log,json}`, `fixer.{log,report.md}` (if needed)",
+          "why_it_is_hard": "Shell brace-expansion used as prose notation, never introduced. Worse, it promises `.log` files for both verifiers that Phase 2 never asks anyone to produce, while the guardrail 'Empty/missing `.log` = silent failure — surface to user' will fire on exactly those files. A newcomer following the text literally would flag every clean run as a silent failure."
+        },
+        {
+          "quote": "Spawn 1 subagent with: verbatim task, prior worker report, both verifier JSONs, new iteration workspace `iter-(N+1)/`. ... After fixer completes, return to Phase 2 with fixer-report as the \"worker report\" input.",
+          "why_it_is_hard": "The iteration counter moves inside Phase 4, so by the time Phase 3's `iter < 5` test is evaluated again it is unclear whether the fix or the verification of the fix consumed the iteration. A reader has to decide for themselves whether five fixer runs or five verification rounds is the cap."
+        },
+        {
+          "quote": "Clean = no `missing`/`partial` instructions AND outcomes `overall == \"pass\"`.",
+          "why_it_is_hard": "`concern` is a legal outcome status but appears in no branch of this test — the reader has to infer that `concern` is not-clean from the fact that `overall` must equal `pass`, then hold that inference until Phase 4 confirms it by listing `concern` among the things a fixer must address."
+        }
+      ]
+    }
+  },
+  "defensible_divergences": [
+    {
+      "topic": "Structure: numbered phase headings vs a flat numbered list",
+      "candidate": "Four `## Phase N — ...` sections plus a Guardrails, Workspace and Final Report section.",
+      "reference": "A single numbered list of three steps with two inline subagent blocks.",
+      "why_it_costs_nothing": "The rubric explicitly does not penalise headings inherited from the source. These headings name real stages a reader will want to jump back to, and they help rather than clutter. The candidate's minimalism problem is what is inside the sections, not that they exist."
+    },
+    {
+      "topic": "Naming the subagent type",
+      "candidate": "Spawn 1 `general-purpose` subagent.",
+      "reference": "Spawn a subagent to complete the user's task.",
+      "why_it_costs_nothing": "Pinning the agent type is a harness detail rather than a passenger with behavioural weight — it removes a small choice from the orchestrator and costs a reader nothing. Not a deduction either way."
+    },
+    {
+      "topic": "Where the fixer's evidence rule points",
+      "candidate": "use `fix_hint` as a starting point ... If a verifier finding is wrong, say so with evidence — don't silently ignore",
+      "reference": "Use a fix hint only when supported by evidence and it addresses the root cause.",
+      "why_it_costs_nothing": "Two coherent framings of the same concern — the reference disciplines the acceptance of hints, the candidate disciplines the rejection of findings. Both keep the fixer from acting on an unverified hint."
+    }
+  ],
+  "source_contradictions": [
+    {
+      "contradiction": "The iteration cap is stated twice and the two versions disagree. Guardrails says 'Max 5 iterations without user permission' — implying the loop may continue past 5 if the user consents. Phase 3 says 'Issues + iter == 5: stop, report remaining issues honestly' — an unconditional stop with no consent branch.",
+      "candidate_resolution": "None. Both statements stand, in different sections, and neither refers to the other. An implementer must guess whether to offer the user a sixth iteration.",
+      "holds_together": false
+    },
+    {
+      "contradiction": "The Workspace section lists `verifier-instructions.{log,json}` and `verifier-outcomes.{log,json}`, and the guardrail 'Empty/missing `.log` = silent failure — surface to user' treats a missing `.log` as a defect. But Phase 2 instructs both verifiers to write only the `.json`; no step tells them to keep a log at all.",
+      "candidate_resolution": "None. The guardrail will fire on files the phases never ask anyone to create.",
+      "holds_together": false
+    },
+    {
+      "contradiction": "The outcomes verifier may report `concern`, and the fixer is told to address `concern` findings, but the Phase 3 clean test only names `missing`/`partial` and `overall == \"pass\"`.",
+      "candidate_resolution": "Implicitly coherent — `overall == \"pass\"` excludes `concern` — but the reader has to derive it rather than read it.",
+      "holds_together": true
+    }
+  ],
+  "better_than_reference": [
+    "The candidate gives the fixer an explicit route to reject a verifier finding: 'If a verifier finding is wrong, say so with evidence — don't silently ignore'. The reference constrains how a fix hint may be used but never says what happens when a finding is simply wrong, which leaves the fixer with only two bad options — comply with a false finding or drop it quietly. This is a real gap in the reference.",
+    "The candidate states a tie-break for disagreeing verifiers — 'Trust failing verifier over passing one when they disagree'. The reference's boolean decision rule covers the mechanical case (any failure means fix), but says nothing for the case where the two verifiers narrate the same artifact incompatibly. Minor, but the reference is silent where the candidate is decided."
+  ],
+  "mean_score": 3.0,
+  "verdict": "weak",
+  "weakest_dimension": "minimalism",
+  "what_to_fix_in_the_sculpting_skill": "The skill needs a rule that a literal artifact shape in the body — a JSON field list, a status vocabulary, or a file manifest — must be moved into the types file and referred to only by its `(→ Type)` arrow, and that where output lands is the frontmatter workspace contract's job, never the body's. In this source those two things are the bulk of what could come out (the two inline verifier schemas plus the Workspace file inventory), and a sculpt that trims prose while keeping them will read shorter without having delegated anything. A second, smaller rule worth adding: a standalone guardrail list must be absorbed into the branch that enforces it, never kept alongside it — the duplicated 5-iteration rule here is what let the two copies drift into a contradiction.",
+  "expectations": [
+    {
+      "text": "The essence survived",
+      "passed": true,
+      "evidence": "score 5/5 — the candidate is the unsculpted source, so every outcome-bearing responsibility is present by construction and nothing is invented. This dimension cannot discriminate on this anchor."
+    },
+    {
+      "text": "Nothing spare remains",
+      "passed": false,
+      "evidence": "score 1/5 — nothing was removed at all. Inline JSON schemas, a workspace file manifest, scripted progress narration stated three times, a Guardrails block duplicating the phases, and an ASCII diagram restating Phases 1-4 all survive."
+    },
+    {
+      "text": "A person can read it easily",
+      "passed": false,
+      "evidence": "score 3/5 — followable, but recurring friction: rules stated twice in two places (and disagreeing on the 5-iteration cap), two dense pseudo-JSON schema lines, and unexplained brace-expansion shorthand naming `.log` files no phase creates but a guardrail checks for."
+    }
+  ],
+  "summary": {"passed": 1, "failed": 2, "total": 3, "pass_rate": 0.33}
+}

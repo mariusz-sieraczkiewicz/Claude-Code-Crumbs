@@ -1,0 +1,27 @@
+{
+  "per_judge": {
+    "essence": [
+      5,
+      5,
+      5
+    ],
+    "minimalism": [
+      4,
+      4,
+      4
+    ],
+    "readability": [
+      4,
+      4,
+      4
+    ]
+  },
+  "median": {
+    "essence": 5,
+    "minimalism": 4,
+    "readability": 4
+  },
+  "mean": 4.33,
+  "verdict": "sound",
+  "spread": "none — all three judges agreed on all three dimensions"
+}

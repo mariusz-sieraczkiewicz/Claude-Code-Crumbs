@@ -1,0 +1,114 @@
+{
+  "dimensions": {
+    "essence": {
+      "score": 5,
+      "reasoning": "Every outcome-bearing responsibility in the source survives in a binding form. Orchestrator-never-implements and report-after-every-phase are kept as flat imperatives ('You orchestrate and never carry out the task yourself. Tell the person the outcome of each phase.'). The two verifiers run in parallel and are structurally unskippable; worker self-verification is forbidden ('Do not check your own work.'). The source's disagreement rule ('trust failing verifier over passing one') is carried by the conjunctive clean test — 'If every instruction was carried out and every outcome criterion passes' — so a single failure blocks completion without needing a separate sentence. The 5-iteration cap and the user-permission escape are both present. The independence requirement lands sharply: 'by examining the produced work rather than the report about it'. The quality-not-existence requirement lands sharply too: 'Existence is not achievement.' Two source responsibilities the reference dropped are preserved here: the silent-failure guard, correctly restated away from its artifact ('A subagent that returns no report has failed silently'), and the anti-thrashing guardrail, absorbed into a decision branch rather than left as a slogan. Nothing is invented: the thrashing branch and the yaml result are derivations from source text, not new behaviour. The one thing stated more lightly than the source is how the outcome verifier inspects — the source's 'run if runnable, read if readable' becomes 'judge whether the produced work achieves it'. Under the rubric's own framing (essence is intent and flow, not technique) and given this exact finding was retired in calibration, I pass it rather than deduct.",
+      "losses": []
+    },
+    "minimalism": {
+      "score": 4,
+      "reasoning": "Almost everything delegable is delegated. Report shapes, status vocabularies, evidence and fix_hint semantics, before/after fix records and the dispute channel all live in the types file, not the body. All of the source's workspace bookkeeping — per-iteration folders, worker.log, worker-report.md, the two verifier .log/.json pairs, fixer.log, status.md and its 'update after every phase' rule — is gone, replaced by a single frontmatter workspace declaration. The verbatim user-facing report strings are gone. Two small passengers remain, both about placement rather than content: the input and output contracts are declared as body lines rather than as frontmatter metadata keys, and the output line names a concrete artifact file, which the calibration ruling puts outside the body. A third, milder item: the 5-iteration cap is asserted three times in nine lines — once as a standalone header sentence and twice inside the decision bullets that already imply it. None of these change a run; they cost a little reader attention. That is 'one or two sentences could go', not a surviving class of passenger.",
+      "passengers": [
+        {
+          "quote": "Output (→ `LoopResult`(`result.yaml`))",
+          "why_it_is_spare": "The type name is the contract; the filename is run bookkeeping, which the calibration ruling places outside the body ('report filenames ... all of it'). The frontmatter already declares the workspace, and the reference carries the same information as a metadata key ('output: VerificationResult') with no filename at all."
+        },
+        {
+          "quote": "Input (→ `Task`)",
+          "why_it_is_spare": "A contract declaration the frontmatter is built to hold. The reference states the same thing as 'inputs: Task' in metadata, keeping the body purely about flow."
+        },
+        {
+          "quote": "Run at most 5 work–verification iterations.",
+          "why_it_is_spare": "Fully implied by the two bullets that follow it — 'fewer than 5 iterations are complete, run the fixer' and 'unresolved after 5 iterations ... stop'. The cap binds from the branches; the header sentence only repeats it."
+        }
+      ]
+    },
+    "readability": {
+      "score": 4,
+      "reasoning": "Read cold, this is clear and short. Plain verbs, one idea per sentence, no jargon beyond the (→ Type) convention, and an order that matches how the work happens: input, orchestrator stance, worker, the two parallel verifiers, the decision, the fixer, the result. The subagent blocks are visually uniform, so a newcomer can scan for 'who does what' in one pass. 'Existence is not achievement' is the kind of line that makes a rule stick. One passage needs a second read: the four decision bullets are unordered but behave as if ordered. An iteration that resolved nothing while fewer than five iterations are complete satisfies bullet two ('record the unresolved issues in the result and stop') and bullet three ('run the fixer and verify again') at the same time, so the reader has to infer that earlier bullets win. A smaller stumble: the bullets tell you to 'run the fixer' before the Fixer block below defines what the fixer does, so a first-time reader briefly reads forward. Neither is severe enough to make the reader guess at intent.",
+      "friction": [
+        {
+          "quote": "- If an iteration resolves nothing, record the unresolved issues in the result and stop.\n- If anything is unresolved and fewer than 5 iterations are complete, run the fixer and verify again.",
+          "why_it_is_hard": "Both conditions can be true in the same iteration, and the list is bulleted rather than numbered, so nothing states that the first match wins. A newcomer deciding what to do after a fruitless iteration three has to choose between stopping and fixing."
+        }
+      ]
+    }
+  },
+  "defensible_divergences": [
+    {
+      "topic": "Where the input and output contracts are named",
+      "candidate": "Body lines 'Input (→ `Task`)' and 'Output (→ `LoopResult`(`result.yaml`))', with frontmatter carrying only types and workspace.",
+      "reference": "Frontmatter metadata keys 'inputs: Task' and 'output: VerificationResult'.",
+      "why_it_costs_nothing": "Partly defensible — the contract is declared either way and a reader learns the same thing. I still counted it under minimalism because the frontmatter can hold it for free and the body version drags a filename along, but the divergence itself does not confuse anyone or change a run."
+    },
+    {
+      "topic": "How the outcome verdict is aggregated",
+      "candidate": "No overall field; OutcomeReview is just a list of checks, and the body's clean test reads 'every outcome criterion passes'.",
+      "reference": "Discriminated union of PassedOutcomesReport and FailedOutcomesReport, with an overall_pass() method.",
+      "why_it_costs_nothing": "The source's clean test was 'no missing/partial AND outcomes overall == pass'. Deriving the overall verdict from the per-criterion states is equivalent and removes a field that could contradict its own contents. Different decomposition, same behaviour."
+    },
+    {
+      "topic": "Workspace naming",
+      "candidate": "workspace: ./.verification-loop/<UTC-timestamp>",
+      "reference": "workspace: \".verification-loop/$runtime.run_id/\" plus a body line 'Use a new workspace for each execution.'",
+      "why_it_costs_nothing": "A timestamp placeholder is self-evidently per-run, so the candidate gets the freshness guarantee without spending a body sentence on it."
+    },
+    {
+      "topic": "How the outcome verifier is told to inspect",
+      "candidate": "'Establish what success means for this task, then judge whether the produced work achieves it. Existence is not achievement.'",
+      "reference": "'read each readable artifact, run each runnable artifact, and assess quality rather than existence'",
+      "why_it_costs_nothing": "The candidate states the intent and lets the technique follow from it, which is the altitude the rubric asks for. A verifier told that existence is not achievement, and required to record what it inspected, will execute what can be executed."
+    },
+    {
+      "topic": "Separate report types per role",
+      "candidate": "WorkerReport and FixReport are distinct models.",
+      "reference": "One WorkingReport serves both the implementer and the fixer.",
+      "why_it_costs_nothing": "The source asked for genuinely different content from the two roles, so two types is the honest shape; the loop still hands each report to the same verification step."
+    }
+  ],
+  "source_contradictions": [
+    {
+      "contradiction": "The source's guardrails say 'Thrashing = escalate, don't grind', but the Decide phase it defines has only three branches — clean, issues under the cap, issues at the cap — and none of them detects thrashing. Followed literally, the loop grinds to iteration five however little progress each pass makes.",
+      "candidate_resolution": "Adds a branch: 'If an iteration resolves nothing, record the unresolved issues in the result and stop.' The guardrail becomes an actual decision the loop can take, and the LoopResult type has an unresolved list to carry what remains. The reference dropped the guardrail entirely instead.",
+      "holds_together": true
+    },
+    {
+      "contradiction": "The source says 'Max 5 iterations without user permission' in the guardrails, but the Decide phase says only 'Issues + iter == 5: stop, report remaining issues honestly' — the permission escape hatch is silently dropped where the decision is actually made.",
+      "candidate_resolution": "Restores it in the branch itself: '...record every unresolved issue in the result and stop. Continue only if the person asks for it.' The cap and the escape now sit in the same place.",
+      "holds_together": true
+    },
+    {
+      "contradiction": "The source ties the silent-failure guard to a file — 'Empty/missing `.log` = silent failure' — while also making the log a workspace artifact that a sculpt should not carry.",
+      "candidate_resolution": "Restates the guard in terms of the result rather than the artifact: 'A subagent that returns no report has failed silently — do not treat its phase as complete.' The guard survives, the log does not.",
+      "holds_together": true
+    }
+  ],
+  "better_than_reference": [
+    "The candidate keeps the silent-failure guard and restates it as a property of the result rather than of a log file — 'A subagent that returns no report has failed silently — do not treat its phase as complete.' The reference dropped this guard along with the log, which loses a real protection: a subagent that dies quietly would otherwise be read as a phase that finished.",
+    "The candidate keeps the anti-thrashing guardrail by turning it into a branch of the decision, where the reference dropped it. This is the pattern the rubric prefers — a guardrail absorbed into a branch rather than left as an unenforceable slogan.",
+    "The candidate's types preserve two fixer obligations the reference lost: the before/after record for each fix (the Fix model) and the channel for disputing a wrong verifier finding with evidence (FixReport.disputed, described as 'Findings judged wrong, each with the evidence against it'). The source required both; the reference's single WorkingReport of summary/artifacts/claims cannot express either, so a fixer following the reference could silently ignore a bad finding — exactly what the source forbade.",
+    "The candidate's frontmatter description is written for a person deciding whether to reach for the skill ('Use when a task must be proven complete and correct, not only attempted.') rather than in role vocabulary. It triggers on the situation, not the machinery."
+  ],
+  "mean_score": 4.33,
+  "verdict": "sound",
+  "weakest_dimension": "minimalism",
+  "what_to_fix_in_the_sculpting_skill": "Add a rule that the input and output contracts are declared only as frontmatter metadata keys, and that no artifact filename may appear anywhere in the sculpt — the body and the frontmatter name types and the workspace, never files. That single rule removes both body contract lines and the 'result.yaml' filename, which together are the whole of this candidate's remaining weight.",
+  "expectations": [
+    {
+      "text": "The essence survived",
+      "passed": true,
+      "evidence": "score 5/5 — every outcome-bearing responsibility binds, including two (silent-failure detection and the anti-thrashing stop) that the reference dropped; nothing invented."
+    },
+    {
+      "text": "Nothing spare remains",
+      "passed": true,
+      "evidence": "score 4/5 — all workspace and report bookkeeping is gone and all shapes are delegated to the types file; two contract lines in the body, one artifact filename, and a thrice-stated iteration cap could still come out."
+    },
+    {
+      "text": "A person can read it easily",
+      "passed": true,
+      "evidence": "score 4/5 — plain, short, well ordered, with uniform subagent blocks; the four decision bullets read as unordered but behave as ordered, so that one passage needs a second pass."
+    }
+  ],
+  "summary": {"passed": 3, "failed": 0, "total": 3, "pass_rate": 1.0}
+}

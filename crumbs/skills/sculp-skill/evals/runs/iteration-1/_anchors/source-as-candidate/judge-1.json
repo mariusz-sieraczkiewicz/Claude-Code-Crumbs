@@ -1,0 +1,189 @@
+{
+  "anchor": "source-as-candidate (low anchor)",
+  "source_path": "/Users/sieracm2/PrivateProjects/Claude-Code-Crumbs/.agents/skills/sculp-skill/evals/source-skills/verification-loop",
+  "candidate_path": "/Users/sieracm2/PrivateProjects/Claude-Code-Crumbs/.agents/skills/sculp-skill/evals/source-skills/verification-loop",
+  "reference_path": "/Users/sieracm2/PrivateProjects/Claude-Code-Crumbs/.agents/skills/sculp-skill/evals/reference-generations/verification-loop",
+  "reference_form_notes": "Frontmatter is a contract: name, an intent-plus-trigger description, and a metadata block declaring inputs (Task), output (VerificationResult), types (./scripts/contracts.py) and workspace. Body is unheaded, unbolded, undiagrammed prose: short declarative sentences, one responsibility each. The iteration limit is stated once, up front, as a bare sentence. Three numbered top-level steps. Parallelism is announced in the sentence that precedes the subagents. Each subagent is introduced as 'Subagent: <Role> (→ `<ResultType>`)' followed by two sentences of work and verdict rule. The decision is a three-branch closed list, each branch naming condition, action, and whether the run continues. No file names, no directory contents, no JSON field lists, no log mechanics, no per-phase user chatter. Closes with a single sentence naming the terminal result and the workspace.",
+  "dimensions": {
+    "writing_manner": {
+      "score": 1,
+      "reasoning": "The candidate is the unedited source register: per-phase section headings, a fenced flow diagram, bold labels, shouted imperatives, telegraphic guardrail bullets with '=' shorthand, and meta-commentary about the orchestrator's own role. Nothing decorative has been removed, and several sentences carry no responsibility at all. This is the bottom of the scale, not a lightly-edited version of it.",
+      "divergences": [
+        {
+          "responsibility": "stage sequencing",
+          "candidate_form": "## Phase 1 — Worker ... ## Phase 2 — Verifiers (parallel, single message) ... ## Phase 3 — Decide ... ## Phase 4 — Fixer",
+          "reference_form": "1. Spawn a subagent to complete the user’s task. (→ `WorkingReport`)\n\n2. Verify its result using two subagents in parallel:\n\n3. Decide:",
+          "form_difference": "Candidate structures the workflow as titled document sections with per-stage headings; reference structures it as three numbered declarative sentences with no headings, so the stage boundary is carried by the sentence rather than by document furniture."
+        },
+        {
+          "responsibility": "describing the loop shape",
+          "candidate_form": "```\nworker → verifier-instructions + verifier-outcomes (parallel)\n  → clean? done : fixer → re-verify (back to verifiers)\n```",
+          "reference_form": "Run at most 5 work–verification iterations.",
+          "form_difference": "Candidate draws the control flow as an ASCII diagram in a code fence, duplicating what the steps below already say; reference carries no diagram at all and lets the ordered steps be the only statement of flow."
+        },
+        {
+          "responsibility": "keeping the worker from grading itself",
+          "candidate_form": "4. Do NOT self-verify",
+          "reference_form": "Turn every imperative into a checklist item and independently verify each through source inspection and applicable checks, without trusting the working report.",
+          "form_difference": "Candidate states it as a capitalised negative imperative in a checklist attached to the worker; reference expresses the same independence as a plain subordinate clause inside the verifier's own instruction, with no emphasis marker and no separate prohibition."
+        },
+        {
+          "responsibility": "framing the skill's own role",
+          "candidate_form": "Delegate work to subagents, verify independently, fix, repeat. You orchestrate — never implement. Report status to the user after every phase.",
+          "reference_form": "Use a new workspace for each execution.\nThe implementer and fixer may change the caller's project when the task requires it; the workspace does not confine task effects.",
+          "form_difference": "Candidate opens with meta-commentary summarising the skill to itself, plus a slogan-shaped clause; reference opens with two sentences that each state an operative constraint and nothing about the skill as a document."
+        },
+        {
+          "responsibility": "global constraints",
+          "candidate_form": "- Never skip a verifier run. Never let worker/fixer self-verify.\n- Max 5 iterations without user permission. Thrashing = escalate, don't grind.\n- Trust failing verifier over passing one when they disagree.\n- Empty/missing `.log` = silent failure — surface to user.",
+          "reference_form": "Run at most 5 work–verification iterations.",
+          "form_difference": "Candidate collects constraints into a bulleted 'Guardrails' checklist written in clipped fragments and '=' equivalences; reference states the one constraint it keeps as a full plain sentence in running text, with no bullet and no list heading."
+        }
+      ]
+    },
+    "altitude": {
+      "score": 1,
+      "reasoning": "The candidate drills to mechanics at essentially every stage: workspace directory naming convention, the exact set of files per iteration, log-writing cadence, report file names, and full inline JSON payload schemas with field names and enum values. This is source altitude throughout, not one or two stages off.",
+      "divergences": [
+        {
+          "responsibility": "where the run's artifacts live",
+          "candidate_form": "Create `.verification-loop/<UTC-timestamp>/` with `task.md` (verbatim task) and `status.md` (running log). Each iteration gets `iter-N/` containing: `worker.log`, `worker-report.md`, `verifier-instructions.{log,json}`, `verifier-outcomes.{log,json}`, `fixer.{log,report.md}` (if needed).",
+          "reference_form": "workspace: \".verification-loop/$runtime.run_id/\"  (frontmatter)\n\nUse a new workspace for each execution.",
+          "form_difference": "Candidate enumerates directory layout and every filename in the body; reference declares the workspace once in the frontmatter contract and states only the invariant (a new one per run), leaving layout entirely undeclared."
+        },
+        {
+          "responsibility": "the instruction verifier's result",
+          "candidate_form": "3. Write `verifier-instructions.json`: `{\"instructions\": [{\"id\", \"instruction\", \"status\": \"done|missing|partial\", \"evidence\", \"fix_hint\"}], \"summary\": {\"total\", \"done\", \"missing\", \"partial\"}}`",
+          "reference_form": "Subagent: Instructions Verifier (→ `VerifyInstructionsReport`)\n... Mark a completed item as done with no issue; mark any other item as partial or missing and explain the issue.",
+          "form_difference": "Candidate spells out the serialised field shape, key names and file destination in the body; reference names the result type and states only the semantic rule for assigning a status, delegating every field to the types file."
+        },
+        {
+          "responsibility": "the outcome verifier's result",
+          "candidate_form": "3. Write `verifier-outcomes.json`: `{\"criteria\": [{\"id\", \"criterion\", \"status\": \"pass|fail|concern\", \"evidence\", \"fix_hint\"}], \"overall\": \"pass|fail|concern\", \"summary\"}`",
+          "reference_form": "Subagent: Outcomes Verifier (→ `VerifyOutcomesReport`)\n... Pass only when there are no issues; otherwise fail and report every issue.",
+          "form_difference": "Same pattern: candidate encodes a JSON schema and a three-valued enum inline; reference reduces the same decision to a one-sentence pass rule and lets the type union carry the shape."
+        },
+        {
+          "responsibility": "how a subagent records progress",
+          "candidate_form": "2. Append running log to `worker.log` — one line per action, written regularly",
+          "reference_form": "1. Spawn a subagent to complete the user’s task. (→ `WorkingReport`)",
+          "form_difference": "Candidate prescribes logging mechanics and cadence a competent model would supply on its own; reference states only the responsibility and the result, with no logging instruction at any stage."
+        },
+        {
+          "responsibility": "progress visibility",
+          "candidate_form": "Read `worker-report.md`, report to user: \"Worker done. Modified N files. Verifying.\" ... Report to user: \"Instructions: X/Y done. Outcomes: <overall>.\"",
+          "reference_form": "Report the terminal result and workspace.",
+          "form_difference": "Candidate scripts literal user-facing strings after each stage; reference has one closing sentence about reporting and no scripted output anywhere."
+        },
+        {
+          "responsibility": "final report",
+          "candidate_form": "## Final Report\n1. One-line result: passed on iter-N / stopped at cap with K remaining issues\n2. What changed — bulleted, from iteration reports\n3. Workspace path for inspection",
+          "reference_form": "Report the terminal result and workspace.",
+          "form_difference": "Candidate specifies the report's section structure and bullet formatting; reference names what must be reported in one sentence and leaves presentation undeclared."
+        }
+      ]
+    },
+    "conditions": {
+      "score": 2,
+      "reasoning": "Phase 3 is the candidate's closest approach to the reference: a three-branch list whose conditions are mutually exclusive. But the governing conditions of the loop are scattered across three separate locations rather than presented as one decision, and the limit itself is written open-ended.",
+      "divergences": [
+        {
+          "responsibility": "the iteration limit",
+          "candidate_form": "- Max 5 iterations without user permission. Thrashing = escalate, don't grind.",
+          "reference_form": "Run at most 5 work–verification iterations.",
+          "form_difference": "Candidate states the limit inside a guardrail bullet, far from the decision it governs, and qualifies it with an unbounded escape ('without user permission') that opens a fourth, undeclared branch; reference states a closed limit once, before the steps, with no escape clause."
+        },
+        {
+          "responsibility": "continuation after a fix",
+          "candidate_form": "- **Issues + iter < 5**: proceed to fixer.\n...\nAfter fixer completes, return to Phase 2 with fixer-report as the \"worker report\" input.",
+          "reference_form": "- Otherwise, spawn a fixer to address every unresolved issue reported by either verifier. Use a fix hint only when supported by evidence and it addresses the root cause. (→ `WorkingReport`) Then verify the fixed result in the next iteration.",
+          "form_difference": "Candidate's branch names only the action and defers whether the workflow continues to a sentence at the end of a later section; reference's branch is self-contained — condition, action, declared result, and continuation all inside the branch."
+        },
+        {
+          "responsibility": "conflicting verifier verdicts and missing evidence",
+          "candidate_form": "- Trust failing verifier over passing one when they disagree.\n- Empty/missing `.log` = silent failure — surface to user.",
+          "reference_form": "- If every instruction is done and the outcome is passed, finish successfully.\n- If iteration 5 has been reached, stop and report every remaining issue.",
+          "form_difference": "Candidate expresses additional conditions as standalone prose bullets outside any decision, so their relationship to the three-branch decision is left to inference; reference admits only the branches inside the decision and expresses no condition outside it."
+        }
+      ]
+    },
+    "structures": {
+      "score": 1,
+      "reasoning": "None of the reference's declarative devices are used in their reference form. The frontmatter is a bare name/description pair with no inputs, output, types or workspace declaration; there is no types file at all, so domain types are described inline as JSON literals; no result is declared with a (→ Type) marker anywhere. Only fragments of one device survive — parallelism is signalled, but as a parenthetical in a section heading rather than as a declaration preceding the subagents.",
+      "divergences": [
+        {
+          "responsibility": "declaring the skill's contract",
+          "candidate_form": "---\nname: verification-loop\ndescription: Execute a task in a worker subagent, independently verify instruction compliance and outcome quality in parallel, fix issues, repeat until clean or max 5 iterations.\n---",
+          "reference_form": "metadata:\n  inputs: Task\n  output: VerificationResult\n  types: \"./scripts/contracts.py\"\n  workspace: \".verification-loop/$runtime.run_id/\"",
+          "form_difference": "Candidate's frontmatter carries no contract — no input, no official output, no types pointer, no workspace; the reference's metadata block is the device that lets the body stop describing shapes, and it is entirely absent."
+        },
+        {
+          "responsibility": "defining domain types",
+          "candidate_form": "`{\"instructions\": [{\"id\", \"instruction\", \"status\": \"done|missing|partial\", \"evidence\", \"fix_hint\"}], \"summary\": {\"total\", \"done\", \"missing\", \"partial\"}}`",
+          "reference_form": "types: \"./scripts/contracts.py\"  — with DoneInstructionCheck / UnresolvedInstructionCheck / PassedInstructionsReport / FailedInstructionsReport defined there as a discriminated union",
+          "form_difference": "Candidate encodes types as inline JSON literals in the body; reference defines them in a separate typed file and never restates a field name in the body. The candidate has no types file to point at."
+        },
+        {
+          "responsibility": "declaring what a stage produces",
+          "candidate_form": "Spawn 1 `general-purpose` subagent. Provide: verbatim task from `task.md`, workspace path `iter-N/`.",
+          "reference_form": "1. Spawn a subagent to complete the user’s task. (→ `WorkingReport`)",
+          "form_difference": "Candidate lists the subagent's inputs and implementation type but declares no result; reference omits plumbing and attaches an explicit (→ Type) result marker, which is the device that makes the stage's output checkable."
+        },
+        {
+          "responsibility": "announcing a subagent's role",
+          "candidate_form": "**Verifier-instructions** — checks every discrete instruction was executed:",
+          "reference_form": "Subagent: Instructions Verifier (→ `VerifyInstructionsReport`)",
+          "form_difference": "Candidate marks the role with bold text and a descriptive gloss ending in a colon that introduces a numbered procedure; reference uses a fixed 'Subagent: <Role> (→ <Result>)' declaration followed by prose, so role and result are declared rather than narrated."
+        },
+        {
+          "responsibility": "announcing parallel work",
+          "candidate_form": "## Phase 2 — Verifiers (parallel, single message)\n\nSpawn 2 subagents simultaneously. Both receive: verbatim task, worker report, workspace path.",
+          "reference_form": "2. Verify its result using two subagents in parallel:",
+          "form_difference": "Candidate signals parallelism inside a section heading plus a dispatch-mechanics sentence ('single message', 'simultaneously', input list); reference announces it once in the step sentence that introduces the subagents, with no mechanics."
+        }
+      ]
+    },
+    "coverage": {
+      "score": 2,
+      "reasoning": "Every outcome-bearing responsibility the reference carries is present here — that is expected, since the reference was derived from this text. But the candidate additionally carries several responsibilities the reference deliberately does not, and they would change behaviour: mid-run status reports to the user after each phase, an escalation that asks the user for permission to exceed the cap, a verifier-disagreement tiebreak rule, and a silent-failure check on log files. Conversely it lacks the reference's statement that task effects are not confined to the workspace.",
+      "divergences": [
+        {
+          "responsibility": "keeping the user informed during the run",
+          "candidate_form": "Report status to the user after every phase. ... Update `status.md` after every phase. ... report to user: \"Worker done. Modified N files. Verifying.\"",
+          "reference_form": "Report the terminal result and workspace.",
+          "form_difference": "Candidate makes per-phase user reporting and a running status log into standing responsibilities of the orchestrator; reference carries a single terminal reporting responsibility and no intermediate one, so the candidate's run has user round-trips the reference's does not."
+        },
+        {
+          "responsibility": "behaviour at the iteration cap",
+          "candidate_form": "- Max 5 iterations without user permission. Thrashing = escalate, don't grind.",
+          "reference_form": "- If iteration 5 has been reached, stop and report every remaining issue.",
+          "form_difference": "Candidate adds an escalate-for-permission responsibility on top of stopping; reference's cap terminates the run unconditionally, so the two skills end differently in the same situation."
+        },
+        {
+          "responsibility": "reconciling verifiers and detecting silent failure",
+          "candidate_form": "- Trust failing verifier over passing one when they disagree.\n- Empty/missing `.log` = silent failure — surface to user.",
+          "reference_form": "(no counterpart)",
+          "form_difference": "Two responsibilities the reference does not carry at all: an inter-verifier tiebreak and a log-integrity check. The reference's decision requires both verifiers to be clean, which makes the tiebreak unnecessary rather than merely unstated."
+        },
+        {
+          "responsibility": "scope of side effects",
+          "candidate_form": "(no counterpart — the candidate only describes what goes in the workspace)",
+          "reference_form": "The implementer and fixer may change the caller's project when the task requires it; the workspace does not confine task effects.",
+          "form_difference": "The reference carries an explicit permission about where work may land; the candidate leaves it to inference, so a reader could conclude the workspace bounds all writes."
+        }
+      ]
+    }
+  },
+  "mean_score": 1.4,
+  "verdict": "diverged",
+  "weakest_dimension": "structures",
+  "what_to_fix_in_the_sculpting_skill": "Nothing in the sculpting skill fired here — this is the un-sculpted source, held as the low anchor. Stated as the rule that would close the largest gap: the skill needs a hard rule that any field list, JSON payload, status enum or record shape appearing in the source must be moved into a typed file, declared in frontmatter metadata as `types:`, and referenced from the body only through a `(→ Type)` result marker on the stage that produces it — with the body forbidden from naming a single field. Without that rule the body has nowhere to delegate to, so the inline JSON schemas survive and drag altitude down with them; the frontmatter contract (`inputs`, `output`, `types`, `workspace`) must be required in the same rule, since it is what makes the delegation addressable.",
+  "expectations": [
+    {"text": "Writing manner matches the reference form", "passed": false, "evidence": "score 1/5 — per-phase headings, a fenced flow diagram, bold role labels, a shouted 'Do NOT self-verify', clipped guardrail bullets and opening meta-commentary; register is unchanged from the source."},
+    {"text": "Level of detail matches the reference altitude", "passed": false, "evidence": "score 1/5 — workspace directory layout, per-iteration filenames, log cadence, scripted user strings and two full inline JSON schemas; the reference delegates all of this to the types file and the frontmatter workspace field."},
+    {"text": "Conditions and branches are declared as in the reference", "passed": false, "evidence": "score 2/5 — the Phase 3 three-branch decision is closed, but the limit lives in a guardrail bullet with an open-ended 'without user permission' escape, the fixer branch defers continuation to the end of a later section, and further conditions sit as loose prose bullets outside any decision."},
+    {"text": "Structural declarations match the reference", "passed": false, "evidence": "score 1/5 — no metadata contract in frontmatter, no types file, no (→ Type) result markers; types are inline JSON and parallelism is signalled only in a section heading."},
+    {"text": "Responsibility coverage matches the reference", "passed": false, "evidence": "score 2/5 — carries four responsibilities the reference drops (per-phase user reports, status log, cap escalation for permission, verifier tiebreak plus log-integrity check) and omits the reference's statement that task effects are not confined to the workspace."}
+  ],
+  "summary": {"passed": 0, "failed": 5, "total": 5, "pass_rate": 0.0}
+}

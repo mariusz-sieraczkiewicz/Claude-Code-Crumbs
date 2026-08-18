@@ -1,0 +1,8 @@
+{
+  "total_tokens": 71129,
+  "duration_ms_first_attempt": 891761,
+  "duration_ms_resume": 24626,
+  "note": "First attempt stalled at 600s with no progress during the third verification round and was killed by the watchdog; output files were already on disk. Resumed from transcript to finish verification. Token count is cumulative from the resumed run; the stalled attempt reported no usage.",
+  "verification_rounds": 4,
+  "issues_per_round": [9, 3, 1, 0]
+}

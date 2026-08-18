@@ -1,0 +1,90 @@
+{
+  "twoj sculp-skill": {
+    "median": {
+      "essence": 5,
+      "minimalism": 3,
+      "readability": 4
+    },
+    "mean": 4.0,
+    "per_judge": {
+      "essence": [
+        5,
+        5,
+        5
+      ],
+      "minimalism": [
+        3,
+        3,
+        3
+      ],
+      "readability": [
+        5,
+        4,
+        4
+      ]
+    }
+  },
+  "baza (bez skilla)": {
+    "median": {
+      "essence": 4,
+      "minimalism": 2,
+      "readability": 4
+    },
+    "mean": 3.33,
+    "per_judge": {
+      "essence": [
+        4,
+        5,
+        4
+      ],
+      "minimalism": [
+        2,
+        2,
+        2
+      ],
+      "readability": [
+        4,
+        4,
+        4
+      ]
+    }
+  },
+  "wzorzec": {
+    "median": {
+      "essence": 3,
+      "minimalism": 4,
+      "readability": 4
+    },
+    "mean": 3.67,
+    "per_judge": {
+      "essence": [
+        3
+      ],
+      "minimalism": [
+        4
+      ],
+      "readability": [
+        4
+      ]
+    }
+  },
+  "surowe zrodlo": {
+    "median": {
+      "essence": 5,
+      "minimalism": 1,
+      "readability": 3
+    },
+    "mean": 3.0,
+    "per_judge": {
+      "essence": [
+        5
+      ],
+      "minimalism": [
+        1
+      ],
+      "readability": [
+        3
+      ]
+    }
+  }
+}

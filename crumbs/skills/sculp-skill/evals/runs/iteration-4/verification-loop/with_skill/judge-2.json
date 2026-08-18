@@ -1,0 +1,115 @@
+{
+  "dimensions": {
+    "essence": {
+      "score": 5,
+      "reasoning": "Every outcome-bearing responsibility in the source survives in a binding form. Orchestrator-never-implements and no-self-verification are stated once and cover both the worker and the fixer (\"You orchestrate; you never carry out the task yourself, and no subagent checks its own work\"). Report-after-every-phase survives. The two verifier roles keep their distinguishing mandates: the instruction verifier decomposes imperatives and checks them against primary evidence rather than the report (\"confirm each one against the files, commands and outputs themselves, never against that report's account of them\"), and the outcome verifier defines success from intent and judges quality not existence. The disagreement guardrail survives in effect (\"When the verifiers disagree, trust the failing one\") — the reference dropped this one entirely. The 5-iteration cap survives with its \"without user permission\" nuance intact. The fixer keeps all three of its behaviour-determining clauses: fix every finding, do not redo passing work, refute wrong findings with evidence. Everything about report and result shape is delegated to the types file, which is correct placement: WorkerReport carries what-was-done / changed files / skipped-with-reason / ambiguities-resolved; InstructionCheck and OutcomeCheck carry the status vocabularies and evidence; Fix carries before/after; LoopResult carries the final result, changes, unresolved issues and workspace. TaskBrief.text carries the source's verbatim-task requirement as a field description (\"The user's task, word for word, never summarised.\"). Nothing was invented: the added trigger clause in the description is frontmatter routing, not new behaviour. Dropping the subagent type (`general-purpose`) and the parallel-in-one-message mechanic is technical detail, not intent, and the rubric places those outside the essence.",
+      "losses": []
+    },
+    "minimalism": {
+      "score": 3,
+      "reasoning": "One recognisable class of passenger survives throughout: the run's own bookkeeping. The rubric rules this out by name — status logs, running logs, per-iteration folders, report filenames — and the candidate carries all four. The frontmatter already declares the workspace, which the rubric says is the whole of what a sculpt keeps about where a run writes; the body then describes the folder layout inside it, the per-action logging the worker must do, the running log the orchestrator must update, and two specific filenames. The silent-failure guard is the case the rubric spells out explicitly: the guard is essence but must be restated in terms of the result rather than the artifact, and the candidate kept the artifact phrasing. None of this is a large volume of text, but it is not one or two stray sentences — it is a consistent failure to delegate the workspace, so it lands at 3 rather than 4. Everything else in the body earns its place: no progress narration survives (the source's scripted user messages such as \"Worker done. Modified N files. Verifying.\" are gone), no rule is stated twice, and no field shape is spelled out in prose.",
+      "passengers": [
+        {
+          "quote": "Every iteration keeps its own folder in the workspace holding each subagent's log and report.",
+          "why_it_is_spare": "A per-iteration folder plus an inventory of what goes in it. The rubric rules this class as execution detail: the `workspace` key in the frontmatter is the complete statement of where the run writes. Nothing in the loop branches on this sentence."
+        },
+        {
+          "quote": "A subagent log that is missing or empty means that subagent failed silently — report it instead of reading the result as success.",
+          "why_it_is_spare": "The guard itself is essence, but it is phrased in terms of an artifact the body should not know about. The rubric gives this exact rewrite: \"An empty log means the subagent failed silently\" becomes \"a subagent that returns no result has failed\". As written, the check is tied to a log file whose existence the body has to assert first."
+        },
+        {
+          "quote": "After every phase, update the running log in the workspace and tell the user where the loop stands.",
+          "why_it_is_spare": "The second half is essence — the source requires reporting to the user after every phase. The first half names a status log, which is bookkeeping. Half the sentence could go without changing any outcome."
+        },
+        {
+          "quote": "Carry out the task in full, logging each action as it happens.",
+          "why_it_is_spare": "\"Carry out the task in full\" is the worker's whole job. The logging clause is the source's worker log requirement carried forward; no later step reads that log, and the worker's actual deliverable is the typed WorkerReport."
+        },
+        {
+          "quote": "Input (→ `TaskBrief`(`task.md`))",
+          "why_it_is_spare": "The type reference is right; the `task.md` filename attached to it is a report filename, ruled execution detail. The same applies to the closing `Output (→ `LoopResult`(`status.md`))`, which additionally collides with the earlier mention of a running log."
+        }
+      ]
+    },
+    "readability": {
+      "score": 4,
+      "reasoning": "Read cold, this is clear and well-paced. The four headings — Worker, Verify, Decide, Fixer — match the order the work actually happens in, and each subagent is introduced with one line naming its role and its return type, followed by two or three plain sentences of mandate. Sentences are short and carry one idea each; there is no jargon a competent newcomer would stumble on, and no decoration. The decision rules read as three exhaustive, mutually exclusive branches, which is exactly what a reader needs at that point. The one place a newcomer has to stop and reconstruct is the filename annotation on the input and output lines: the notation `TaskBrief`(`task.md`) is not explained anywhere, and it is not obvious whether it means the type is read from that file, written to it, or merely mirrored there. The output line makes it slightly worse by pointing the final result at `status.md` while the body has already described a separate \"running log in the workspace\" — a reader cannot tell from the text whether those are one file or two. This is a single passage needing a second pass, not a recurring obstacle, so it sits at 4. The `(→ Type)` arrow itself is an established convention and is not counted against the candidate; only the extra filename in parentheses is.",
+      "friction": [
+        {
+          "quote": "Input (→ `TaskBrief`(`task.md`))",
+          "why_it_is_hard": "The nested parenthesis is an unexplained notation. A newcomer knows what the arrow means but not what the trailing filename asserts — whether it is a required input file, an output location, or a mirror. Paired with the closing `Output (→ `LoopResult`(`status.md`))` and the earlier \"update the running log in the workspace\", the reader is left unsure whether the final result and the running log are the same artifact."
+        }
+      ]
+    }
+  },
+  "defensible_divergences": [
+    {
+      "topic": "The `concern` status",
+      "candidate": "Keeps `concern` as a third status on `OutcomeCheck` and on the outcome verdict, and keys the decision on the verdict: \"If every imperative was carried out and the outcome verifier passes the result, finish and report.\"",
+      "reference": "Removes `concern` entirely; outcomes are a pass/fail union, and a passed report is structurally forbidden from carrying issues.",
+      "why_it_costs_nothing": "Both resolve the source's own inconsistency coherently. The candidate's version is decidable — anything other than a pass verdict routes to the fixer — so no run would end differently. The reference's union is stricter for machine validation; the candidate's is closer to the source's vocabulary. Neither loses essence."
+    },
+    {
+      "topic": "Where the input and output contract lives",
+      "candidate": "Declares them as body lines at the top and bottom of the flow.",
+      "reference": "Declares them as frontmatter metadata keys, `inputs: Task` and `output: VerificationResult`.",
+      "why_it_costs_nothing": "The contract is stated exactly once either way, and the body placement doubles as a visual frame for the flow. Only the appended filenames are a cost, and that is scored under minimalism, not here."
+    },
+    {
+      "topic": "Shape of the types file",
+      "candidate": "Flat `BaseModel` classes with `Field(description=...)` carrying the rules — for example the task text is described as \"The user's task, word for word, never summarised.\"",
+      "reference": "A `Contract` base with `extra=\"forbid\"`, discriminated unions for passed/failed reports, and helper predicates such as `all_done()` and `collect_remaining_issues()`.",
+      "why_it_costs_nothing": "The candidate encodes less structurally but reads faster and still carries every rule the body delegated to it. The reference's unions buy stricter validation (a passed report cannot list issues); the candidate buys legibility. Neither changes what a run produces."
+    },
+    {
+      "topic": "Structure of the body",
+      "candidate": "Four named sections — Worker, Verify, Decide, Fixer.",
+      "reference": "Three numbered steps with the verifiers nested inside step 2 and the fixer folded into step 3.",
+      "why_it_costs_nothing": "Same decomposition, different packaging. The candidate's headings help a reader find a stage; the reference's numbering makes the loop-back explicit. Both match how the work happens."
+    }
+  ],
+  "source_contradictions": [
+    {
+      "contradiction": "The source's clean-test looks only at the outcome verifier's overall verdict (\"outcomes overall == pass\"), but the fixer is told to address every `concern` finding. A run can therefore be clean and still hold unaddressed concerns.",
+      "candidate_resolution": "The verdict governs the branch — \"If every imperative was carried out and the outcome verifier passes the result, finish and report\" — while `concern` survives as a criterion-level status the fixer must resolve when the verdict is not a pass. The types file makes the split explicit by putting a status on each outcome check and a separate verdict on the report.",
+      "holds_together": true
+    },
+    {
+      "contradiction": "The guardrails allow more than 5 iterations with user permission (\"Max 5 iterations without user permission\"), but the decision phase says to stop flatly at iteration 5.",
+      "candidate_resolution": "Both are kept in one branch: \"If issues remain after the fifth iteration, stop and report every unresolved issue; continue only if the user asks for further iterations.\"",
+      "holds_together": true
+    },
+    {
+      "contradiction": "The source counts iterations ambiguously — the fixer is handed a new iteration folder while the loop diagram treats fix-then-reverify as one continuation, so it is unclear whether a fix increments the counter.",
+      "candidate_resolution": "Names a single unit and counts that: \"Run at most 5 verify–fix iterations.\"",
+      "holds_together": true
+    }
+  ],
+  "better_than_reference": [
+    "The disagreement guardrail. The candidate keeps the source's \"Trust failing verifier over passing one when they disagree\" as \"When the verifiers disagree, trust the failing one.\" The reference drops it entirely. This is outcome-bearing: with two independent verifiers, the split-decision case is exactly the case the rule exists for, and a run following the reference has nothing telling it not to accept the pass. This is a loss in the reference, not a bonus in the candidate.",
+    "The fix-hint handling. The reference body tells the fixer to \"Use a fix hint only when supported by evidence\", but its types file declares no such field and forbids extras, so no verifier can ever produce one — the instruction can never fire. The candidate does the opposite and coherently: an optional fix hint exists on both the instruction check and the outcome check, and the body says nothing about it, leaving a competent fixer to use a field that is actually there.",
+    "The iteration cap keeps its escape hatch. The candidate's \"continue only if the user asks for further iterations\" preserves the source's \"without user permission\" qualifier; the reference's \"If iteration 5 has been reached, stop and report every remaining issue\" turns a soft cap into a hard one, which would end some runs differently."
+  ],
+  "mean_score": 4.0,
+  "verdict": "sound",
+  "weakest_dimension": "minimalism",
+  "what_to_fix_in_the_sculpting_skill": "Add a rule that the frontmatter `workspace` declaration is the complete and only statement of where a run writes: the body must never name what lives inside the workspace — per-iteration folders, running or status logs, per-action logging duties, or report filenames appended to a type reference. Pair it with the required rewrite for guards phrased in terms of those artifacts: restate the guard in terms of the result, or drop it with the artifact, so \"an empty or missing log means the subagent failed silently\" becomes \"a subagent that returns no result has failed\". Without this rule the sculptor treats faithfully-carried bookkeeping as preserved essence, which is the whole of what cost this candidate its minimalism score.",
+  "expectations": [
+    {
+      "text": "The essence survived",
+      "passed": true,
+      "evidence": "score 5/5 — every outcome-bearing responsibility binds, including two the reference lost: the trust-the-failing-verifier rule and the user-permission escape from the 5-iteration cap. Report shapes, status vocabularies and the verbatim-task requirement are all delegated to the types file rather than restated."
+    },
+    {
+      "text": "Nothing spare remains",
+      "passed": false,
+      "evidence": "score 3/5 — the run's own bookkeeping survives as a class across five places: the per-iteration folder layout, the running log the orchestrator must update, the per-action logging the worker must do, and the task and status filenames appended to the input and output contracts. The silent-failure guard is kept in artifact terms where the rubric requires it in result terms."
+    },
+    {
+      "text": "A person can read it easily",
+      "passed": true,
+      "evidence": "score 4/5 — plain, short sentences in the order the work happens, each subagent introduced with its role and return type. One passage needs a second pass: the unexplained type-plus-filename notation, made murkier by pointing the final result at a status file after the body has already mentioned a separate running log."
+    }
+  ],
+  "summary": {"passed": 2, "failed": 1, "total": 3, "pass_rate": 0.67}
+}

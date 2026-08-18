@@ -1,0 +1,110 @@
+skill: verification-loop
+version: v1
+source_lines: 82
+result_lines: 51
+
+deleted:
+  - what: "Opening restatement of the loop (\"Delegate work to subagents, verify independently, fix, repeat\")"
+    why: "Repeats the description in the frontmatter."
+  - what: "ASCII loop diagram (worker → verifiers → clean? → fixer → re-verify)"
+    why: "Repeats the phase sequence stated by the sections themselves."
+  - what: "\"Never skip a verifier run.\""
+    why: "Every path in the loop already returns to the verifiers."
+  - what: "\"Thrashing = escalate, don't grind.\""
+    why: "Jargon with no distinct action; the iteration cap already covers it."
+  - what: "Duplicate statement of the 5-iteration cap in the guardrails"
+    why: "Stated once where the loop is defined."
+  - what: "Explicit workspace file inventory (task.md, status.md, iter-N/, worker.log, worker-report.md, verifier-instructions.{log,json}, verifier-outcomes.{log,json}, fixer.{log,report.md})"
+    why: "Bookkeeping detail; naming the files does not change what the loop produces. Replaced by one sentence saying each iteration keeps every subagent's log and report."
+  - what: "Numbered sub-steps inside each phase"
+    why: "Artificial micro-steps of a single responsibility."
+  - what: "\"Spawn 1 general-purpose subagent\" / \"Spawn 2 subagents simultaneously (single message)\""
+    why: "Mechanics of spawning subagents are already known to the model; parallelism is declared in prose before the two verifiers."
+  - what: "Literal user-facing sentences (\"Worker done. Modified N files. Verifying.\", \"Instructions: X/Y done. Outcomes: <overall>.\")"
+    why: "Examples of wording, not requirements. One rule now covers reporting after every phase."
+  - what: "Final Report section listing the three things to report"
+    why: "Replaced by the typed output LoopResult."
+  - what: "JSON field listings for both verifiers, including the derived counts summary"
+    why: "Moved to typed contracts; counts are computable from the checks."
+
+modified:
+  - what: "Frontmatter description"
+    how: "Kept verbatim, appended when to use the skill."
+  - what: "Frontmatter metadata"
+    how: "Added the typed contracts path and the workspace path, because the skill writes its result to files."
+  - what: "\"You orchestrate — never implement.\" and the two per-subagent \"Do NOT self-verify\" instructions"
+    how: "Merged into one preamble line without jargon: you never carry out the task yourself, and no subagent checks its own work."
+  - what: "Skill name"
+    how: "Suffixed to verification-loop-v1 so the name matches the working copy's folder."
+  - what: "\"Empty/missing .log = silent failure — surface to user.\""
+    how: "Written as a full sentence naming the concept of silent subagent failure."
+  - what: "\"Trust failing verifier over passing one when they disagree.\""
+    how: "Kept, moved next to the two verifiers it governs."
+  - what: "Phase headings"
+    how: "Phase 1..4 numbering dropped; sections named Worker, Verify, Decide, Fixer."
+  - what: "Verifier definitions"
+    how: "Given a role, the data they receive, what they must establish, and a typed result."
+  - what: "Phase 3 decision"
+    how: "Written as complete branches: condition, action, whether the loop continues."
+  - what: "Fixer's \"use fix_hint as a starting point\""
+    how: "Dropped as a contract field reference; the hint is a described field of the verifier contracts."
+
+added:
+  - what: "Input declaration (TaskBrief from task.md) and Output declaration (LoopResult in status.md)"
+    why: "The skill's entry and exit data must be typed and declared."
+  - what: "\"no subagent checks its own work\" in the preamble"
+    why: "The source forbade self-verification for worker and fixer in two places; one rule now binds every subagent."
+
+contracts:
+  file: contracts.py
+  types:
+    TaskBrief: "The task, stored word for word."
+    WorkerReport: "What was done, which files changed, what was skipped and why, which ambiguities were resolved."
+    InstructionCheck / InstructionReport: "Per-imperative status, evidence and fix hint."
+    OutcomeCheck / OutcomeReport: "Per-criterion status, evidence, fix hint, plus the overall verdict the loop branches on."
+    Fix / RefutedFinding / FixerReport: "Before and after for each fix, and findings refuted with evidence."
+    LoopResult: "Whether it passed, on which iteration, what changed, what is unresolved, and where the workspace is."
+
+verification:
+  method: >-
+    One verification subagent, given the original skill, the ground rules and the writing rules
+    inline in its prompt, and forbidden from opening any file so that nothing else in the project
+    could influence its judgement.
+  rounds:
+    - round: 1
+      verdict: "3 blocking, 5 minor"
+      found:
+        - "Blocking: the copy did not carry the -v1 suffix."
+        - "Blocking: the fixer was given no input data, though the original handed it the task, the prior report and both verifier results."
+        - "Blocking: on the second and later passes the verifiers had no defined input, because the fixer's report was no longer wired back to them."
+        - "Minor: the decision branch reused the raw status values and the verdict field name from the contracts."
+        - "Minor: 'user' had been renamed to 'participant' with no gain."
+        - "Minor: one worker report field lacked a description."
+        - "Minor: 'never skip a verifier run' was now only structural."
+        - "Minor: 'do not check your own work' appeared twice."
+      fixed:
+        - "Renamed to verification-loop-v1."
+        - "Fixer now receives the task, the report just verified and both verifier reports."
+        - "Verifiers now receive the latest worker or fixer report."
+        - "Decision branch written in plain words instead of contract values."
+        - "Restored 'user'."
+        - "Added the missing field description."
+        - "Merged the two self-verification bans into one preamble rule."
+      declined:
+        - item: "Add 'never skip this step' to the verify section."
+          reason: >-
+            The verify section is already an unconditional imperative on the only path from the
+            worker to the decision, so the sentence would be a reassurance, which the minimalism
+            rule removes. The verifier accepted this in round 2.
+    - round: 2
+      verdict: "1 blocking, 1 minor"
+      found:
+        - "Blocking: the fixer still lacked the report it was fixing, which is the only record of what changed, what was skipped and which ambiguities were resolved."
+        - "Minor: the instruction verifier still said 'the worker's account', which names the wrong report on a fix iteration."
+      fixed:
+        - "Fixer input now names the report just verified."
+        - "Instruction verifier now refers to that report rather than to the worker."
+    - round: 3
+      verdict: "CLEAN"
+      found: []
+  behaviour_lost: none

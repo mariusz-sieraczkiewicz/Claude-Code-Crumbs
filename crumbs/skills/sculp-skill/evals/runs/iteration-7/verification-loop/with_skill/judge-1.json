@@ -1,0 +1,102 @@
+{
+  "dimensions": {
+    "essence": {
+      "score": 5,
+      "reasoning": "Every outcome-bearing responsibility in the source survives in a binding form. Orchestrator-never-implements ('You arrange the work and never carry it out yourself'); verbatim task propagated to every subagent ('Keep the task in the person's own words and give that same wording to every subagent'); no self-verification ('No subagent checks its own work'); report after every phase; two verifiers in parallel with independence from the worker's account; instruction decomposition; outcome verification defined as intent plus run/read plus quality-not-existence; the clean condition; the 5-round cap; the fixer's three obligations (repair every issue from the suggested repair, leave passing work alone, rebut a mistaken check with evidence rather than silently ignoring it); and the re-entry rule that the checks then read the fixer's account in place of the worker's. Statuses, evidence fields, repair hints, files-touched, skipped-with-reason and ambiguities-resolved are all carried by the types file, which is correct placement, not weakening. The source's log-based guard is restated in terms of the result exactly as the calibration ruling prescribes: 'If a subagent returns nothing, treat that as a failure and tell the person.' Nothing was invented that changes behaviour; the request for user permission at the cap is derived from the source's own guardrail wording, not added.",
+      "losses": []
+    },
+    "minimalism": {
+      "score": 4,
+      "reasoning": "The body stays at human-intent altitude: no filenames, no JSON shapes, no phase numbering, no per-file inventory. Field shapes, status vocabularies and the evidence/repair-hint structure all sit in the types file, and serialization/file-passing conventions sit in the fixed conventions file the method supplies. Two sentences and one clause could still come out. The strongest is the run-bookkeeping sentence, which the calibration ruling places outside the body even in abstracted form. The disagreement rule restates what the clean condition already decides. Neither is expensive, so this stays at the top of the band rather than dropping to 3 — no recognisable *class* of passenger survives (no progress narration, no field shapes, no artifact inventory).",
+      "passengers": [
+        {
+          "quote": "Keep each round's records separately so the history stays inspectable.",
+          "why_it_is_spare": "This is the run's own bookkeeping — the per-iteration folder requirement from the source, abstracted but still present. The ruling recorded in evals.json is that a workspace declared in the frontmatter (which this candidate has: `workspace: ./.verification-loop/<timestamp-id>`) is the whole of what a sculpt keeps about where a run writes. Nothing in the skill's behaviour reads those separated records; the fixer and verifiers are fed by the typed reports, not by folder layout."
+        },
+        {
+          "quote": "If the two checks disagree, the failing one prevails.",
+          "why_it_is_spare": "The clean condition two lines later already decides this: 'The work is clean when every demand was carried out and the outcome is judged successful.' A failing check makes the conjunction false, so the failing check already prevails. Restating it is a duplicated rule."
+        },
+        {
+          "quote": "present the unresolved issues and what a further round would attempt",
+          "why_it_is_spare": "The 'what a further round would attempt' half is an embellishment the source does not ask for; the source's cap behaviour is to report remaining issues honestly. The unresolved issues are already carried by the result type's `unresolved_issues` field."
+        }
+      ]
+    },
+    "readability": {
+      "score": 4,
+      "reasoning": "Read as a newcomer, this lands. Plain words throughout, no jargon, no abbreviations, one idea per sentence, and the three headings ('Do the work', 'Check the work', 'Decide and repeat') match the order in which the work actually happens, so a reader can find a stage without hunting. Each subagent is introduced by name with its job stated in two or three sentences. 'Clean' is defined in the sentence before it is used. One passage needs a second pass: the cap bullet stacks four decisions (present issues, state what another round would try, ask the person, stop unless permitted, still produce the result) into two sentences. A smaller wrinkle is that the decision bullets say 'have them fixed and checked again' before the Fixer subagent is introduced beneath them — a short forward reference that resolves within a few lines and did not leave me unsure what to do.",
+      "friction": [
+        {
+          "quote": "If issues remain after the last round, present the unresolved issues and what a further round would attempt, and ask the person whether to continue or to stop there. Stop unless the person allows more rounds; the result is still produced.",
+          "why_it_is_hard": "Four separate obligations in two sentences, with the default (stop) stated after the question and the 'result is still produced' rider hung off a semicolon. A newcomer has to re-read to work out that the result is produced in both branches."
+        }
+      ]
+    }
+  },
+  "defensible_divergences": [
+    {
+      "topic": "Structure: named stage headings vs a numbered step list",
+      "candidate": "Three prose headings — 'Do the work', 'Check the work', 'Decide and repeat' — with subagent blocks beneath each.",
+      "reference": "A numbered 1/2/3 list with subagent blocks inline.",
+      "why_it_costs_nothing": "Both make the order of work obvious and both scan. The headings arguably help a reader find the decision rules faster; neither adds or loses a responsibility."
+    },
+    {
+      "topic": "Where the fixer is declared",
+      "candidate": "A standalone 'Subagent: Fixer' block after the decision bullets, plus 'The checks then read the fixer's account in place of the worker's.'",
+      "reference": "The fixer folded into the third decision bullet: 'spawn a fixer to address every unresolved issue reported by either verifier'.",
+      "why_it_costs_nothing": "The candidate's form gives the fixer the same three-sentence treatment as the other subagents, which is internally consistent, and it makes the loop re-entry explicit. The cost is a brief forward reference, noted above but not material."
+    },
+    {
+      "topic": "How the types file is located",
+      "candidate": "Frontmatter carries only `workspace`; the types file is reached through the conventions file, which fixes it at `./scripts/contracts.py`.",
+      "reference": "Frontmatter names `types: \"./scripts/contracts.py\"` alongside `inputs` and `output`.",
+      "why_it_costs_nothing": "Both get the reader to the same file. The candidate still declares 'Input (→ `TaskSpec`)' at the top and 'Output (→ LoopResult(`loop-result.yaml`))' at the bottom, so the contract boundary is visible in the body either way."
+    },
+    {
+      "topic": "Status vocabulary",
+      "candidate": "Outcome verdict is pass/fail/concern and instruction status is done/missing/partial, held in the types file; the body only says 'clean'.",
+      "reference": "Encodes pass/fail structurally as separate Passed/Failed report classes and says 'Pass only when there are no issues' in the body.",
+      "why_it_costs_nothing": "Both keep the vocabulary out of the body's prose. The candidate's 'concern' status is inherited from the source and is correctly non-clean under its own definition."
+    }
+  ],
+  "source_contradictions": [
+    {
+      "contradiction": "The source's guardrail says 'Max 5 iterations without user permission' — implying the user can authorise more — but its decide phase says 'Issues + iter == 5: stop, report remaining issues honestly', an unconditional stop.",
+      "candidate_resolution": "Resolves toward the guardrail: at the cap it presents the unresolved issues, asks the person whether to continue, and stops unless the person allows more rounds — while still producing the result either way.",
+      "holds_together": true
+    },
+    {
+      "contradiction": "The source forbids self-verification ('Never let worker/fixer self-verify') yet hands both verifiers the worker report as input, which invites them to lean on the worker's own account.",
+      "candidate_resolution": "States the rule as an independence requirement rather than an input restriction: 'Neither may rely on the worker's own account; both establish what actually happened from the files themselves.'",
+      "holds_together": true
+    }
+  ],
+  "better_than_reference": [
+    "The silent-failure guard survives. The candidate carries 'If a subagent returns nothing, treat that as a failure and tell the person' — precisely the result-terms restatement the calibration ruling asks for when the log artifact is dropped. The reference dropped the guard along with the log, so a reference-driven run has nothing to say when a subagent comes back empty.",
+    "The cap resolution honours the source's 'without user permission' wording by actually asking the person. The reference converted it into a hard stop ('If iteration 5 has been reached, stop and report every remaining issue'), silently discarding the escape hatch the source granted.",
+    "'Run at most 5 rounds, counting the first pass as round one' closes an off-by-one the reference leaves open with the bare 'Run at most 5 work–verification iterations.'"
+  ],
+  "mean_score": 4.33,
+  "verdict": "sound",
+  "weakest_dimension": "minimalism",
+  "what_to_fix_in_the_sculpting_skill": "Add a rule that once a workspace is declared in the frontmatter, no sentence about the run's own record-keeping may remain in the body — including abstracted ones like 'keep each round's records separately' — because the abstraction test currently lets per-iteration folder requirements survive as prose about inspectability.",
+  "expectations": [
+    {
+      "text": "The essence survived",
+      "passed": true,
+      "evidence": "score 5/5 — every outcome-bearing responsibility binds, including the fixer's rebuttal duty and the empty-result guard the reference lost; field shapes and status sets are delegated to the types file."
+    },
+    {
+      "text": "Nothing spare remains",
+      "passed": true,
+      "evidence": "score 4/5 — two sentences and one clause could go: the per-round records sentence (run bookkeeping), the verifier-disagreement rule (already decided by the clean condition), and 'what a further round would attempt'."
+    },
+    {
+      "text": "A person can read it easily",
+      "passed": true,
+      "evidence": "score 4/5 — plain language, stage order matches the work, terms defined before use; one dense passage at the round cap stacks four obligations into two sentences."
+    }
+  ],
+  "summary": {"passed": 3, "failed": 0, "total": 3, "pass_rate": 1.0}
+}

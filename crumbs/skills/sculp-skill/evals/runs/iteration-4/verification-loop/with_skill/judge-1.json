@@ -1,0 +1,118 @@
+{
+  "dimensions": {
+    "essence": {
+      "score": 5,
+      "reasoning": "Every outcome-bearing responsibility in the source survives in a binding form. Orchestrator-never-implements and the ban on self-verification are stated as one rule (\"You orchestrate; you never carry out the task yourself, and no subagent checks its own work\"). Reporting after every phase survives. The two verifiers are still spawned in parallel with distinct mandates: decomposition into imperatives plus independent confirmation \"against the files, commands and outputs themselves, never against that report's account of them\", and success-from-intent plus \"judge quality rather than existence\". The disagreement rule survives (\"When the verifiers disagree, trust the failing one\") - the reference dropped it. The clean/continue/stop decision keeps all three source branches with the same trigger conditions, and the 5-iteration cap keeps the source's \"without user permission\" nuance (\"continue only if the user asks for further iterations\"). The silent-failure guard survives. The fixer keeps address-every-finding, don't-redo-passing-work, and refute-with-evidence. All shape detail the source spelled out in prose - worker report contents with absolute paths, skipped items, ambiguities resolved; verifier statuses done/missing/partial and pass/fail/concern; evidence; fixer before/after - is delegated to the types file, which is correct placement, not weakening. Nothing was invented. The one source line with no counterpart is the nudge \"Thrashing = escalate, don't grind\"; it is vague guidance largely absorbed by the hard cap and the honest stop-report, the reference drops it too, and I am not deducting for it.",
+      "losses": []
+    },
+    "minimalism": {
+      "score": 3,
+      "reasoning": "The skill is cut hard and almost everything mechanical is delegated - but one recognisable class of passenger survives in four places: the run's own bookkeeping. The rubric rules that a workspace declared in the frontmatter is the whole of what a sculpt keeps about where a run writes, and that per-iteration folders, log files and report filenames are execution detail. The candidate still describes the per-iteration folder layout, still instructs the orchestrator to keep a running log, still frames the silent-failure guard around the log file rather than the returned result, and still pins filenames to the input and output declarations. The rubric even supplies the rewrite for that guard (\"a subagent that returns no result has failed\"), so this is not a close call. Separately, the input and output declarations sit in the body rather than in the frontmatter contract; that alone would be minor, but each carries a filename with it. Everything else is lean: no progress narration, no duplicated rules, no field shapes in the body.",
+      "passengers": [
+        {
+          "quote": "Every iteration keeps its own folder in the workspace holding each subagent's log and report.",
+          "why_it_is_spare": "Pure run layout. The frontmatter already declares the workspace; naming what goes inside it is ruled execution detail, and no branch in the body turns on the folder existing."
+        },
+        {
+          "quote": "A subagent log that is missing or empty means that subagent failed silently - report it instead of reading the result as success.",
+          "why_it_is_spare": "The guard is essence but it is carried by the artifact. Restated in terms of the result - a subagent that returns no report has failed - the guard survives and the log file disappears, which is the rubric's own worked example."
+        },
+        {
+          "quote": "After every phase, update the running log in the workspace and tell the user where the loop stands.",
+          "why_it_is_spare": "\"Tell the user where the loop stands\" is the essence; the running-log half is status-file bookkeeping that the workspace declaration already covers."
+        },
+        {
+          "quote": "Input (→ `TaskBrief`(`task.md`))",
+          "why_it_is_spare": "The type carries the contract; the filename is workspace bookkeeping. The same applies to the closing `LoopResult`(`status.md`). The declaration also belongs in the frontmatter contract rather than the body."
+        }
+      ]
+    },
+    "readability": {
+      "score": 5,
+      "reasoning": "Read as a newcomer, it lands first time. Sentences are short and carry one idea; the section order - Worker, Verify, Decide, Fixer - matches the order the work happens, and each subagent is introduced by a one-line header followed by the instruction actually given to it, so there is never any doubt whose rule is whose. Terms are plain: no unexplained jargon, no internal names, no abbreviations. The decision branches are a three-item list whose conditions read as ordinary English rather than as a boolean expression, which is easier than the source's \"Clean = no missing/partial AND overall == pass\". The one place a reader might pause is the compound notation on the input and output lines, where a filename is appended in a second bracket after the type arrow; the arrow itself is an established convention needing no gloss, and the filename is guessable in context, so this is a token-level quirk rather than a passage that needs rereading. Nothing has to be reconstructed.",
+      "friction": []
+    }
+  },
+  "defensible_divergences": [
+    {
+      "topic": "Structure: named sections vs a numbered procedure",
+      "candidate": "Four headed stages (Worker, Verify, Decide, Fixer) with subagent sub-headers.",
+      "reference": "A numbered 1-2-3 list with subagent sub-headers inside step 2.",
+      "why_it_costs_nothing": "Both express the same order and the same nesting. The candidate's headings help a reader jump to a stage, and the loop-back is stated explicitly in the Decide branch, so nothing is lost by not numbering."
+    },
+    {
+      "topic": "Three-valued outcome verdict",
+      "candidate": "OutcomeCheck and OutcomeReport keep the source's pass/fail/concern, and the Decide rule treats only an outright pass as clean.",
+      "reference": "Collapses outcomes to a binary pass/fail via separate Passed/Failed report models.",
+      "why_it_costs_nothing": "The candidate is closer to the source and stays coherent: concern is not pass, so it routes to the fixer exactly as the source's Phase 3 / Phase 4 pair intended."
+    },
+    {
+      "topic": "Where the worker's report shape lives",
+      "candidate": "The body says only \"Carry out the task in full, logging each action as it happens\"; done / changed_files / skipped / ambiguities_resolved live as described fields in the types file.",
+      "reference": "Similar delegation through WorkingReport, with fewer fields.",
+      "why_it_costs_nothing": "The types file is part of the skill; a field with a description binds as well as a sentence would, and restating it in the body would be the defect."
+    },
+    {
+      "topic": "Fix hints",
+      "candidate": "fix_hint is an optional field on both check models and the body never mentions it.",
+      "reference": "The body tells the fixer to weigh a fix hint although no such field exists in its types file, so no verifier can emit one.",
+      "why_it_costs_nothing": "The candidate's arrangement is internally consistent: the hint can actually be produced, and the fixer sees it in the data it is handed."
+    },
+    {
+      "topic": "Escalation at the cap",
+      "candidate": "\"stop and report every unresolved issue; continue only if the user asks for further iterations\".",
+      "reference": "\"If iteration 5 has been reached, stop and report every remaining issue.\"",
+      "why_it_costs_nothing": "Both are coherent readings of the source's split between its guardrail (a cap that user permission can lift) and its Phase 3 text (a hard stop); the candidate simply keeps the permission door the guardrail described."
+    }
+  ],
+  "source_contradictions": [
+    {
+      "contradiction": "The source's guardrail says \"Max 5 iterations without user permission\", implying the cap can be lifted by asking, while Phase 3 says at iteration 5 to \"stop, report remaining issues honestly\" with no mention of asking.",
+      "candidate_resolution": "Stops at five, reports every unresolved issue, and continues only if the user asks - folding both statements into one branch.",
+      "holds_together": true
+    },
+    {
+      "contradiction": "The source never fixes what an \"iteration\" is: the loop diagram shows the fixer returning to the verifiers, while Phase 4 gives the fixer a new workspace folder iter-(N+1), so it is unclear whether a fix round or a work-verify round consumes the budget.",
+      "candidate_resolution": "Defines the unit explicitly as a verify-fix iteration and counts completed iterations against the cap.",
+      "holds_together": true
+    },
+    {
+      "contradiction": "The source's fixer must address `concern` findings, yet Phase 3's definition of clean only mentions instruction statuses and outcomes `overall == \"pass\"`, leaving `concern` undefined as a stopping condition.",
+      "candidate_resolution": "Requires the outcome verifier to pass the result for the loop to finish, so anything short of pass routes to the fixer.",
+      "holds_together": true
+    }
+  ],
+  "better_than_reference": [
+    "Keeps the source's conflict rule, \"When the verifiers disagree, trust the failing one.\" The reference drops it entirely, which is a real essence loss there: with two independent verifiers, a contradictory pair has no defined resolution in the reference, so a run could accept a passing verdict that the other verifier contradicted.",
+    "Keeps the source's user-permission door at the cap rather than converting it into an unconditional hard stop.",
+    "Makes the fix hint actually producible by declaring it as a field on both check models, instead of instructing the fixer to use a hint that the type contract forbids any verifier from emitting.",
+    "Preserves the source's three-valued outcome status (pass / fail / concern), so a hedged verdict is expressible, where the reference flattens it to pass or fail."
+  ],
+  "mean_score": 4.33,
+  "verdict": "sound",
+  "weakest_dimension": "minimalism",
+  "what_to_fix_in_the_sculpting_skill": "Add a rule that no run artifact may be named anywhere except the frontmatter workspace declaration, with a mandatory rewrite step attached: any rule whose trigger is an artifact (an empty log, a missing report file, a per-iteration folder, a status file to update) must be re-expressed in terms of the observable result before it is kept, or dropped along with the artifact. Concretely: 'a missing or empty subagent log means silent failure' must become 'a subagent that returns no report has failed', and 'update the running log after every phase' must become 'report status after every phase'. The same rule should require inputs and outputs to be declared in the frontmatter contract by type alone, never with a backing filename. This single rule would have removed all four passengers in this candidate, which are the whole of its minimalism deduction.",
+  "expectations": [
+    {
+      "text": "The essence survived",
+      "passed": true,
+      "evidence": "score 5/5 - orchestration-only, no self-verification, parallel independent verifiers, the trust-the-failing-verifier tie-break, the five-iteration cap with the user-permission door, the silent-failure guard, and the fixer's refute-with-evidence duty all survive in binding form; report and check shapes are delegated to the types file; nothing invented."
+    },
+    {
+      "text": "Nothing spare remains",
+      "passed": false,
+      "evidence": "score 3/5 - run bookkeeping survives as a class in four places: the per-iteration folder description, the running-log instruction, the silent-failure guard framed around the log file rather than the returned result, and the task.md / status.md filenames pinned to the input and output declarations."
+    },
+    {
+      "text": "A person can read it easily",
+      "passed": true,
+      "evidence": "score 5/5 - short single-idea sentences, stages in the order the work happens, each subagent's instruction placed directly under its own header, plain-English decision branches, no unexplained jargon; only the filename-in-brackets notation gives a moment's pause."
+    }
+  ],
+  "summary": {
+    "passed": 2,
+    "failed": 1,
+    "total": 3,
+    "pass_rate": 0.67
+  }
+}

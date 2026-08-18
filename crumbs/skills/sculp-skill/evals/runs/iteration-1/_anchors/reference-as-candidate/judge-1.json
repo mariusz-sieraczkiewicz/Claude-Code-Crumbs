@@ -1,0 +1,46 @@
+{
+  "anchor": "reference-as-candidate",
+  "source_path": "/Users/sieracm2/PrivateProjects/Claude-Code-Crumbs/.agents/skills/sculp-skill/evals/source-skills/verification-loop",
+  "candidate_path": "/Users/sieracm2/PrivateProjects/Claude-Code-Crumbs/.agents/skills/sculp-skill/evals/reference-generations/verification-loop",
+  "reference_path": "/Users/sieracm2/PrivateProjects/Claude-Code-Crumbs/.agents/skills/sculp-skill/evals/reference-generations/verification-loop",
+  "scope": ["SKILL.md", "scripts/contracts.py"],
+  "dimensions": {
+    "writing_manner": {
+      "score": 5,
+      "reasoning": "Candidate and reference are the same text, so every sentence shape is by construction interchangeable. Independently characterised before comparison, the reference register is: short declarative sentences, each naming a responsibility, an input or a required result ('Spawn a subagent to complete the user's task.', 'Report the terminal result and workspace.'); no phase headings, no ASCII loop diagram, no bold guardrail bullets, no capitalised 'Do NOT' — all of which the source carries and none of which survive. The one place a strict reading of the level-4 anchor could bite is the scoping line 'The implementer and fixer may change the caller's project when the task requires it; the workspace does not confine task effects.' — a two-clause semicolon sentence that constrains interpretation rather than assigning a responsibility. Under the comparative anchor ('interchangeable with the reference') this is a 5; it is flagged below as a rubric observation, not a deduction.",
+      "divergences": []
+    },
+    "altitude": {
+      "score": 5,
+      "reasoning": "Identical text, so no stage can be more or less specific than the reference. Measured against the source for the compression-vs-omission check: the source's iter-N directory layout, worker.log / worker-report.md / verifier-*.json filenames, and the inline JSON field schemas are all absent from the reference, with field-level shape delegated to scripts/contracts.py (WorkingReport, VerifyInstructionsReport, VerifyOutcomesReport, Passed/Stopped). The workspace survives only as a frontmatter value, which is the reference's chosen altitude for storage.",
+      "divergences": []
+    },
+    "conditions": {
+      "score": 5,
+      "reasoning": "Identical text. The decide step is a closed three-branch set — every instruction done and outcome passed, iteration cap reached, otherwise fix — with the loop limit stated once up front ('Run at most 5 work-verification iterations.') and re-entry stated in the third branch ('Then verify the fixed result in the next iteration.'). Note for rubric calibration: the rubric's prose demands each branch name 'whether the official result is produced', which the reference does not do per branch — it carries that in the frontmatter output plus the Passed | Stopped union in the types file. Scored 5 on the comparative table anchor.",
+      "divergences": []
+    },
+    "structures": {
+      "score": 5,
+      "reasoning": "Identical text and identical types file. Every device the rubric names is present and in the expected position: frontmatter contract with inputs/output/types/workspace; parallelism announced before the subagents that perform it ('Verify its result using two subagents in parallel:'); each subagent given a role line, its work, and a declared result via the (-> Type) marker; domain types defined in contracts.py rather than described in the body.",
+      "divergences": []
+    },
+    "coverage": {
+      "score": 5,
+      "reasoning": "Identical text, so the responsibility set is the same by construction. Against the source, the outcome-bearing responsibilities all survive: delegate execution, verify instructions independently without trusting the report, verify outcomes against intent, decide, cap at 5, fix every unresolved issue and re-verify, report the terminal result and workspace. Source items absent from the reference (per-phase user status updates, empty-log detection, trust-the-failing-verifier tie-break) are absent from the candidate too, so they are out of scope for this comparison rather than dropped.",
+      "divergences": []
+    }
+  },
+  "mean_score": 5.0,
+  "verdict": "equivalent",
+  "weakest_dimension": "none",
+  "what_to_fix_in_the_sculpting_skill": "Nothing — this is the high anchor and no divergence exists to attribute to the sculpting skill. The finding belongs to the rubric instead: two dimensions describe the 'reference form' in prose that is strictly stronger than what the reference sample actually does, so a judge scoring against the prose rather than the comparative table anchor would mark the reference itself down to 4. Dimension 1 demotes 'one sentence that carries no responsibility' to a 4, but the reference contains exactly one such sentence (the workspace-does-not-confine-effects scoping line); dimension 3 requires each branch to name 'whether the official result is produced', but the reference's three decide-branches leave that to the frontmatter output and the Passed | Stopped union in contracts.py. Either soften those two prose clauses to match the sample, or state explicitly that the table anchors are comparative and override the prose description.",
+  "expectations": [
+    {"text": "Writing manner matches the reference form", "passed": true, "evidence": "score 5/5 - same text; short declarative responsibility-bearing sentences, none of the source's headings, diagram, or bold guardrails."},
+    {"text": "Level of detail matches the reference altitude", "passed": true, "evidence": "score 5/5 - same text; filenames, directory layout and JSON field shapes delegated to contracts.py exactly as the reference delegates them."},
+    {"text": "Conditions and branches are declared as in the reference", "passed": true, "evidence": "score 5/5 - same text; closed three-branch decision with the 5-iteration limit stated once and re-entry named in the fix branch."},
+    {"text": "Structural declarations match the reference", "passed": true, "evidence": "score 5/5 - same text; frontmatter contract, parallelism announced before subagents, role plus (-> Type) result per subagent, types in contracts.py."},
+    {"text": "Responsibility coverage matches the reference", "passed": true, "evidence": "score 5/5 - same text; identical set of outcome-bearing responsibilities, nothing dropped or invented."}
+  ],
+  "summary": {"passed": 5, "failed": 0, "total": 5, "pass_rate": 1.0}
+}

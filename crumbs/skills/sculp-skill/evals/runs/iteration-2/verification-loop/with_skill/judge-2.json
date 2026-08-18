@@ -1,0 +1,143 @@
+{
+  "dimensions": {
+    "writing_manner": {
+      "score": 3,
+      "reasoning": "Register is right: short declarative sentences, plain vocabulary, no bold, no ASCII loop diagram, no capitalised imperatives, no meta-commentary about the skill. Every sentence carries a responsibility, a constraint or a required result. What keeps it off the reference form is that the source's per-stage section-heading device survives, re-labelled: the candidate segments the body with three markdown H2s, where the reference carries stage transitions inside running numbered prose and closes on a bare sentence. The rubric names per-stage headings explicitly as the level-3 source artifact, and there are three of them, which is past the 'one or two leftover decorations' allowance at 4.",
+      "divergences": [
+        {
+          "responsibility": "stage segmentation",
+          "candidate_form": "## Check the work ... ## Fix and check again ... ## Produce the verification result",
+          "reference_form": "2. Verify its result using two subagents in parallel: ... 3. Decide: ... Report the terminal result and workspace.",
+          "form_difference": "Candidate re-uses the source's sectioning device (`## Phase N — X` becomes `## <verb phrase>`), so the reader is handed a table of stages. The reference has no headings at all in the body; stage boundaries are carried by the numbered step markers and the `Subagent:` labels, and the terminal step has no marker of its own."
+        },
+        {
+          "responsibility": "terminal report",
+          "candidate_form": "## Produce the verification result\n\nReport the verification result.",
+          "reference_form": "Report the terminal result and workspace.",
+          "form_difference": "Candidate spends a heading plus a sentence that restates the heading almost word for word; the reference states the same responsibility once, unheaded, as the last line of the document."
+        }
+      ]
+    },
+    "altitude": {
+      "score": 4,
+      "reasoning": "Altitude is close to the reference across the board. No log files, no report filenames, no JSON literals, no directory layout, no per-iteration folder naming — all of which the source spells out. Field-level shape (statuses, evidence, fix hints, changed files) is delegated to contracts.py rather than restated in the body, exactly where the reference delegates it. One stage sits below reference altitude: the cap branch drills into the shape of a user interaction. A second sits marginally above it: the outcome reviewer drops the reference's naming of the two inspection modes. Neither is a drill into mechanics and no stage is compressed past actionability, so the level-3 anchors do not apply.",
+      "divergences": [
+        {
+          "responsibility": "behaviour at the iteration cap",
+          "candidate_form": "If something is outstanding after the fifth check, present the open findings and what another round would attempt, and ask whether to carry on. Continue only on a yes; otherwise the result is produced with those findings unresolved.",
+          "reference_form": "If iteration 5 has been reached, stop and report every remaining issue.",
+          "form_difference": "Candidate descends into the content of a dialogue turn — what to show, what a further round would attempt, which answer counts as consent. The reference names the branch, the action, and stops; it enumerates neither the material presented nor the possible replies."
+        },
+        {
+          "responsibility": "outcome verification method",
+          "candidate_form": "Establish what success means for the person who asked, rather than what the task literally says, then judge whether what the work produced achieves it.",
+          "reference_form": "Define success from user intent, read each readable artifact, run each runnable artifact, and assess quality rather than existence.",
+          "form_difference": "Candidate stops one notch higher: it names the judgment but not how the artifacts are inspected. The reference still names the two inspection modes and the quality-not-existence bar; the candidate leaves 'run it if it runs' to inference."
+        }
+      ]
+    },
+    "conditions": {
+      "score": 4,
+      "reasoning": "The decision is a closed three-branch set in the same shape as the reference: each branch names its condition, its permitted action, and whether the workflow continues, and whether the official result is produced is determinate in every branch. The governing definition ('Anything a review does not record as done or passing is outstanding.') is stated once, a few lines above the branches it controls, which is no further away than the reference's own placement of its iteration cap. The one form divergence is the loop limit: the reference's limit is unconditional and its cap branch terminates, while the candidate's limit is gated on consent and the consent branch reopens the loop without declaring a new bound.",
+      "divergences": [
+        {
+          "responsibility": "loop limit and its exit",
+          "candidate_form": "Check at most five times unless the person who asked for the task agrees to more. ... Continue only on a yes; otherwise the result is produced with those findings unresolved.",
+          "reference_form": "Run at most 5 work–verification iterations. ... If iteration 5 has been reached, stop and report every remaining issue.",
+          "form_difference": "The reference states the limit as a flat number and makes the cap branch terminal, so the loop is bounded by reading the first line. The candidate states the limit with an 'unless' attached, and the branch that satisfies the 'unless' sends control back into the loop with no stated bound on the continuation — the reader has to infer whether the ask repeats every round or the cap simply lapses."
+        }
+      ]
+    },
+    "structures": {
+      "score": 4,
+      "reasoning": "All of the reference's declarative devices are present and mostly in the same positions: a frontmatter contract naming inputs, the official output and the types file; parallelism announced in a sentence before the two subagents that perform it; every subagent given a role label, its work in one or two sentences, and a declared result; the `(→ Type)` marker on all four subagents; domain types defined in contracts.py rather than described in the body. Two placements differ. The fixer is declared below the decision that spawns it rather than inside its branch, and the input is an inline primitive rather than a named domain type. The frontmatter omits `workspace:`, but the candidate never saves a result, so within its own design that device is not applicable — the loss of the workspace is scored as coverage, not as a misused device.",
+      "divergences": [
+        {
+          "responsibility": "declaring the fixer subagent",
+          "candidate_form": "- If something is outstanding and fewer than five checks have run, fix it and check again. ... [two lines later] Subagent: Fixer (→ `WorkReport`)",
+          "reference_form": "Otherwise, spawn a fixer to address every unresolved issue reported by either verifier. Use a fix hint only when supported by evidence and it addresses the root cause. (→ `WorkingReport`) Then verify the fixed result in the next iteration.",
+          "form_difference": "The reference folds the fixer's spawn, work and declared result into the branch that triggers it, so the branch is self-contained. The candidate splits them: the branch says only 'fix it', and the subagent block that says what fixing means sits after the decision, in the same position the two verifier blocks occupy relative to their announcement."
+        },
+        {
+          "responsibility": "declaring the skill's input",
+          "candidate_form": "inputs: \"task: str\"",
+          "reference_form": "inputs: Task  (with `class Task(Contract): description: str` in the types file)",
+          "form_difference": "The reference makes the input a named domain type resolved in the types file, so the frontmatter contract is uniformly type-valued. The candidate writes a Python annotation fragment inline, so the input alone is described in the body-side contract while everything else is delegated."
+        }
+      ]
+    },
+    "coverage": {
+      "score": 2,
+      "reasoning": "Three misses against the reference's set, spanning all three failure modes. Dropped: the per-run workspace, which the reference keeps as a frontmatter declaration, a one-line rule, and the closing report element — the candidate leaves no durable trace of a run and its terminal report has nothing to point the user at. Dropped with it: the interpretation guard that task effects are not confined to the workspace. Retained past the reference's line: the source's 'Max 5 iterations without user permission', which the reference deliberately compressed into a hard cap and the candidate restores as a consent prompt. Also retained: 'leave work that already passed untouched', a source line the reference folded into 'address every unresolved issue'. Additionally, the reference's fix-hint discipline is dropped from the body and survives only as a field description in the types file. The worker, parallel verifiers, verifier independence, both verification lenses, the outstanding-work definition, the three-branch decision and the fixer are all carried correctly.",
+      "divergences": [
+        {
+          "responsibility": "per-run workspace and inspectable trace",
+          "candidate_form": "(absent — frontmatter has inputs/output/types only; the body never mentions a workspace; the last line reads \"Report the verification result.\")",
+          "reference_form": "workspace: \".verification-loop/$runtime.run_id/\" ... \"Use a new workspace for each execution.\" ... \"Report the terminal result and workspace.\"",
+          "form_difference": "Dropped. The reference compresses the source's elaborate file layout down to a single declared workspace plus a rule that each run gets a fresh one, and keeps the workspace in the terminal report so the run is inspectable. The candidate compressed the whole responsibility out rather than compressing its detail, so a run leaves nothing behind."
+        },
+        {
+          "responsibility": "scope of task effects outside the workspace",
+          "candidate_form": "(absent)",
+          "reference_form": "The implementer and fixer may change the caller's project when the task requires it; the workspace does not confine task effects.",
+          "form_difference": "Dropped, as a consequence of dropping the workspace. The reference adds this guard so a reader does not conclude the subagents are sandboxed; the candidate never raises the question and never answers it."
+        },
+        {
+          "responsibility": "termination at the iteration cap",
+          "candidate_form": "Check at most five times unless the person who asked for the task agrees to more. ... present the open findings and what another round would attempt, and ask whether to carry on.",
+          "reference_form": "Run at most 5 work–verification iterations. ... If iteration 5 has been reached, stop and report every remaining issue.",
+          "form_difference": "Retained past the reference's line. The source's \"Max 5 iterations without user permission\" is a responsibility the reference deliberately compressed into an unconditional cap; the candidate carries it forward and adds a user-consent turn the reference does not have."
+        },
+        {
+          "responsibility": "scope of the fixer's edits",
+          "candidate_form": "Settle every outstanding finding and leave work that already passed untouched.",
+          "reference_form": "spawn a fixer to address every unresolved issue reported by either verifier",
+          "form_difference": "Retained. The source's \"Only fix — don't redo passing work\" survives as a second clause; the reference treats it as implied by 'address every unresolved issue' and does not state it."
+        },
+        {
+          "responsibility": "discipline on using a fix hint",
+          "candidate_form": "(body has none; only `fix_hint: str | None = Field(default=None, description=\"Where fixing should start, when not done.\")` in the types file)",
+          "reference_form": "Use a fix hint only when supported by evidence and it addresses the root cause.",
+          "form_difference": "Dropped from the behavioural contract. The reference states a condition on when a hint may be acted on; the candidate's types file only says what the field holds, which does not constrain the fixer."
+        }
+      ]
+    }
+  },
+  "mean_score": 3.4,
+  "verdict": "diverged",
+  "weakest_dimension": "coverage",
+  "what_to_fix_in_the_sculpting_skill": "The sculpting skill has no rule distinguishing run mechanics (which must be deleted) from the run's durable trace (which must be preserved as a single declaration). The candidate correctly deleted worker.log, worker-report.md, verifier-*.json and iter-N/ — and deleted the workspace with them, so nothing survives a run and the terminal report has nothing to hand back. Add a rule of the form: when the source persists artifacts of its own execution, collapse the file layout to one `workspace:` entry in the frontmatter contract, state that each execution uses a fresh one, and name the workspace in the terminal result; delete every filename, log format and per-stage subdirectory below it. A second, smaller rule would have caught the other coverage miss: an escape clause on a loop limit in the source ('max N without user permission') must be resolved into an unconditional cap, because a consent-gated limit is not a limit and reopens the loop with no declared bound.",
+  "expectations": [
+    {
+      "text": "Writing manner matches the reference form",
+      "passed": false,
+      "evidence": "score 3/5 — register, sentence length and vocabulary match, but the source's per-stage heading device survives as three re-labelled H2s ('## Check the work', '## Fix and check again', '## Produce the verification result') where the reference uses no headings at all, and the final heading restates the sentence beneath it."
+    },
+    {
+      "text": "Level of detail matches the reference altitude",
+      "passed": true,
+      "evidence": "score 4/5 — no logs, filenames, JSON shapes or directory layout survive, and field shape is delegated to contracts.py as in the reference; the cap branch alone sits below altitude by scripting a user interaction ('present the open findings and what another round would attempt, and ask whether to carry on')."
+    },
+    {
+      "text": "Conditions and branches are declared as in the reference",
+      "passed": true,
+      "evidence": "score 4/5 — the same closed three-branch decision with condition, action and result determinate in each; the loop limit is gated ('at most five times unless the person ... agrees to more') and the consent branch reopens the loop without declaring a new bound."
+    },
+    {
+      "text": "Structural declarations match the reference",
+      "passed": true,
+      "evidence": "score 4/5 — frontmatter contract, pre-announced parallelism, role-plus-work-plus-result subagent blocks, (→ Type) markers on all four subagents and types in the types file are all present; the fixer is declared below its branch rather than inside it, and the input is an inline primitive rather than a named domain type."
+    },
+    {
+      "text": "Responsibility coverage matches the reference",
+      "passed": false,
+      "evidence": "score 2/5 — the workspace and its scoping guard are dropped so no run leaves a trace, the source's user-permission escape at the cap is retained where the reference compressed it into a hard stop, 'leave passing work untouched' is retained, and the fix-hint evidence discipline is dropped from the body."
+    }
+  ],
+  "summary": {
+    "passed": 3,
+    "failed": 2,
+    "total": 5,
+    "pass_rate": 0.6
+  }
+}

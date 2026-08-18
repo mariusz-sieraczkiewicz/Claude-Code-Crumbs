@@ -1,0 +1,71 @@
+{
+  "method": "median of 3 judges",
+  "per_judge": {
+    "writing_manner": [
+      3,
+      3,
+      3
+    ],
+    "altitude": [
+      2,
+      1,
+      2
+    ],
+    "conditions": [
+      3,
+      3,
+      3
+    ],
+    "structures": [
+      2,
+      2,
+      2
+    ],
+    "coverage": [
+      2,
+      2,
+      2
+    ]
+  },
+  "median_by_dimension": {
+    "writing_manner": 3,
+    "altitude": 2,
+    "conditions": 3,
+    "structures": 2,
+    "coverage": 2
+  },
+  "mean_score": 2.4,
+  "expectations": [
+    {
+      "text": "writing manner matches the reference form",
+      "passed": false,
+      "evidence": "median 3/5 from [3, 3, 3]"
+    },
+    {
+      "text": "altitude matches the reference form",
+      "passed": false,
+      "evidence": "median 2/5 from [2, 1, 2]"
+    },
+    {
+      "text": "conditions matches the reference form",
+      "passed": false,
+      "evidence": "median 3/5 from [3, 3, 3]"
+    },
+    {
+      "text": "structures matches the reference form",
+      "passed": false,
+      "evidence": "median 2/5 from [2, 2, 2]"
+    },
+    {
+      "text": "coverage matches the reference form",
+      "passed": false,
+      "evidence": "median 2/5 from [2, 2, 2]"
+    }
+  ],
+  "summary": {
+    "passed": 0,
+    "failed": 5,
+    "total": 5,
+    "pass_rate": 0.0
+  }
+}
