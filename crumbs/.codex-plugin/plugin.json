@@ -1,0 +1,37 @@
+{
+  "name": "crumbs",
+  "version": "0.1.45",
+  "description": "Focused skills for software delivery, agent workflows, and clear technical communication.",
+  "author": {
+    "name": "Mariusz Sieraczkiewicz",
+    "url": "https://github.com/mariusz-sieraczkiewicz"
+  },
+  "homepage": "https://github.com/mariusz-sieraczkiewicz/Claude-Code-Crumbs",
+  "repository": "https://github.com/mariusz-sieraczkiewicz/Claude-Code-Crumbs",
+  "license": "MIT",
+  "keywords": [
+    "codex",
+    "skills",
+    "software-delivery",
+    "agent-workflows",
+    "technical-writing"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Crumbs",
+    "shortDescription": "Focused skills for delivery and communication",
+    "longDescription": "Crumbs provides Codex skills for software delivery, agent coordination, clear technical writing, diagrams, and document utilities.",
+    "developerName": "Mariusz Sieraczkiewicz",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Use KISS to coordinate this development task.",
+      "Rewrite this technical text clearly and concisely.",
+      "Create a workflow diagram for this process."
+    ]
+  }
+}

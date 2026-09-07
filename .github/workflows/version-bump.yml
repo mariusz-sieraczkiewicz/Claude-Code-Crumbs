@@ -53,6 +53,7 @@ jobs:
           for i, plugin in enumerate(plugins):
               source_dir = plugin["source"].lstrip("./")
               plugin_json_path = f"{source_dir}/.claude-plugin/plugin.json"
+              codex_plugin_json_path = f"{source_dir}/.codex-plugin/plugin.json"
 
               # Check if any changed file is inside this plugin's directory
               plugin_changed = any(f.startswith(f"{source_dir}/") for f in changed_files)
@@ -68,13 +69,17 @@ jobs:
               # Update marketplace.json
               plugins[i]["version"] = new_version
 
-              # Update plugin's own plugin.json
-              with open(plugin_json_path) as f:
-                  pj = json.load(f)
-              pj["version"] = new_version
-              with open(plugin_json_path, "w") as f:
-                  json.dump(pj, f, indent=2)
-                  f.write("\n")
+              # Update every manifest supplied by the plugin
+              for manifest_path in (plugin_json_path, codex_plugin_json_path):
+                  try:
+                      with open(manifest_path) as f:
+                          manifest = json.load(f)
+                  except FileNotFoundError:
+                      continue
+                  manifest["version"] = new_version
+                  with open(manifest_path, "w") as f:
+                      json.dump(manifest, f, indent=2)
+                      f.write("\n")
 
               bumped.append(f"{plugin['name']} {current} -> {new_version}")
 
@@ -104,7 +109,7 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .claude-plugin/marketplace.json dev-workflow/.claude-plugin/plugin.json crumbs/.claude-plugin/plugin.json
+          git add .claude-plugin/marketplace.json dev-workflow/.claude-plugin/plugin.json crumbs/.claude-plugin/plugin.json crumbs/.codex-plugin/plugin.json
           if git diff --cached --quiet; then
             echo "No version change to commit."
             exit 0
