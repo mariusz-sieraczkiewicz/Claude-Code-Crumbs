@@ -33,6 +33,7 @@ jira:
 5. When task is planned create a separate yaml file with notes about it ie. id, goal, acceptance criteria, and later plan if needed (`<id>-<task-kebab-name>.md`)
 6. Task state is expressed only by its section in `backlog.md` ("In progress" / "To do") or by moving it to `done.md` - never as a status field in the task file. Within "To do" the order IS the priority - no priority labels
 7. Workspace for a this skill files is `./.kiss`
+8. Append a dated line to the task file at each phase change: analysis done, implementation started, review started, verification started. This is a log, not task state - state stays where point 6 puts it.
 
 ## Analyse
 1. Based on user provided input analyse current repository to better understand the problem (if task needs repo information)
@@ -40,23 +41,25 @@ jira:
 3. Propose in human friendly way (follow @references/simple-talk.md) main goal of the task as you understand and short acceptance criteria. Agree with user.
 4. If needed do additional analysis (any kind: web search, codebase search, tools or just thinking) to prepare a proposition of main (crucial) assumptions (design, critical corner cases, influence on current solution) about how you'd like to solve the task (follow @references/simple-talk.md). Don't talk about details if human can live without them. Agree finally with user on approach.
 If task implementation can be very simple, then just propose implementation as usual, no quirks.
-5. If needed (task is big enough) Prapare plan for yourself (agent, not for human user). Part of the plan should be creating or modifying tests according to the used testing approach
+5. If needed (task is big enough) Prapare plan for yourself (agent, not for human user). Part of the plan should be creating or modifying tests according to the used testing approach. End the plan with the files the change will touch.
 6. Save backlog item with goal, acceptance criteria, and optional plan
 
 ## Implement
 1. Implement task based on created plan for backlog times including tests (domain, e2e).
 2. On the other hand be flexible about the plan especially when implementation exposes cource changing findings.
-3. To ensure mechanical quality run compilation, static analysis and tests.
-4. Choose the frequency and amount of check to fit the task size and complexity.
-5. At the end use one or more subagents (depending on task complexity) to verify task outcomes against goal and acceptance criteria. When issues found correct them.
-6. Finally use one or more subagents (depending on task complexity) to do code review based on general good practices related to used tech stach and rules defined in `.claude\rules`. Uber rule to verify is to ensure no comments (almost no comment).
+3. Run checks cheapest first: compilation, static analysis and architecture checks, the tests covering what you changed, the module, the whole suite. Go only as far as the change needs.
+4. Cheap checks after every change. The whole suite before the pull request.
+5. When a broad run goes red, narrow to the failing test. Never re-run the whole suite to see the same failure.
+6. When the implementation is complete use one or more subagents (depending on task complexity) to verify task outcomes against goal and acceptance criteria. When issues found correct them.
+7. Use one or more subagents (depending on task complexity) to do code review based on general good practices related to used tech stack and rules defined in `.claude/rules`. Uber rule to verify is to ensure no comments (almost no comment).
+8. Run 6 and 7 in the background and keep working while they do - the whole suite, the live verification below. Collect their findings and correct what they found before opening the pull request.
 
 ## Final verification
 1. Key phase is real verification of application when whole real app must locally started and clicked through to ensure application works in real usage. Use `agent-browser` skill for it. If not available or cannot connect STOP! Report.
 2. Verification should be one or more user journey that requires a set of steps to be done to verify behaviour
 3. User journey should be selected to base match current task scope.
 4. Found problems should be repaired. In edge cased should be elevated to the human if a new backlog item / task is needed.
-5. After user journey success describe to user the exact scenario(s) clicked using simple talk (references/simple-talk.md). If 
+5. After user journey success describe to user the exact scenario(s) clicked using simple talk (references/simple-talk.md).
 6. Remove obselete, not used code if left after any refactor.
 7. Spawn independent set of subagents to check if every rule in every point in this SKILL (`kiss/SKILL.md`) is fulfilled. Everything must be effectively done to move to 8. Use also subagents to repair found issues to parallelize work.
 8. Task fully done move from `backlog.md` to `done.md`, and from `.kiss/<id>-<task-kebab-name>.md` to `.kiss/done/<id>-<task-kebab-name>.md`
