@@ -38,9 +38,18 @@ For details, read the Developer's JSONL transcript:
 
 Do not use `claude logs` or `pgrep -af claude`. Stop a session with `claude stop <session-id>` using the ID from `claude agents --json`. Do not kill its process; Claude Code may restart it.
 
-## Reuse or create
+## Reuse, rebuild, or create
 
 Before reuse, confirm that no active agent owns the environment and that no uncommitted work would be lost. Preserve uncertain work and report it.
+
+Treat an idle slot as safe to rebuild only when all of these are true:
+
+- its assigned Issue and pull request are merged, closed, cancelled, or explicitly moved elsewhere;
+- `claude agents --json` shows no working Developer;
+- every checkout and worktree has been inspected, with no commit that exists only locally and no unique uncommitted change;
+- any apparently dirty checkout is proven equivalent to a durable remote commit. A familiar branch name, an idle session, or old activity is not proof.
+
+When the human explicitly asks to clean unused slots and these checks pass, delete the environment by its exact ID and recreate it from `projectId` with the same `Developer <N>` name. Wait for deletion to finish before creating the replacement. Before reuse, verify that the replacement is running, its default branch is clean and current, and the current KISS plugin is installed and enabled. If any check is inconclusive, preserve the environment and report what remains uncertain.
 
 Use the environment ID for rename operations. While an Issue is assigned, rename its slot to:
 
