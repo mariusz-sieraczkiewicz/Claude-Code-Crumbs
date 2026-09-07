@@ -1,4 +1,4 @@
-# sculp-skill eval
+# sculpt-skill eval
 
 Measures whether the sculpting skill lands on the intended **form**: the way it
 writes, how deep it goes, and how it declares conditions and structures. It does

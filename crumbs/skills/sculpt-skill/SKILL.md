@@ -1,9 +1,9 @@
 ---
-name: sculp-skill
+name: sculpt-skill
 description: Sculpting skill means remove everething and leave only essence in which removing anything will break the skill outcome. Use when user wants make skill crystal clean.
 ---
 # Important
-Don't use skill-creator skill together with sculp-skill - it may be counterproductive.
+Don't use skill-creator skill together with sculpt-skill - it may be counterproductive.
 
 # Ground rules
 1. Always work on skill copy - suffix them with the next version <skill-name>-v1, -v2 ...

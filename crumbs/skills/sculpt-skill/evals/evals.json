@@ -1,5 +1,5 @@
 {
-  "skill_name": "sculp-skill",
+  "skill_name": "sculpt-skill",
   "grading": {
     "method": "llm-as-a-judge",
     "rubric": "evals/rubric.md",
@@ -43,7 +43,7 @@
     {
       "id": 1,
       "name": "verification-loop",
-      "prompt": "Sculpt the skill at .agents/skills/sculp-skill/evals/source-skills/verification-loop so only its essence remains.",
+      "prompt": "Sculpt the skill at .agents/skills/sculpt-skill/evals/source-skills/verification-loop so only its essence remains.",
       "source_skill": "evals/source-skills/verification-loop",
       "reference_generation": "evals/reference-generations/verification-loop",
       "scope": [
