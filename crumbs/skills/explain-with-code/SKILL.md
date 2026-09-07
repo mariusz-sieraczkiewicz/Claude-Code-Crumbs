@@ -1,6 +1,6 @@
 ---
-name: sec
-description: Rewrite your most recent answer to be shorter and plainer, explained through short code fragments. Use when the user invokes /sec (optionally with a number like "/sec 600"), or asks for a shorter explanation backed by small code excerpts. Default limit is 1200 characters. Keeps the conversation language of the previous messages — never switches to English on its own.
+name: explain-with-code
+description: Rewrite your most recent answer to be shorter and plainer, explained through short code fragments. Use when the user invokes /explain-with-code (optionally with a number like "/explain-with-code 600"), or asks for a shorter explanation backed by small code excerpts. Default limit is 1200 characters. Keeps the conversation language of the previous messages — never switches to English on its own.
 ---
 
 # Sec
@@ -10,7 +10,7 @@ Rewrite your previous answer so someone unfamiliar with the details can read it 
 ## What to do
 
 1. **Target the last answer.** Rewrite your most recent substantive reply. If the user points at something else, rewrite that instead.
-2. **Respect the limit.** Default is max **1200 characters**. If the user gives a number (e.g. "/sec 600", "max 300 chars"), obey it exactly. Count characters including spaces and stay under. Code fragments do not count toward the limit — prose does.
+2. **Respect the limit.** Default is max **1200 characters**. If the user gives a number (e.g. "/explain-with-code 600", "max 300 chars"), obey it exactly. Count characters including spaces and stay under. Code fragments do not count toward the limit — prose does.
 3. **Keep the language.** Write in the language used in the previous messages of this conversation. Do not switch to English unless the conversation is already in English.
 4. **Explain with short code fragments.** Show 1-5 line excerpts of the real code, and around each one say in plain words what it does in the flow. Never paste a long block. Never leave a fragment without an explanation.
 5. **Plain language.** Short sentences, everyday words. No preamble, no filler, no hedging.
