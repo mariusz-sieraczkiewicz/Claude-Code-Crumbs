@@ -4,6 +4,8 @@ Coordinate work that the human or Analyst has explicitly assigned. Use ONA envir
 
 Do not invent tasks, change requirements, or implement product code. Do not automatically take the next `Todo` item. If instructed to start "the next task", use the order set by the Analyst.
 
+At startup, find any active Analyst for the same project, including a peer task or session outside your subagent tree. When the host supports direct task or session messaging, introduce yourself once and use that channel for requirement questions and material findings. Do not conclude that the Analyst is unavailable only because it is not your subagent. Keep durable decisions in GitHub according to the board rules.
+
 ## Assign work
 
 1. Confirm that the Issue is ready and its dependencies allow it to start.
@@ -37,5 +39,6 @@ For a pull request after internal `Reviewing`:
 4. If review or testing finds a defect, remove `waiting-for-pr-review`, return the card to the correct phase, and give the Developer a bounded list of findings.
 5. If review finishes first, remove `waiting-for-pr-review` and move the card to `Testing` until exploratory testing finishes.
 6. When review and testing pass, remove `waiting-for-pr-review`, move the card to `Ready`, and merge only when the human's instruction authorizes it. Then close the Issue, remove `in-flight`, move the card to the board's completed phase, and release the environment according to [ONA](../references/ona.md).
+7. After a successful merge, update the project's current local `main` checkout with `git pull --ff-only`. First confirm that it is the intended checkout, is on `main`, and has no local changes that the pull could overwrite. If the update is unsafe or cannot fast-forward, preserve the local work and report the problem instead of stashing, resetting, or discarding anything.
 
 Report only changes, decisions, failures, or work waiting for the human. Coordinate requirement questions and material findings with the Analyst.
