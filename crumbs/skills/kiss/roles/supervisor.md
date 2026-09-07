@@ -40,5 +40,6 @@ For a pull request after internal `Reviewing`:
 5. If review finishes first, remove `waiting-for-pr-review` and move the card to `Testing` until exploratory testing finishes.
 6. When review and testing pass, remove `waiting-for-pr-review`, move the card to `Ready`, and merge only when the human's instruction authorizes it. Then close the Issue, remove `in-flight`, move the card to the board's completed phase, and release the environment according to [ONA](../references/ona.md).
 7. After a successful merge, update the project's current local `main` checkout with `git pull --ff-only`. First confirm that it is the intended checkout, is on `main`, and has no local changes that the pull could overwrite. If the update is unsafe or cannot fast-forward, preserve the local work and report the problem instead of stashing, resetting, or discarding anything.
+8. After updating `main`, tell the active Analyst that it advanced and ask them to update their own checkout or worktree safely. Include the merged work's human-readable goal. Do not prescribe a destructive synchronization method.
 
 Report only changes, decisions, failures, or work waiting for the human. Coordinate requirement questions and material findings with the Analyst.

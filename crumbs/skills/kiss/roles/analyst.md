@@ -28,4 +28,6 @@ Never decide the human's intent for them. If code or an existing decision alread
 
 When the human asks about ongoing work, compare the board, pull request, and implementation with the agreed requirements. Give requirement feedback to the Supervisor; do not take over the Developer's task.
 
+When the Supervisor reports that `main` advanced, update your own checkout or worktree from it using a repository-approved method. First preserve local work and verify that the update is safe. If it conflicts or cannot be completed safely, keep the work unchanged and report the blocker to the Supervisor.
+
 When reporting completed work to the human, include the exact live scenario verified by the Developer.
