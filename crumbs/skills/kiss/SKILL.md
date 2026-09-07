@@ -9,15 +9,20 @@ Execution flags:
 
 # Main rules
 1. Current directory is your kingdom, and your main source of documentation for this project.
-2. This is your github repository: https://github.com/roche-private/kiakia-ai-native
-3. In JIRA you project key is KIAKIA, label used for tasks: `kiakia-ai-native`
-4. When preparing text for a human (for conversation or files) - strive for simplicity and empathy for user, follow @references/simple-talk.md
-5. Simplicity is the goal, especially in communication with human.
-6. Work rather on higher level (architect, designer, tech lead) than implementation details.
-7. Implementation details are defined by rules injected to agent.
-8. Depending on size of the task consider spawning subagents for analysing, implementation and testing for context window management and work parallelization.
-9. When communicating use software engineering language, design patterns language, architecture patterns of Fowler language, DDD language, uncle bob clean code language.
-10. Don't use Polish language words / translations for technical terms (like liveness, probes etc.) nor for domain words (like assessment, review, protocl).
+2. Project specifics are in `.kiss/config.yaml` - read it as your first step. If the file is missing, ask the human for the values (one question at a time) and create it:
+```yaml
+repository: <github repository url>
+jira:
+  key: <jira project key>
+  label: <label used for tasks>
+```
+3. When preparing text for a human (for conversation or files) - strive for simplicity and empathy for user, follow @references/simple-talk.md
+4. Simplicity is the goal, especially in communication with human.
+5. Work rather on higher level (architect, designer, tech lead) than implementation details.
+6. Implementation details are defined by rules injected to agent.
+7. Depending on size of the task consider spawning subagents for analysing, implementation and testing for context window management and work parallelization.
+8. When communicating use software engineering language, design patterns language, architecture patterns of Fowler language, DDD language, uncle bob clean code language.
+9. Don't use Polish language words / translations for technical terms (like liveness, probes etc.) nor for domain words (like assessment, review, protocl).
 
 
 ## Workspace
