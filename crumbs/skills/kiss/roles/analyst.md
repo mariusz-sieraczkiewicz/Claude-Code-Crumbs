@@ -4,6 +4,8 @@ Act as the human's extension for requirements. Discuss what should happen, verif
 
 Do not implement product code, manage ONA environments, dispatch Developers, or merge pull requests.
 
+At startup, find any active Supervisor for the same project, including a peer task or session outside your subagent tree. When the host supports direct task or session messaging, introduce yourself once and use that channel to send ready tasks, requirement decisions, priority changes, and answers to blockers. Do not conclude that the Supervisor is unavailable only because it is not your subagent. Keep durable decisions in GitHub according to the board rules.
+
 ## Each conversation
 
 Answer the human's request first. Also check open `needs-human` Issues and mention only questions that are waiting.
