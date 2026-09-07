@@ -1,65 +1,46 @@
 ---
 name: kiss
-description: Implements super simple development flow with coding agents. Use when user wants to work on, continue, finish, repair, analyse software develpoment task.
+description: Runs a simple software delivery flow as an analyst, supervisor, or developer. Use when the user wants to define, coordinate, implement, inspect, or finish development work tracked in GitHub.
 ---
 
-Execution flags:
-`--status` - when provided check which of the following points (from Main rules, Workspace, Analyse, Implement, Final verification sections) are done in the current task context and report to user
-`--continue` - when provided check which of the following points (from Main rules, Workspace, Analyse, Implement, Final verification sections) are done and start executing first not done and then next ones. If all points done just report and propose next not done task.
+# KISS
 
-# Main rules
-1. Current directory is your kingdom, and your main source of documentation for this project.
-2. Project specifics are in `.kiss/config.yaml` - read it as your first step. If the file is missing, ask the human for the values (one question at a time) and create it:
+KISS means Keep It Simple, Stupid. Keep the process and its language as small as the work allows.
+
+## Invocation
+
+Invoke KISS with `--role <developer|analyst|supervisor>`. When `--role` is omitted, use `developer`.
+
+- `--status` checks every applicable rule in this file, the selected role, and its references, then reports what is done and what remains.
+- `--continue` performs the same check and continues from the first unfinished action. When nothing remains, report completion without claiming new work.
+
+Read this file and all three files under `roles/`, then act only with the selected role's authority.
+
+## Common ground
+
+1. Treat the current directory as the project source of truth. Read its instructions and code before making claims.
+2. Read `.kiss/config.yaml` first. Discover missing values when possible; otherwise ask one question at a time and create it:
+
 ```yaml
-repository: <github repository url>
-jira:
-  key: <jira project key>
-  label: <label used for tasks>
+repository: <github repository URL>
+githubProject:
+  owner: <user or organisation>
+  number: <project number>
+ona:
+  projectId: <ONA project id>
+  maxEnvironments: 7
 ```
-3. When preparing text for a human (for conversation or files) - strive for simplicity and empathy for user, follow @references/simple-talk.md
-4. Simplicity is the goal, especially in communication with human.
-5. Work rather on higher level (architect, designer, tech lead) than implementation details.
-6. Implementation details are defined by rules injected to agent.
-7. Depending on size of the task consider spawning subagents for analysing, implementation and testing for context window management and work parallelization.
-8. When communicating use software engineering language, design patterns language, architecture patterns of Fowler language, DDD language, uncle bob clean code language.
-9. Don't use Polish language words / translations for technical terms (like liveness, probes etc.) nor for domain words (like assessment, review, protocl).
 
+3. GitHub Issues, pull requests, and the configured Project are the only durable task state. Do not create `.kiss/backlog.md` or task files. Follow [GitHub Project](references/board.md).
+4. Only the Analyst creates and prioritises tasks, normally from a human request. The Supervisor and Developer report possible work to the Analyst. The Supervisor starts only work assigned by the human or Analyst.
+5. The Analyst and Supervisor communicate directly when both are reachable. Durable decisions go to GitHub according to the board rules.
+6. Read `../clean-ai-text/references/simple-talk.md` before writing for the human. Ask one question at a time. Use established software engineering and domain terms without unnecessary translation.
+7. Preserve user work and authority. Never merge or discard work without permission that covers that action.
 
-## Workspace
-1. Every task should be in backlog first (`backlog.md`).
-2. Tasks in backlog are extremely simple, short but specific (verb oriented, goal oriented - one sentence) - easy for human to understand. Render each section as a markdown table with columns ID and Title; the ID stays plain text, the whole title is the link to the task file (no separate link, no id inside the link)
-3. When new task / subject arrive after discussion propose to save to backlog
-4. Number tasks sequentially - it is their id (4 digit number 0000 aligned)
-5. When task is planned create a separate yaml file with notes about it ie. id, goal, acceptance criteria, and later plan if needed (`<id>-<task-kebab-name>.md`)
-6. Task state is expressed only by its section in `backlog.md` ("In progress" / "To do") or by moving it to `done.md` - never as a status field in the task file. Within "To do" the order IS the priority - no priority labels
-7. Workspace for a this skill files is `./.kiss`
-8. Append a dated line to the task file at each phase change: analysis done, implementation started, review started, verification started. This is a log, not task state - state stays where point 6 puts it.
+## Roles
 
-## Analyse
-1. Based on user provided input analyse current repository to better understand the problem (if task needs repo information)
-2. Evaluate task complexity and level of information provided by human to decide if more questions are needed to better define the task. Don't hesitate to ask questions, but also don't ask questions that are easily defferable from context or with deeper analysis or with codebase search.
-3. Propose in human friendly way (follow @references/simple-talk.md) main goal of the task as you understand and short acceptance criteria. Agree with user.
-4. If needed do additional analysis (any kind: web search, codebase search, tools or just thinking) to prepare a proposition of main (crucial) assumptions (design, critical corner cases, influence on current solution) about how you'd like to solve the task (follow @references/simple-talk.md). Don't talk about details if human can live without them. Agree finally with user on approach.
-If task implementation can be very simple, then just propose implementation as usual, no quirks.
-5. If needed (task is big enough) Prapare plan for yourself (agent, not for human user). Part of the plan should be creating or modifying tests according to the used testing approach. End the plan with the files the change will touch.
-6. Save backlog item with goal, acceptance criteria, and optional plan
+- [Developer](roles/developer.md) delivers one assigned Issue.
+- [Analyst](roles/analyst.md) turns human intent into ordered, verifiable work.
+- [Supervisor](roles/supervisor.md) coordinates assigned work across ONA environments.
 
-## Implement
-1. Implement task based on created plan for backlog times including tests (domain, e2e).
-2. On the other hand be flexible about the plan especially when implementation exposes cource changing findings.
-3. Run checks cheapest first: compilation, static analysis and architecture checks, the tests covering what you changed, the module, the whole suite. Go only as far as the change needs.
-4. Cheap checks after every change. The whole suite before the pull request.
-5. When a broad run goes red, narrow to the failing test. Never re-run the whole suite to see the same failure.
-6. When the implementation is complete use one or more subagents (depending on task complexity) to verify task outcomes against goal and acceptance criteria. When issues found correct them.
-7. Use one or more subagents (depending on task complexity) to do code review based on general good practices related to used tech stack and rules defined in `.claude/rules`. Uber rule to verify is to ensure no comments (almost no comment).
-8. Run 6 and 7 in the background and keep working while they do - the whole suite, the live verification below. Collect their findings and correct what they found before opening the pull request.
-
-## Final verification
-1. Key phase is real verification of application when whole real app must locally started and clicked through to ensure application works in real usage. Use `agent-browser` skill for it. If not available or cannot connect STOP! Report.
-2. Verification should be one or more user journey that requires a set of steps to be done to verify behaviour
-3. User journey should be selected to base match current task scope.
-4. Found problems should be repaired. In edge cased should be elevated to the human if a new backlog item / task is needed.
-5. After user journey success describe to user the exact scenario(s) clicked using simple talk (references/simple-talk.md).
-6. Remove obselete, not used code if left after any refactor.
-7. Spawn independent set of subagents to check if every rule in every point in this SKILL (`kiss/SKILL.md`) is fulfilled. Everything must be effectively done to move to 8. Use also subagents to repair found issues to parallelize work.
-8. Task fully done move from `backlog.md` to `done.md`, and from `.kiss/<id>-<task-kebab-name>.md` to `.kiss/done/<id>-<task-kebab-name>.md`
+Read [ONA](references/ona.md) before inspecting or changing an environment or agent.
