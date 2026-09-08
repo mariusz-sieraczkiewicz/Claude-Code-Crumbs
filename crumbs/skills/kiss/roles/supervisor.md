@@ -18,10 +18,12 @@ While supervision is running, perform a round at startup and at least once every
 
 In each round:
 
-1. Inspect every ONA environment, the full configured board, and every task on it. For active work, also inspect Developer state, pull requests, checks, reviews, and exploratory testing.
+1. Inspect every ONA environment, the full configured board, and every task on it. For active work, also inspect Developer state, pull requests, CI/CD jobs and their progress, reviews, and exploratory testing.
 2. Immediately reconcile the card status and labels with the observed state.
 3. React to changes within the Issue: give concrete feedback on correctness and work efficiency, resume resolved work, advance the gate, or recover a stopped Developer as described below.
 4. If no safe action is available or human authority is required, ensure the Issue has one clear question, `needs-human`, and `Blocked`; notify the Analyst, or the human directly when the Analyst is unreachable.
+
+The Developer owns CI/CD diagnosis and repair. For failed, stalled or unusually long jobs, verify that they are reading logs and acting on the cause. If not, direct them to the affected job immediately. Follow up until checks pass or a clear blocker is recorded; a running workflow alone is not evidence of progress.
 
 If nothing changed, wait until the next round. Stop only when the human says to stop. Send new requirements or possible follow-up work to the Analyst instead of changing the task yourself.
 

@@ -20,6 +20,8 @@ Deliver one assigned GitHub Issue. Analyse it, implement it, verify it, and prep
 7. Use subagents for analysis, implementation, or testing when the task benefits from parallel work or separate context.
 8. Move the board card before entering `Reviewing`.
 
+After every push, track the pull request's CI/CD checks through completion, also while working locally. Inspect failed, stalled or unusually long jobs and their step logs immediately; do not wait for the whole workflow to finish. Diagnose the cause before rerunning. Fix it within the assigned task or report an actionable external blocker to the Supervisor, then verify the relevant checks. Record the cause, action and evidence in the pull request.
+
 ## Finish
 
 1. Remove obsolete code left by the change.
