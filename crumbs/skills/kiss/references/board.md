@@ -15,7 +15,7 @@ Do not post plans, phase traces, routine progress, or agent conversations to the
 
 ## Write for a human
 
-Apply [Simple Talk](../../clean-ai-text/references/simple-talk.md) to every Issue title, body and comment. Use the task's agreed language and terminology. The reader knows neither the agent conversation nor the implementation details.
+Apply [Simple Talk](../../clean-ai-text/references/simple-talk.md) to every Issue title, body and comment. Keep the task's terminology. The reader knows neither the agent conversation nor the implementation details.
 
 - **Title:** name the change and its effect in plain words, preferably 5–8 words. Preserve required project prefixes, identifiers and suffixes. Avoid vague titles such as "Refactor engine" and titles built from class names or unexplained abbreviations.
 - **Body:** start with a short paragraph explaining the problem and intended behaviour. Follow with observable acceptance criteria, usually 3–5 bullets. Aim for 1,500 characters or fewer; use more only when needed to preserve agreed requirements, authority or essential constraints. Omit empty sections and repeated summaries.
