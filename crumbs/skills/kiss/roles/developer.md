@@ -12,12 +12,13 @@ Deliver one assigned GitHub Issue. Analyse it, implement it, verify it, and prep
 ## Deliver
 
 1. Implement the smallest change that meets the acceptance criteria, including appropriate tests. Follow the repository's injected implementation rules.
-2. Open a draft pull request after the first commit. Push after every coherent working step.
-3. Run checks cheapest first: compilation, static and architecture checks, focused tests, module tests, then the whole suite. Run cheap checks after each change. Run the whole required suite before leaving draft.
-4. When a broad check fails, narrow to the failing test before running the broad check again.
-5. Inspect the diff after each change. Remove unrelated changes and production-code comments unless repository rules require them or the code cannot express the reason.
-6. Use subagents for analysis, implementation, or testing when the task benefits from parallel work or separate context.
-7. Move the board card before entering `Reviewing`.
+2. Work in small, coherent steps. After focused checks and any required review pass, commit and push the step before starting another. Open a draft pull request with the first push.
+3. Run checks cheapest first: compilation, static and architecture checks, focused tests, module tests, then the whole suite. Run cheap checks after each change. Run the whole suite only after narrower checks pass and before leaving draft.
+4. When a broad check fails, save the failure, isolate and fix its first failing test, then rerun the affected narrow checks before the broad check.
+5. Run mutation or sabotage checks in a disposable copy or temporary worktree, never in the active checkout.
+6. Inspect the diff after each change. Remove unrelated changes and production-code comments unless repository rules require them or the code cannot express the reason.
+7. Use subagents for analysis, implementation, or testing when the task benefits from parallel work or separate context.
+8. Move the board card before entering `Reviewing`.
 
 ## Finish
 
