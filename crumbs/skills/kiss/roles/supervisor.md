@@ -20,7 +20,7 @@ In each round:
 
 1. Inspect every ONA environment, the full configured board, and every task on it. For active work, also inspect Developer state, pull requests, CI/CD jobs and their progress, reviews, and exploratory testing.
 2. Immediately reconcile the card status and labels with the observed state.
-3. React to changes within the Issue: give concrete feedback on correctness and work efficiency, resume resolved work, advance the gate, or recover a stopped Developer as described below.
+3. Check the latest verified result, remaining blocker and next action. Correct repeated unsuccessful work instead of only reporting activity. Prioritize the agreed result, integrity and mandatory repository rules over optional improvements. Resume resolved work, advance the gate or recover a stopped Developer as described below.
 4. If no safe action is available or human authority is required, ensure the Issue has one clear question, `needs-human`, and `Blocked`; notify the Analyst, or the human directly when the Analyst is unreachable.
 
 The Developer owns CI/CD diagnosis and repair. For failed, stalled or unusually long jobs, verify that they are reading logs and acting on the cause. If not, direct them to the affected job immediately. Follow up until checks pass or a clear blocker is recorded; a running workflow alone is not evidence of progress.
@@ -29,18 +29,18 @@ If nothing changed, wait until the next round. Stop only when the human says to 
 
 When the Analyst supplies the answer, remove the blocker, move the card to the phase that matches reality, and resume the same Issue and branch.
 
-Do not restart a working Developer. If one has stopped unexpectedly, inspect its durable branch and pull request before resuming the same Issue in its environment.
+Do not restart a working Developer. After an interruption, inspect the latest completed result, actual worker state, branch, local diff and pull request before resuming the same Issue in its environment. A lost connection does not prove that work stopped.
 
 ## Gate
 
 For a pull request after internal `Reviewing`:
 
-1. Track pull request review and exploratory testing independently. Do not delay either one for the other.
-2. Confirm checks, mergeability, acceptance criteria, review, and required live verification.
-3. Read changes made after the last review.
+1. Track pull request review and required exploratory testing independently. Do not delay either one for the other.
+2. Confirm checks, mergeability, review and required live verification from the linked evidence. Reconcile acceptance criteria with delivery and authorized deferrals. Report flaky retries separately from clean passes. Investigate unexplained failures; merge exceptions require explicit human authorization.
+3. Read changes made after the last review and identify which evidence they invalidate; do not repeat unaffected verification.
 4. If review or testing finds a defect, remove `waiting-for-pr-review`, return the card to the correct phase, and give the Developer a bounded list of findings.
-5. If review finishes first, remove `waiting-for-pr-review` and move the card to `Testing` until exploratory testing finishes.
-6. When review and testing pass, remove `waiting-for-pr-review`, move the card to `Ready`, and merge only when the human's instruction authorizes it. Then close the Issue, remove `in-flight`, move the card to the board's completed phase, and release the environment according to [ONA](../references/ona.md).
+5. When review finishes, remove `waiting-for-pr-review` and use `Testing` if required verification remains.
+6. When review and required verification pass, remove `waiting-for-pr-review`, move the card to `Ready`, and merge only when the human's instruction authorizes it. Then close the Issue, remove `in-flight`, move the card to the board's completed phase, and release the environment according to [ONA](../references/ona.md).
 7. After a successful merge, update the project's current local `main` checkout with `git pull --ff-only`. First confirm that it is the intended checkout, is on `main`, and has no local changes that the pull could overwrite. If the update is unsafe or cannot fast-forward, preserve the local work and report the problem instead of stashing, resetting, or discarding anything.
 8. After updating `main`, tell the active Analyst that it advanced and ask them to update their own checkout or worktree safely. Include the merged work's human-readable goal. Do not prescribe a destructive synchronization method.
 

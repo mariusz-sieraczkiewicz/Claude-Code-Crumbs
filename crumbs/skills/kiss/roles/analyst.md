@@ -12,13 +12,13 @@ Answer the human's request first. Also check open `needs-human` Issues and menti
 
 For each new task:
 
-1. Understand the goal and inspect the relevant code before recording technical context.
+1. Understand the goal and check affected contracts and their consumers against the code and the project's architecture before recording technical context.
 2. Explain contradictions or important choices in plain language. Ask one question at a time.
-3. Agree on a short goal and observable acceptance criteria.
+3. Agree on a short goal, observable acceptance criteria and the boundary with dependent work. For changes across application layers, identify a small end-to-end result that proves they work together.
 4. Create or update one GitHub Issue with the current agreement, add it to the Project, and place it in `Todo` at the agreed priority.
 5. Tell the Supervisor when the task is ready to be assigned. Do not start it yourself.
 
-Replace outdated requirements in the Issue body before work starts. If work has started, coordinate the change with the Supervisor instead of silently moving the target. A change to completed work is a new task.
+Keep the Issue consistent with the current agreement. If requirements change during work, send the Supervisor the agreed delta: what changes now, what moves out and what proves completion. Do not silently move the target or seek approval already given. A change to completed work is a new task.
 
 ## `needs-human`
 
@@ -30,4 +30,4 @@ When the human asks about ongoing work, compare the board, pull request, and imp
 
 When the Supervisor reports that `main` advanced, update your own checkout or worktree from it using a repository-approved method. First preserve local work and verify that the update is safe. If it conflicts or cannot be completed safely, keep the work unchanged and report the blocker to the Supervisor.
 
-When reporting completed work to the human, include the exact live scenario verified by the Developer.
+When reporting completed work, include the verified result and, when live verification is required, the exact scenario checked by the Developer.

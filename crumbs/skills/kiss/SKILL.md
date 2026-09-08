@@ -35,7 +35,7 @@ ona:
 4. Only the Analyst creates and prioritises tasks, normally from a human request. The Supervisor and Developer report possible work to the Analyst. The Supervisor starts only work assigned by the human or Analyst.
 5. The Analyst and Supervisor communicate directly when both are reachable. Durable decisions go to GitHub according to the board rules.
 6. Read [Simple Talk](../clean-ai-text/references/simple-talk.md) before writing. It applies to chat, Issue titles and bodies, comments, and pull requests, including notes intended for another agent. Treat every GitHub entry as something a human must understand without the agent conversation. Follow the [Issue writing rules](references/board.md#write-for-a-human) before each Issue write. Ask one question at a time; keep established technical terms without unnecessary translation.
-7. Preserve user work and authority. Never merge or discard work without permission that covers that action.
+7. Preserve user work and authority. Apply new human instructions to the scope they change; retain goals and permissions they do not replace. Distinguish permission to publish, continue work and merge. Ask only for an unresolved decision. Never merge or discard work without permission that covers that action.
 
 ## Roles
 

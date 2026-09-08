@@ -4,7 +4,7 @@ The configured GitHub Project is the backlog and progress view. Resolve it from 
 
 ## Content
 
-- Issue body: current requirements and verified context.
+- Issue body: current requirements, verified context and authorized deferrals with follow-up links.
 - Project position: priority.
 - Project status: current phase.
 - Pull request: implementation, review, and verification.
@@ -49,14 +49,14 @@ Use the existing Project phases:
 | `Planning` | Assigned; Developer is inspecting the task | Supervisor |
 | `Implementing` | Code and tests are changing | Developer |
 | `Reviewing` | Internal diff review or repair | Developer |
-| `Testing` | Exploratory testing is the remaining gate | Developer |
+| `Testing` | Required verification is the remaining gate | Developer |
 | `Blocked` | Waiting for a human decision, external dependency, or pull request review | Role that found the blocker |
 | `Ready` | Pull request approved and ready to merge | Supervisor |
 | `Last done` / `Done archive` | Merged work | Supervisor |
 
-After internal `Reviewing`, request pull request review and start exploratory testing in parallel. While review is pending, keep the card in `Blocked` with `waiting-for-pr-review`. If review finishes first, remove the label and use `Testing`. Move to `Ready` only after both pass.
+After internal `Reviewing`, request pull request review and start required exploratory testing in parallel. While review is pending, keep the card in `Blocked` with `waiting-for-pr-review`. When review finishes, remove the label and use `Testing` if required verification remains. Move to `Ready` only after approval and required verification pass.
 
-Move a card before starting its phase. The Supervisor reconciles the board with the agent and pull request when they disagree.
+Move a card before starting its phase. The Supervisor reconciles the board with the agent and pull request when they disagree. When closing an Issue, remove stale active-status text and reconcile its criteria with delivery and authorized deferrals; keep verification evidence in the pull request.
 
 ## Commands
 

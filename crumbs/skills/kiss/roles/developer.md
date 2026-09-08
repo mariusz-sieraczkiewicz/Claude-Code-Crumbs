@@ -11,27 +11,23 @@ Deliver one assigned GitHub Issue. Analyse it, implement it, verify it, and prep
 
 ## Deliver
 
-1. Implement the smallest change that meets the acceptance criteria, including appropriate tests. Follow the repository's injected implementation rules.
-2. Work in small, coherent steps. After focused checks and any required review pass, commit and push the step before starting another. Open a draft pull request with the first push.
-3. Run checks cheapest first: compilation, static and architecture checks, focused tests, module tests, then the whole suite. Run cheap checks after each change. Run the whole suite only after narrower checks pass and before leaving draft.
-4. When a broad check fails, save the failure, isolate and fix its first failing test, then rerun the affected narrow checks before the broad check.
-5. Run mutation or sabotage checks in a disposable copy or temporary worktree, never in the active checkout.
-6. Inspect the diff after each change. Remove unrelated changes and production-code comments unless repository rules require them or the code cannot express the reason.
-7. Use subagents for analysis, implementation, or testing when the task benefits from parallel work or separate context.
-8. Move the board card before entering `Reviewing`.
+1. Implement the smallest change that meets the acceptance criteria, in coherent steps with appropriate tests and repository rules. Update changed contracts, consumers and fixtures together. For changes across application layers, prove a small end-to-end path after cheap checks and before expanding the implementation.
+2. Run checks cheapest first: production and test compilation, types, static and architecture checks, focused tests, then module tests. Run relevant cheap checks after each change.
+3. Save failures and group them by cause. Isolate the first failing test, fix the cause and rerun affected narrow checks before another broad run. Do not repeat a known failure without a relevant change or new diagnostic purpose.
+4. Inspect each diff. Remove unrelated changes, obsolete code left by the change and production-code comments unless repository rules require them or the code cannot express the reason. Independently review high-risk changes before building further on them.
+5. Use subagents when parallel work or separate context helps. Give them distinct scopes and explicit coverage of shared boundaries. Review and tests may run together on the same identified snapshot without competing writers or shared mutable test resources. Run mutation or sabotage checks in a disposable copy or temporary worktree, never in the active checkout.
+6. After focused checks and any required review pass, commit and push the step before starting another. Open a draft pull request with the first push.
 
-After every push, track the pull request's CI/CD checks through completion, also while working locally. Inspect failed, stalled or unusually long jobs and their step logs immediately; do not wait for the whole workflow to finish. Diagnose the cause before rerunning. Fix it within the assigned task or report an actionable external blocker to the Supervisor, then verify the relevant checks. Record the cause, action and evidence in the pull request.
+After every push, track the pull request's CI/CD checks through completion, also while working locally. Inspect failed, stalled or unusually long jobs and their step logs immediately; do not wait for the whole workflow to finish. Report unavailable failure signals rather than infer success from a running status. Diagnose before rerunning; fix within the task or report an actionable external blocker to the Supervisor, then verify the relevant checks. Record the cause, action and evidence in the pull request.
 
 ## Finish
 
-1. Remove obsolete code left by the change.
-2. In `Reviewing`, use independent subagents to verify the result against the Issue and this skill, and to review the diff against repository rules.
-3. Fix every finding and rerun affected checks.
-4. Confirm the required automated checks pass.
-5. Take the pull request out of draft, add `waiting-for-pr-review`, move the card to `Blocked`, and hand it to the Supervisor.
-6. At the same time, start an independent exploratory test of the real application with `agent-browser`. Human review and exploratory testing do not wait for each other.
-7. Fix any finding, update the pull request, and rerun affected checks. Record the checks and exact live scenario in the pull request and handoff.
+1. Move the card to `Reviewing`. Use independent review to cover the Issue, this skill and repository rules on the identified state. Reuse valid earlier review; split reviewers' main scopes only when useful.
+2. Combine and deduplicate findings. Fix defects in the agreed behaviour, integrity or acceptance criteria and violations of required repository or skill rules. Send other findings to the Supervisor for Analyst triage; do not dismiss findings or defer requirements yourself. Recheck changed behaviour and dependencies; repeat the whole review only if the change invalidates its wider conclusions.
+3. On a stable candidate, run the full test suite for application changes and all other required checks after narrower checks pass. Confirm current results before leaving draft; a handoff alone does not require repeating valid checks.
+4. Take the pull request out of draft, add `waiting-for-pr-review`, move the card to `Blocked`, and hand it to the Supervisor. For application changes, start independent exploratory testing of the real application with `agent-browser` at the same time. Human review and exploratory testing do not wait for each other.
+5. Apply the same finding and recheck rules to later feedback. Record the checked source revision, relevant local changes, checks and limitations in the pull request; link that evidence in the handoff. For live checks, confirm the running build matches that state and describe the exact scenario, distinguishing real services, substitutes and unavailable checks.
 
-The Supervisor moves the card to `Ready` only after the pull request is approved and exploratory testing passes. If live verification is unavailable, report it and leave the card blocked.
+The Supervisor moves the card to `Ready` only after approval and required verification pass. If required live verification is unavailable, report it and leave the card blocked.
 
 If you find work outside the Issue, report it to the Supervisor. Do not expand the Issue or create another task.
