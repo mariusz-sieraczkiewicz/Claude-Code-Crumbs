@@ -21,7 +21,7 @@ In each round:
 1. Inspect every ONA environment, the full configured board, and every task on it. For active work, also inspect Developer state, pull requests, CI/CD jobs and their progress, reviews, and exploratory testing.
 2. Immediately reconcile the card status and labels with the observed state.
 3. Check the latest verified result, remaining blocker and next action. Correct repeated unsuccessful work instead of only reporting activity. Prioritize the agreed result, integrity and mandatory repository rules over optional improvements. Resume resolved work, advance the gate or recover a stopped Developer as described below.
-4. If no safe action is available or human authority is required, ensure the Issue has one clear question, `needs-human`, and `Blocked`; notify the Analyst, or the human directly when the Analyst is unreachable.
+4. If a real unresolved impediment prevents progress, use `Blocked` and record what must change. If a human decision or authority is required, ensure the Issue has one clear question and `needs-human`; notify the Analyst, or the human directly when the Analyst is unreachable. Ordinary pull request review wait stays in `Code review` with `waiting-for-pr-review`.
 
 The Developer owns CI/CD diagnosis and repair. For failed, stalled or unusually long jobs, verify that they are reading logs and acting on the cause. If not, direct them to the affected job immediately. Follow up until checks pass or a clear blocker is recorded; a running workflow alone is not evidence of progress.
 
@@ -39,8 +39,8 @@ For a pull request after internal `Reviewing`:
 2. Confirm checks, mergeability, review and required live verification from the linked evidence. Reconcile acceptance criteria with delivery and authorized deferrals. Report flaky retries separately from clean passes. Investigate unexplained failures; merge exceptions require explicit human authorization.
 3. Read changes made after the last review and identify which evidence they invalidate; do not repeat unaffected verification.
 4. If review or testing finds a defect, remove `waiting-for-pr-review`, return the card to the correct phase, and give the Developer a bounded list of findings.
-5. When review finishes, remove `waiting-for-pr-review` and use `Testing` if required verification remains.
-6. When review and required verification pass, remove `waiting-for-pr-review`, move the card to `Ready`, and merge only when the human's instruction authorizes it. Then close the Issue, remove `in-flight`, move the card to the board's completed phase, and release the environment according to [ONA](../references/ona.md).
+5. While external review is pending, use `Code review` with `waiting-for-pr-review`, unless a real unresolved impediment requires `Blocked`. After approval, remove the label and use `Testing` if required verification remains; keep real impediments in `Blocked`.
+6. When review and required verification pass, remove `waiting-for-pr-review`, move the card to `Code review` for the final merge gate, and merge only when the human's instruction authorizes it. If merge authorization is missing, use `Blocked` with `needs-human` and seek that decision. After a successful merge, close the Issue, remove `in-flight`, move the card to the board's completed phase, and release the environment according to [ONA](../references/ona.md).
 7. After a successful merge, update the project's current local `main` checkout with `git pull --ff-only`. First confirm that it is the intended checkout, is on `main`, and has no local changes that the pull could overwrite. If the update is unsafe or cannot fast-forward, preserve the local work and report the problem instead of stashing, resetting, or discarding anything.
 8. After updating `main`, tell the active Analyst that it advanced and ask them to update their own checkout or worktree safely. Include the merged work's human-readable goal. Do not prescribe a destructive synchronization method.
 

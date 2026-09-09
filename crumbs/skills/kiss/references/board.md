@@ -41,20 +41,23 @@ To place an item lower, pass `afterId` for the item that should precede it.
 
 ## Status
 
-Use the existing Project phases:
+Use these Project phases in this order:
 
 | Status | Meaning | Owner |
 | --- | --- | --- |
 | `Todo` | Defined and not assigned | Analyst |
 | `Planning` | Assigned; Developer is inspecting the task | Supervisor |
+| `Blocked` | An unresolved impediment prevents progress, such as a missing human decision or external dependency | Role that found the blocker |
 | `Implementing` | Code and tests are changing | Developer |
 | `Reviewing` | Internal diff review or repair | Developer |
 | `Testing` | Required verification is the remaining gate | Developer |
-| `Blocked` | Waiting for a human decision, external dependency, or pull request review | Role that found the blocker |
-| `Ready` | Pull request approved and ready to merge | Supervisor |
-| `Last done` / `Done archive` | Merged work | Supervisor |
+| `Code review` | Pull request awaiting external review or completion of the merge gate | Supervisor |
+| `Last done` | Recently merged work | Supervisor |
+| `Done archive` | Earlier merged work | Supervisor |
 
-After internal `Reviewing`, request pull request review and start required exploratory testing in parallel. While review is pending, keep the card in `Blocked` with `waiting-for-pr-review`. When review finishes, remove the label and use `Testing` if required verification remains. Move to `Ready` only after approval and required verification pass.
+After internal `Reviewing`, request pull request review and start required exploratory testing in parallel. While review is pending, keep the card in `Code review` with `waiting-for-pr-review`. After approval, remove the label and use `Testing` if required verification remains. Once approval and required verification pass, use `Code review` for the final merge gate; the Supervisor merges under existing human authority. If merge authorization is missing, use `Blocked` with `needs-human`.
+
+Use `Blocked` only for a real unresolved impediment, including unavailable required verification. Ordinary pull request review wait belongs in `Code review`. A real blocker takes precedence even while review is pending; retain `waiting-for-pr-review` until review finishes. When the blocker is resolved, return to the phase that matches the remaining work.
 
 Move a card before starting its phase. The Supervisor reconciles the board with the agent and pull request when they disagree. When closing an Issue, remove stale active-status text and reconcile its criteria with delivery and authorized deferrals; keep verification evidence in the pull request.
 
