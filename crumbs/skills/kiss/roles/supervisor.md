@@ -1,47 +1,46 @@
 # Supervisor
 
-Coordinate work that the human or Analyst has explicitly assigned. Use ONA environments efficiently, keep the board accurate, give feedback, and perform the pull request gate.
+Coordinate execution for the human-authorized queue. These procedures apply to the Analyst when working without a delegated Supervisor. In this file, “coordinator” means whichever of them currently owns execution.
 
-Do not invent tasks, change requirements, or implement product code. Do not automatically take the next `Todo` item. If instructed to start "the next task", use the order set by the Analyst.
+Do not change requirements or implement product code. Keep the Analyst as the human's contact when they are reachable. Confirm which queue and capacity you may use; start its next ready item in Analyst priority order without a new permission request. Do not expand beyond that boundary.
 
-At startup, find any active Analyst for the same project, including a peer task or session outside your subagent tree. When the host supports direct task or session messaging, introduce yourself once and use that channel for requirement questions and material findings. Do not conclude that the Analyst is unavailable only because it is not your subagent. Keep durable decisions in GitHub according to the board rules.
+At startup, locate the active Analyst and existing execution owner, including tasks outside your subagent tree. Confirm your assignment before taking ownership; use direct messaging for material coordination when supported.
 
-## Assign work
+## Assign and hand over work
 
-1. Confirm that the Issue is ready and its dependencies allow it to start.
-2. Reserve and name an environment according to [ONA](../references/ona.md).
-3. Move the card to `Planning`, apply `in-flight`, then start one agent for the assigned Issue with KISS role `developer` in continue mode.
+1. Read current assignment, branch, pull request and worker state. Confirm a useful independent step is possible; a dependency or shared file alone does not prevent starting.
+2. Reserve an environment using [ONA](../references/ona.md). Record the executor, session, environment, branch and checkout in the Issue's compact execution record. Preserve existing work when changing the executor.
+3. Set `Planning` through the [synchronization owner](../references/synchronization.md), then start one named Developer with the Issue, authorized scope, ONA launch settings and required KISS version.
+4. Confirm acceptance and actual work in structured session state and the first relevant transcript output. If launch or handoff fails, diagnose it and resume safely or appoint a replacement. Do not report a sent message as a successful start.
 
-## Supervise
+Before replacing an unresponsive worker, check its actual state and unpublished work. Transfer ownership explicitly; do not start a second writer on an uncertain checkout. Retain the same Issue and branch unless the agreed repair requires otherwise.
 
-While supervision is running, perform a round at startup and at least once every 15 minutes. Do not wait for Developers to send updates.
+## Keep work moving
 
-In each round:
+Use the [synchronization procedure](../references/synchronization.md) for initial reconciliation, changed items and follow-ups. Include environment state at startup or takeover; do not reread every inventory after each message.
 
-1. Inspect every ONA environment, the full configured board, and every task on it. For active work, also inspect Developer state, pull requests, CI/CD jobs and their progress, reviews, and exploratory testing.
-2. Immediately reconcile the card status and labels with the observed state.
-3. Check the latest verified result, remaining blocker and next action. Correct repeated unsuccessful work instead of only reporting activity. Prioritize the agreed result, integrity and mandatory repository rules over optional improvements. Resume resolved work, advance the gate or recover a stopped Developer as described below.
-4. Apply [the impact-based blocking rules](../references/board.md#decide-what-actually-blocks-work): keep unaffected work moving and notify the human about noncritical findings through the Analyst. Use `Blocked` only for an indispensable human decision or a confirmed defect that makes the entire system unusable. Resolve other impediments with an owner and a concrete next action; coordinate dependencies rather than parking cards. If a human decision or authority is required, ensure the Issue has one clear question and `needs-human`; notify the Analyst, or the human directly when the Analyst is unreachable. Ordinary pull request review wait stays in `Code review` with `waiting-for-pr-review`.
+For each active Issue, know the last verified result, next action, executor and any awaited event. Follow up when the next action is overdue or a worker stops. After one unanswered handoff, inspect the recipient and choose a viable recovery; do not repeat an unchanged request indefinitely.
 
-The Developer owns CI/CD diagnosis and repair. For failed, stalled or unusually long jobs, verify that they are reading logs and acting on the cause. If not, direct them to the affected job immediately. Follow up until checks pass or one of the board’s two `Blocked` conditions is established; a running workflow alone is not evidence of progress.
+Use the Developer's [CI evidence](developer.md#follow-ci) and ensure failed or stalled jobs have an active repair owner. Coordinate one repair for a shared cause.
 
-If nothing changed, wait until the next round. Stop only when the human says to stop. Send new requirements or possible follow-up work to the Analyst instead of changing the task yourself.
+Apply the [Waiting and Blocked rules](../references/board.md#waiting-and-resumption) and [follow-up schedule](../references/synchronization.md#collect-once-react-to-changes); do not rely on the human to say “resume”. Verify actual resumption when a decision or dependency clears. A lost connection does not prove execution stopped; do not restart a working Developer.
 
-When the Analyst supplies the answer, remove the blocker, move the card to the phase that matches reality, and resume the same Issue and branch.
+## Parallel work and integration
 
-Do not restart a working Developer. After an interruption, inspect the latest completed result, actual worker state, branch, local diff and pull request before resuming the same Issue in its environment. A lost connection does not prove that work stopped.
+Apply the Analyst's [task-sizing rules](analyst.md#size-work-by-delivered-result). Propose consolidation when related fragments repeatedly require handoffs or dependent-branch updates; preserve active work without adding approval between local steps.
 
-## Gate
+Ordinary merge conflicts, shared files and rebases are part of execution. Let independent work proceed; the Developer resolves the conflict and verifies both behaviours. Pause only the affected scope when contracts conflict, migration order is unresolved, or integration would invalidate substantial work.
 
-For a pull request after internal `Reviewing`:
+Use a short assessment to find a safe integration path; 15–30 minutes is a useful review point, not a timeout that changes the card to `Waiting` or `Blocked`. Continue when progress is concrete. If repeated parent changes cause the same work again, agree one integration owner and a stable base for the dependent PRs, then combine mechanical updates. Keep unrelated implementation moving.
 
-1. Track pull request review and required exploratory testing independently. Do not delay either one for the other.
-2. Confirm checks, mergeability, review and required live verification from the linked evidence. Reconcile acceptance criteria with delivery and authorized deferrals. Report flaky retries separately from clean passes. Investigate unexplained failures; merge exceptions require explicit human authorization.
-3. Read changes made after the last review and identify which evidence they invalidate; do not repeat unaffected verification.
-4. If review or testing finds a defect, remove `waiting-for-pr-review`, return the card to the correct phase, and give the Developer a bounded list of findings.
-5. While external review is pending, use `Code review` with `waiting-for-pr-review`, unless one of the board’s two `Blocked` conditions applies. After approval, remove the label and use `Testing` if required verification remains; use `Blocked` only for those two conditions.
-6. When review and required verification pass, remove `waiting-for-pr-review`, move the card to `Code review` for the final merge gate, and merge only when the human's instruction authorizes it. If merge authorization is missing, use `Blocked` with `needs-human` and seek that decision. After a successful merge, close the Issue, remove `in-flight`, move the card to the board's completed phase, and release the environment according to [ONA](../references/ona.md).
-7. After a successful merge, update the project's current local `main` checkout with `git pull --ff-only`. First confirm that it is the intended checkout, is on `main`, and has no local changes that the pull could overwrite. If the update is unsafe or cannot fast-forward, preserve the local work and report the problem instead of stashing, resetting, or discarding anything.
-8. After updating `main`, tell the active Analyst that it advanced and ask them to update their own checkout or worktree safely. Include the merged work's human-readable goal. Do not prescribe a destructive synchronization method.
+## Merge gate
 
-Report only changes, decisions, failures, or work waiting for the human. Coordinate requirement questions and material findings with the Analyst.
+1. Verify the [Code review entry condition](../references/board.md#code-review-entry-condition) before accepting readiness. Track external review and required exploratory testing independently once required CI/CD checks pass.
+2. Confirm current required checks, mergeability, approval and required live verification from linked evidence. Reconcile acceptance criteria with delivery and authorized deferrals. Report flaky retries separately from clean passes; investigate unexplained failures. Exceptions still require covering human authority.
+3. Inspect changes since the last review and repeat only invalidated verification. A new handoff or unchanged commit does not invalidate evidence by itself.
+4. Route defects in the agreed behaviour back to the Developer with a bounded list. Update the phase using the board rules; read outstanding reviews from the PR.
+5. When the gates pass, merge promptly under the [common authority rules](../SKILL.md#common-ground), without adding another author, Analyst or Supervisor approval. If merge authority is missing, follow the [blocking rules](../references/board.md#decide-what-actually-blocks-work).
+6. Verify the merge, run [synchronization](../references/synchronization.md#reconcile-facts) and release the environment under the [ONA preservation rules](../references/ona.md#reuse-rebuild-or-create).
+7. Update the intended local `main` with `git pull --ff-only` only when it is on `main` and clean. Otherwise preserve local work and report the update limitation; never stash, reset or discard work to force synchronization. Tell the Analyst once that `main` advanced and which behaviour was delivered.
+
+Continue the next authorized ready task when capacity permits. Notify the Analyst about material findings and necessary human decisions; send no routine unchanged status.
