@@ -29,6 +29,8 @@ When a decision arrives, check for other remaining dependencies, update the curr
 
 ## Parallel work and integration
 
+Allocate Developers to complete results under the Analyst's [task-sizing rules](analyst.md#size-work-by-delivered-result), not one task per layer or local step. When related fragments create repeated handoffs or dependent-branch updates, propose consolidation to the Analyst while preserving active work; do not create another mandatory approval between implementation steps.
+
 Ordinary merge conflicts, shared files and rebases are part of execution. Let independent work proceed; the Developer resolves the conflict and verifies both behaviours. Pause only the affected scope when contracts conflict, migration order is unresolved, or integration would invalidate substantial work.
 
 Use a short assessment to find a safe integration path; 15–30 minutes is a useful review point, not a timeout that changes the card to `Waiting` or `Blocked`. Continue when progress is concrete. If repeated parent changes cause the same work again, agree one integration owner and a stable base for the dependent PRs, then combine mechanical updates. Keep unrelated implementation moving.

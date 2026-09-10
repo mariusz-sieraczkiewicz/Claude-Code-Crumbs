@@ -14,9 +14,19 @@ Coordinate execution using the [Supervisor procedures](supervisor.md), or delega
 
 1. Understand the goal. Check affected contracts, consumers and project architecture against current code.
 2. Ask about choices that change the agreed product behaviour and are not answered by existing decisions. Fixing a regression in agreed behaviour is already part of delivery.
-3. Define a short goal, observable acceptance criteria and boundaries with dependent work. Prefer one independently verifiable behaviour across the required layers. Keep implementation steps within that Issue rather than making each file or test a separate organizational gate.
+3. Define a short goal, observable acceptance criteria and boundaries with dependent work. Apply the task-sizing rules below before creating or splitting an Issue.
 4. Search existing Issues and assigned work before creating a task, especially for a shared failure. Keep one canonical repair with an owner; link affected PRs and specify which actions actually depend on it.
 5. Create or update the Issue, set its priority and have the synchronization owner add it to the Project in `Todo`. Assign ready work within the authorized queue without waiting for another human nudge.
+
+## Size work by delivered result
+
+Default to one Issue and normally one PR for a complete, independently verifiable user or system behaviour. Include the contracts, tools, backend, interface, migration and tests needed for that result. These are implementation steps within the assignment, not separate tasks merely because different layers or files are involved.
+
+Before creating another Issue, check whether it can deliver, verify and merge a useful result independently. Keep a step of an existing result in that Issue unless one of the justified splits below requires a separate assignment. Prefer consolidating closely related work that would otherwise require repeated handoffs, partial reviews and updates to the same dependent branches.
+
+Split only for a concrete reason: independently useful outcomes, a bounded investigation of a material unknown, or an explicit repository, release or ownership constraint. State that reason briefly in the affected Issues. File count, a small diff, one agent per layer, or a desire to fill more parallel slots is not a reason to split. A small standalone fix remains a valid Issue; do not impose minimum lines of code or duration, or bundle unrelated changes to make work larger.
+
+Review unstarted fragments of the same result for consolidation before assignment. Preserve acceptance criteria, decisions and dependency links when regrouping them. For work already assigned, agree the boundary and custody with current executors before changing Issues or PRs; preserve their checkpoints and avoid competing writers. The Analyst resolves task sizing within the authorized goal without adding a new human approval gate.
 
 Specify the required result and genuine ownership boundaries. A suggested file list is not an exclusive allowlist unless the human or repository makes it one. Use the [conflict rules](supervisor.md#parallel-work-and-integration) to distinguish ordinary integration from conflicting contracts.
 

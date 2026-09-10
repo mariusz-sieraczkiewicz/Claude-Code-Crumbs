@@ -13,7 +13,7 @@ The coordinator is the Analyst or the Supervisor they delegated. Send phase and 
 
 ## Deliver
 
-1. Implement the smallest change that meets the acceptance criteria, in coherent steps with appropriate tests and repository rules. Update changed contracts, consumers and fixtures together. For changes across application layers, prove a small end-to-end path after cheap checks and before expanding the implementation.
+1. Deliver the complete assigned behaviour, in coherent local steps with appropriate tests and repository rules. Keep all required layers in the assignment and avoid unrelated changes; small commits do not require separate Issues or PRs. Follow the Analyst's [task-sizing rules](analyst.md#size-work-by-delivered-result) when proposing a split. Update changed contracts, consumers and fixtures together. For changes across application layers, prove a small end-to-end path after cheap checks and before expanding the implementation.
 2. Run checks cheapest first: production and test compilation, types, static and architecture checks, focused tests, then module tests. Recheck affected behaviour after meaningful changes. Broaden only when required by the repository or justified by changed risk or new evidence.
 3. Save failures and group them by cause. Isolate the first failing test, fix the cause and rerun affected narrow checks before another broad run. Do not repeat a known failure without a relevant change or new diagnostic purpose.
 4. Inspect each diff. Remove unrelated changes, obsolete code left by the change and production-code comments unless repository rules require them or the code cannot express the reason. Independently review high-risk changes before building further on them.
