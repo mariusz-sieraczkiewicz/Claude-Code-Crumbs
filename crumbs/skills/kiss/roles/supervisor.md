@@ -35,7 +35,7 @@ Use a short assessment to find a safe integration path; 15–30 minutes is a use
 
 ## Merge gate
 
-1. Track external review and required exploratory testing independently. Neither waits for the other.
+1. Verify the [Code review entry condition](../references/board.md#code-review-entry-condition) before accepting readiness. Track external review and required exploratory testing independently once required CI/CD checks pass.
 2. Confirm current required checks, mergeability, approval and required live verification from linked evidence. Reconcile acceptance criteria with delivery and authorized deferrals. Report flaky retries separately from clean passes; investigate unexplained failures. Exceptions still require covering human authority.
 3. Inspect changes since the last review and repeat only invalidated verification. A new handoff or unchanged commit does not invalidate evidence by itself.
 4. Route defects in the agreed behaviour back to the Developer with a bounded list. Update phase and review labels using the board rules. Do not erase a still-pending external review merely because another step is waiting.

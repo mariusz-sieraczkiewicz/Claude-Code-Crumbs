@@ -24,7 +24,9 @@ Before adding or reordering board options, preserve existing option IDs and item
 
 Use only a channel and posting authority established by the human or project configuration. If no channel is configured, continue GitHub reconciliation and report the missing review-channel setting. Do not guess a similarly named channel or send direct messages without authorization.
 
-Post each ready PR as its own message, with a short human-readable purpose and link. Search for an existing message for that exact repository and PR before posting. Keep its channel/message ID mapping in integration metadata. PR descriptions should explain the problem, resulting behaviour and verification in at most ten sentences unless a repository template or essential requirement needs more.
+Before posting, verify the [Code review entry condition](board.md#code-review-entry-condition) against the current PR revision. Publish only non-draft PRs with all required CI/CD checks green. A review request or a card already in `Code review` is not proof of readiness. If the entry condition stops holding after publication, correct the existing message to show that readiness was withdrawn; do not post another review request until the condition passes again.
+
+Post each eligible PR as its own message, with a short human-readable purpose and link. Search for an existing message for that exact repository and PR before posting. Keep its channel/message ID mapping in integration metadata. PR descriptions should explain the problem, resulting behaviour and verification in at most ten sentences unless a repository template or essential requirement needs more.
 
 Use the channel's established emoji for approval and merge. Verify the convention from existing messages; if ambiguous, report it rather than assigning a new meaning. Reconcile reactions against current GitHub state, including dismissed approvals and reopened work. Remove only stale reactions owned by the integration; preserve human reactions. For an older message containing several PRs, use an aggregate reaction only if it is true for every linked PR, and flag ambiguous existing markings.
 

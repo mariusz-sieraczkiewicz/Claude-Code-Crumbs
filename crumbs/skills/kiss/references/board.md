@@ -43,7 +43,7 @@ Use these phases in display order. The coordinator is the Analyst or their deleg
 | `Waiting` | No useful independent step remains; a named result will allow work to resume | Coordinator |
 | `Reviewing` | Internal diff review or repair | Developer |
 | `Testing` | Required verification is the remaining gate | Developer |
-| `Code review` | Pull request awaiting external review or completion of the merge gate | Coordinator |
+| `Code review` | Non-draft PR with all required CI/CD checks green for its current revision, awaiting external review or merge | Coordinator |
 | `Last done` | Recently merged work with its acceptance criteria complete | Coordinator |
 | `Done archive` | Earlier completed work | Coordinator |
 
@@ -51,10 +51,16 @@ After internal review and the Developer's [readiness checks](../roles/developer.
 
 1. A qualifying `Blocked` condition takes precedence.
 2. Active repair uses `Implementing`, or `Reviewing` for internal-review fixes, even if external review is pending.
-3. Otherwise, pending external review uses `Code review`.
-4. After approval, remaining verification uses `Testing`; when verification also passes, use `Code review` for the [merge gate](../roles/supervisor.md#merge-gate).
+3. Apply the [Code review entry condition](#code-review-entry-condition). Unfinished automated verification uses `Testing`, or `Waiting` only under the rules below; it does not qualify for `Code review`.
+4. Once that condition passes, pending external review uses `Code review`. After approval, remaining exploratory verification uses `Testing`; when it also passes, use `Code review` for the [merge gate](../roles/supervisor.md#merge-gate).
 
 Keep `waiting-for-pr-review` whenever external review is pending, independently of the phase. Remove it once approval is complete. Missing merge authority requires a human decision; permission already given does not need renewal.
+
+### Code review entry condition
+
+Before entering or remaining in `Code review`, a PR must be non-draft and every required CI/CD check must have completed successfully for its current head and applicable integration revision. Pending, failed, cancelled, missing or unknown results do not qualify. An approval, review request, local pass or green result from an older revision cannot replace that evidence.
+
+Recheck this condition after each push and CI/CD result. If it no longer holds, move the card out of `Code review`: assign failed checks to a repair owner in `Implementing`, or use `Testing` for unfinished verification and `Waiting` only when no useful independent work remains. A shared or apparently unrelated failure still prevents this PR from entering `Code review`; continue useful work under the rules below.
 
 ### Waiting and resumption
 
@@ -62,7 +68,7 @@ Use `Waiting` only after checking that no useful independent step remains. Recor
 
 `Waiting` still counts as started work against the agreed work-in-progress limit; it does not free unlimited capacity for new tasks. Remove `in-flight` when no Developer is actively executing the task, and restore it on verified resumption. Agent allocation and started-work count are different facts.
 
-A running required check can justify `Waiting` when no other work or external review remains. Before waiting for a colleague, check their state and arrange recovery if needed. Shared files and ordinary conflicts follow the [integration rules](../roles/supervisor.md#parallel-work-and-integration).
+A running required check can justify `Waiting` when no useful independent work remains; an outstanding external review request does not override the Code review entry condition. Before waiting for a colleague, check their state and arrange recovery if needed. Shared files and ordinary conflicts follow the [integration rules](../roles/supervisor.md#parallel-work-and-integration).
 
 The coordinator resumes the same Issue when its event arrives, after checking remaining dependencies. An expired follow-up triggers investigation and, if needed, reassignment. It does not require renewed permission or automatically mean `Blocked`. Notify the human when the impact changes or a decision is needed.
 
