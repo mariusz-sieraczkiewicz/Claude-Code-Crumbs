@@ -1,6 +1,10 @@
 # ONA environments
 
-ONA environments are reusable slots named `Developer 1` through `Developer 7`. Reuse `Developer 1` and `Developer 2` first. Create the next numbered environment only when explicitly assigned parallel work needs more capacity. Never exceed `maxEnvironments` or seven. Never delete an environment without a specific human instruction.
+ONA environments are reusable slots. Each region has up to `maxEnvironments` slots, with a maximum of seven: up to seven in Europe and another seven in the United States. Use Europe by default. When Europe reaches its capacity limit, use the US runner without waiting for human approval. The KiaKia AI Native ONA project already has runners configured for both regions; use those runners rather than creating new ones.
+
+Before allocating a slot, inspect environments in both regions and resolve their runner IDs from the configured project. Count capacity separately for each region. Select the runner through the installed ONA CLI or API, checking its supported options, and verify the new environment's region before starting a Developer. A capacity limit triggers the regional fallback; other failures require diagnosis.
+
+Keep `Developer <N>` names unique across both regions, from `Developer 1` through `Developer 14`. Reuse `Developer 1` and `Developer 2` first when available in the selected region. Create the next unused numbered environment only when explicitly assigned parallel work needs more capacity. Never exceed `maxEnvironments` or seven in either region. If both regions are full, reuse a safe idle slot or wait for capacity while continuing other work. Never delete an environment without a specific human instruction.
 
 ## Send commands safely
 

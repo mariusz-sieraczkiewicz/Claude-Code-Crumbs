@@ -28,7 +28,7 @@ githubProject:
   number: <project number>
 ona:
   projectId: <ONA project id>
-  maxEnvironments: 7
+  maxEnvironments: 7 # Per region: Europe and United States
 ```
 
 3. GitHub Issues, pull requests, and the configured Project are the only durable task state. Do not create `.kiss/backlog.md` or task files. Follow [GitHub Project](references/board.md).
