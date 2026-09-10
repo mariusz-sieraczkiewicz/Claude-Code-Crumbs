@@ -1,12 +1,12 @@
 # Synchronize delivery state
 
-GitHub, the Project, worker state and the review channel describe different facts. Keep them consistent through one named synchronization owner for the queue. The coordinator owns this responsibility until they explicitly hand it to an available process or executor. This ownership covers projected phases, labels, native links and Slack messages/reactions. Issue requirements and decisions remain authored by the Analyst, while implementation evidence remains authored by the Developer. Other agents supply changed evidence rather than independently writing the projected state.
+GitHub, the Project, worker state and the review channel describe different facts. Keep them consistent through one named synchronization owner for the queue. The coordinator owns this responsibility until they explicitly hand it to an available process or executor. This owner writes phases, labels, native links and Slack messages/reactions. Issue requirements and decisions remain authored by the Analyst, while implementation evidence remains authored by the Developer. Other agents supply changed evidence rather than independently writing the projected state.
 
 ## Collect once, react to changes
 
-Use a script or API integration for deterministic copying and comparisons when available. Prefer GitHub events and CI completion watches, with a full reconciliation at startup, takeover and at a configured interval no longer than 15 minutes. Consume changed records between those checks. A quiet scheduled read does not require an LLM turn; wake the coordinator for a discrepancy, failed action, due follow-up or newly executable task.
+Use a script or API integration for deterministic copying and comparisons when available. Prefer GitHub events and CI completion watches, with a full reconciliation at startup, takeover and at a configured interval no longer than 15 minutes. Consume changed records between those checks. A quiet scheduled read does not require a model turn. Wake the coordinator for a discrepancy, failed action, due follow-up or newly executable task. When the queue has no executable step, register an event wait or host wakeup no later than 15 minutes; stay quiet while nothing changes.
 
-This skill defines the procedure; it does not install a webhook listener or scheduler. Verify that the chosen mechanism exists and runs. If none is available, the named coordinator performs reconciliation with available tools and registers a host wakeup. Report unsupported monitoring instead of claiming an unattended service is active. Do not have Analyst, Supervisor and Developer each poll the same unchanged CI run.
+This skill defines the procedure; it does not install a webhook listener or scheduler. Verify that the chosen mechanism exists and runs. If none is available, the named coordinator performs reconciliation with available tools and registers a host wakeup. If the host cannot schedule a wakeup, report the limitation and establish a reachable coordinator; do not claim unattended monitoring exists. Do not have Analyst, Supervisor and Developer each poll the same unchanged CI run.
 
 A configured model may help classify an ambiguous description. It must not decide acceptance, infer missing approval or invent dependency links. Route such questions to the delivery owner with the source evidence.
 
@@ -16,7 +16,7 @@ A configured model may help classify an ambiguous description. It must not decid
 2. Link a PR natively through GitHub Development when its scope implements the Issue. Record real blocking relationships natively as well. Verify the actual relation after writing; a URL in an Issue body is not equivalent. A PR that provides only a foundation does not complete the broader Issue.
 3. Compute the phase using [board rules](board.md#status), the execution record and current evidence. Preserve an unresolved human decision or a valid Waiting condition; a PR event alone must not overwrite them. Review approval, successful CI, merge and deployment are separate facts. Unknown or unavailable checks remain unknown.
 4. Update stale status and labels through the one writer. Read them back and check for GitHub automation side effects. Recompute from current evidence if another actor changed the item; never blindly restore a stale snapshot over newer work.
-5. Check parent/grouping Issues against all their acceptance criteria and relevant children before closing them. Do not infer completion solely from one linked merge.
+5. Close an Issue only when its own acceptance criteria are complete, accounting for authorized deferrals and, for grouping Issues, relevant children. A foundation PR or one child merge is not proof. Remove stale active labels and status text, update completed phases and retain detailed verification in the PR.
 
 Before adding or reordering board options, preserve existing option IDs and item values. If the host API cannot do this safely, keep task data intact and report the exact configuration action needed; do not replace the entire option list speculatively.
 
@@ -32,6 +32,6 @@ Use the channel's established emoji for approval and merge. Verify the conventio
 
 Store processed event IDs or equivalent deduplication keys and the last verified source revision. Re-read current state for delayed or out-of-order events. Repeating a sync must not duplicate messages, links or comments.
 
-Only one executor holds projected-state write ownership at a time. Hand over that ownership and the message mapping explicitly. Before retrying an uncertain write, read its result; for Slack, look for the exact message before reposting. On rate limits or transient errors, use the provider's retry guidance and retain the pending action. Do not run a tight retry loop or ask a large model to restate the unchanged failure.
+Transfer write ownership and the message mapping explicitly. Before retrying an uncertain write, read its result; for Slack, look for the exact message before reposting. On rate limits or transient errors, use the provider's retry guidance and retain the pending action. Do not run a tight retry loop or ask a large model to restate the unchanged failure.
 
 Record the affected item, attempted operation and next retry when synchronization fails. A synchronization failure does not by itself block unrelated implementation or prove that a PR's checks failed. The coordinator repairs synchronization and verifies the actual state before reporting success.

@@ -4,7 +4,7 @@ Coordinate execution for the human-authorized queue. These procedures apply to t
 
 Do not change requirements or implement product code. Keep the Analyst as the human's contact when they are reachable. Confirm which queue and capacity you may use; start its next ready item in Analyst priority order without a new permission request. Do not expand beyond that boundary.
 
-At startup, locate the active Analyst and existing execution owner for this project, including peer tasks outside your subagent tree. Confirm your assignment and avoid competing ownership; use direct messaging for material coordination when supported. Do not send repeated introductions.
+At startup, locate the active Analyst and existing execution owner, including tasks outside your subagent tree. Confirm your assignment before taking ownership; use direct messaging for material coordination when supported.
 
 ## Assign and hand over work
 
@@ -17,19 +17,17 @@ Before replacing an unresponsive worker, check its actual state and unpublished 
 
 ## Keep work moving
 
-At startup or takeover, reconcile the complete configured board, PRs and environments once. Subsequently inspect changed items, awaited events and due follow-ups. Use the [synchronization procedure](../references/synchronization.md) for full reconciliation and API writes rather than reading every inventory after every message.
+Use the [synchronization procedure](../references/synchronization.md) for initial reconciliation, changed items and follow-ups. Include environment state at startup or takeover; do not reread every inventory after each message.
 
 For each active Issue, know the last verified result, next action, executor and any awaited event. Follow up when the next action is overdue or a worker stops. After one unanswered handoff, inspect the recipient and choose a viable recovery; do not repeat an unchanged request indefinitely.
 
-The Developer owns CI diagnosis and repair. One collector watches each CI run and retains its logs and outcome. The coordinator uses that evidence, checking that failed or stalled jobs have an active repair owner. A running workflow alone does not prove progress. Group recurring failures under one canonical repair instead of making every Developer rediscover the cause.
+Use the Developer's [CI evidence](developer.md#follow-ci) and ensure failed or stalled jobs have an active repair owner. Coordinate one repair for a shared cause.
 
-Apply [Waiting and Blocked](../references/board.md#decide-what-actually-blocks-work). Continue unaffected work and resume an awaiting Issue when its condition is satisfied. If the queue has no executable step, register an event wait or a bounded host wakeup no later than 15 minutes; stay quiet while nothing changes. Do not spend repeated model turns narrating the wait. If the host cannot schedule a wakeup, report that limitation and establish a reachable coordinator instead of claiming monitoring exists.
-
-When a decision arrives, check for other remaining dependencies, update the current phase and confirm that the same Issue resumes. Do not restart a working Developer. A lost connection is not proof that execution stopped.
+Apply the [Waiting and Blocked rules](../references/board.md#waiting-and-resumption) and [follow-up schedule](../references/synchronization.md#collect-once-react-to-changes); do not rely on the human to say “resume”. Verify actual resumption when a decision or dependency clears. A lost connection does not prove execution stopped; do not restart a working Developer.
 
 ## Parallel work and integration
 
-Allocate Developers to complete results under the Analyst's [task-sizing rules](analyst.md#size-work-by-delivered-result), not one task per layer or local step. When related fragments create repeated handoffs or dependent-branch updates, propose consolidation to the Analyst while preserving active work; do not create another mandatory approval between implementation steps.
+Apply the Analyst's [task-sizing rules](analyst.md#size-work-by-delivered-result). Propose consolidation when related fragments repeatedly require handoffs or dependent-branch updates; preserve active work without adding approval between local steps.
 
 Ordinary merge conflicts, shared files and rebases are part of execution. Let independent work proceed; the Developer resolves the conflict and verifies both behaviours. Pause only the affected scope when contracts conflict, migration order is unresolved, or integration would invalidate substantial work.
 
@@ -41,8 +39,8 @@ Use a short assessment to find a safe integration path; 15–30 minutes is a use
 2. Confirm current required checks, mergeability, approval and required live verification from linked evidence. Reconcile acceptance criteria with delivery and authorized deferrals. Report flaky retries separately from clean passes; investigate unexplained failures. Exceptions still require covering human authority.
 3. Inspect changes since the last review and repeat only invalidated verification. A new handoff or unchanged commit does not invalidate evidence by itself.
 4. Route defects in the agreed behaviour back to the Developer with a bounded list. Update phase and review labels using the board rules. Do not erase a still-pending external review merely because another step is waiting.
-5. When the gates pass, merge promptly under existing human authorization. Do not add another author, Analyst or Supervisor approval. If the human requested review before merge, retain that gate; if merge authority is genuinely missing, record the question under `Blocked` with `needs-human`.
-6. Verify the merge and run synchronization: close only Issues whose acceptance criteria are fulfilled, remove stale active labels, update completed phases and Slack reactions. A merged foundation PR alone does not complete its broader Issue. Release the environment under the ONA preservation rules.
+5. When the gates pass, merge promptly under the [common authority rules](../SKILL.md#common-ground), without adding another author, Analyst or Supervisor approval. If merge authority is missing, follow the [blocking rules](../references/board.md#decide-what-actually-blocks-work).
+6. Verify the merge, run [synchronization](../references/synchronization.md#reconcile-facts) and release the environment under the [ONA preservation rules](../references/ona.md#reuse-rebuild-or-create).
 7. Update the intended local `main` with `git pull --ff-only` only when it is on `main` and clean. Otherwise preserve local work and report the update limitation; never stash, reset or discard work to force synchronization. Tell the Analyst once that `main` advanced and which behaviour was delivered.
 
 Continue the next authorized ready task when capacity permits. Notify the Analyst about material findings and necessary human decisions; send no routine unchanged status.

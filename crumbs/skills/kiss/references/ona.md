@@ -1,6 +1,6 @@
 # ONA environments
 
-ONA environments are reusable slots. Each region has up to `maxEnvironments` slots, with a maximum of seven: up to seven in Europe and another seven in the United States. Use Europe by default. When Europe reaches its capacity limit, use the US runner without waiting for human approval. The KiaKia AI Native ONA project already has runners configured for both regions; use those runners rather than creating new ones.
+ONA environments are reusable slots. Each region has up to `maxEnvironments` slots, with a maximum of seven: up to seven in Europe and another seven in the United States. Use Europe by default. When Europe reaches its capacity limit, use the US runner without waiting for human approval. Use the project's configured runners rather than creating new ones; see the [setup note](../README.md#ona-setup).
 
 Before allocating a slot, inspect environments in both regions and resolve their runner IDs from the configured project. Count capacity separately for each region. Select the runner through the installed ONA CLI or API, checking its supported options, and verify the new environment's region before starting a Developer. A capacity limit triggers the regional fallback; other failures require diagnosis. Track model-budget exhaustion separately from environment slots. For a confirmed regional model quota, use an already configured and authorized US route when available; do not repeat calls against the same exhausted budget. A quota that applies to the account across regions will not be fixed by moving environments. Preserve checkpoints and verify access once after a relevant routing change.
 
@@ -31,7 +31,7 @@ When a plugin change says that a restart is required, start a fresh background s
 
 ## Select the Developer model
 
-When launching an ONA Developer, use the model and effort specified by the human or project. If neither specifies them, choose a supported Developer profile from the [setup recommendations](../README.md#model-recommendations). Keep that choice fixed across the assignment. This choice applies only to the ONA Developer; preserve the user or host settings for other roles.
+When launching an ONA Developer, use the model and effort specified by the human or project. If neither specifies them, choose a supported Developer profile from the [setup recommendations](../README.md#model-recommendations). Keep that choice fixed across the assignment.
 
 Use the installed host's supported launch options and an exact provider model identifier; do not guess flags or rely on an unverified alias. Confirm the effective model, effort, provider and region in the actual session metadata or first response, and record them with the assignment. If a requested model is unavailable, diagnose access or use an explicitly authorized fallback. Keep unaffected work moving without silently downgrading or claiming a model ran when it did not. Never restart a working Developer just to change its model.
 
@@ -54,7 +54,7 @@ For details, read the Developer's JSONL transcript:
 ~/.claude/projects/-workspaces-<repository>/<agent-id>-*.jsonl
 ```
 
-After launch, also inspect that session's transcript before treating the task as started. It must show KISS expansion with `attributionSkill` set to `crumbs:kiss`. If the transcript reports an unknown command or lacks KISS attribution, stop every just-started matching session by ID, preserve the checkout, and reconcile the card and labels with the last phase proven by the branch and pull request. Assign the plugin repair to the coordinator and continue independent work. Use [Waiting](board.md#waiting-and-resumption) only when no useful step remains and a named recovery event and follow-up exist. Preserve the checkpoint if an assignment is released to `Todo`; remove `in-flight` when no Developer is active. A plugin failure alone is not `Blocked`. Verify recovery before relaunching; do not retry an unchanged failure.
+After launch, also inspect that session's transcript before treating the task as started. It must show KISS expansion with `attributionSkill` set to `crumbs:kiss`. If the transcript reports an unknown command or lacks KISS attribution, stop every just-started matching session by ID, preserve the checkout, and reconcile the card and labels with the last phase proven by the branch and pull request. Assign the plugin repair to the coordinator and continue independent work. Apply the [Waiting and blocking rules](board.md#waiting-and-resumption), preserving the checkpoint and removing `in-flight` when no Developer is active. Verify recovery before relaunching; do not retry an unchanged failure.
 
 Do not use `claude logs` or `pgrep -af claude`. Stop a session with `claude stop <session-id>` using the ID from `claude agents --json`. Do not kill its process; Claude Code may restart it.
 

@@ -16,17 +16,7 @@ Do not post plans, phase traces, routine progress comments, or agent conversatio
 
 ## Write for a human
 
-Apply [Simple Talk](../../clean-ai-text/references/simple-talk.md) to every Issue title, body and comment. Keep the task's terminology. The reader knows neither the agent conversation nor the implementation details.
-
-- **Title:** name the change and its effect in plain words, preferably 5–8 words. Preserve required project prefixes, identifiers and suffixes. Avoid vague titles such as "Refactor engine" and titles built from class names or unexplained abbreviations.
-- **Body:** start with a short paragraph explaining the problem and intended behaviour. Follow with observable acceptance criteria, usually 3–5 bullets. Aim for 1,500 characters or fewer; use more only when needed to preserve agreed requirements, authority or essential constraints. Omit empty sections and repeated summaries.
-- **Technical context:** keep only details that change what a correct solution must do. Link to the relevant source instead of copying architecture, workflow rules, file lists or logs. Describe what a link or identifier refers to; a section number or path alone is not an explanation. Keep exact names when they are necessary.
-- **Comments and notes:** record only a question, its answer or a durable decision, usually in 2–4 sentences. State what needs deciding or what was decided, why it matters, and the effect on the task. Do not paste agent handoffs, reasoning transcripts, command output or progress reports. Implementation and verification evidence belongs in the pull request.
-- **Updates:** keep one coherent current description, not successive addenda or duplicated requirements. Preserve agreed scope and criteria when shortening; follow the Analyst's rules for changes after work starts.
-
-For example, prefer **"Keep user edits when AI finishes"** to **"Implement draftVersion guard in result hydration"**. Explain that a late AI result must not overwrite text edited after generation started; use the exact technical name only if the implementation needs it.
-
-Before saving, reread the title and text as a new reader: can they tell what changes, why, and when it is done? Remove repetition and unnecessary detail, not requirements. Check that the final Markdown has real paragraphs and lists rather than escaped newlines.
+Follow the [Issue writing guide](writing.md) for titles, descriptions and comments.
 
 ## Priority
 
@@ -42,7 +32,7 @@ To place an item lower, pass `afterId` for the item that should precede it.
 
 ## Status
 
-Use these Project phases in this display order. The coordinator is the Analyst or their delegated Supervisor; Waiting and Blocked are exceptions, not mandatory stages:
+Use these phases in display order. The coordinator is the Analyst or their delegated Supervisor. The owner in this table is responsible for the work; the synchronization owner writes the status. `Waiting` and `Blocked` are exceptions, not mandatory stages:
 
 | Status | Meaning | Owner |
 | --- | --- | --- |
@@ -54,10 +44,17 @@ Use these Project phases in this display order. The coordinator is the Analyst o
 | `Reviewing` | Internal diff review or repair | Developer |
 | `Testing` | Required verification is the remaining gate | Developer |
 | `Code review` | Pull request awaiting external review or completion of the merge gate | Coordinator |
-| `Last done` | Recently merged work | Coordinator |
-| `Done archive` | Earlier merged work | Coordinator |
+| `Last done` | Recently merged work with its acceptance criteria complete | Coordinator |
+| `Done archive` | Earlier completed work | Coordinator |
 
-After internal `Reviewing`, request pull request review and start required exploratory testing in parallel. While review is pending, keep the card in `Code review` with `waiting-for-pr-review`. After approval, remove the label and use `Testing` if required verification remains. Once approval and required verification pass, use `Code review` for the final merge gate; the coordinator merges under existing human authority. If merge authorization is missing, use `Blocked` with `needs-human`.
+After internal review and the Developer's [readiness checks](../roles/developer.md#finish), external review and exploratory testing run in parallel. Choose the phase in this order:
+
+1. A qualifying `Blocked` condition takes precedence.
+2. Active repair uses `Implementing`, or `Reviewing` for internal-review fixes, even if external review is pending.
+3. Otherwise, pending external review uses `Code review`.
+4. After approval, remaining verification uses `Testing`; when verification also passes, use `Code review` for the [merge gate](../roles/supervisor.md#merge-gate).
+
+Keep `waiting-for-pr-review` whenever external review is pending, independently of the phase. Remove it once approval is complete. Missing merge authority requires a human decision; permission already given does not need renewal.
 
 ### Waiting and resumption
 
@@ -65,9 +62,9 @@ Use `Waiting` only after checking that no useful independent step remains. Recor
 
 `Waiting` still counts as started work against the agreed work-in-progress limit; it does not free unlimited capacity for new tasks. Remove `in-flight` when no Developer is actively executing the task, and restore it on verified resumption. Agent allocation and started-work count are different facts.
 
-A running required check can justify `Waiting` when nothing else remains. A repair in progress stays `Implementing` or `Testing`; ordinary external review stays `Code review`. Waiting for a colleague to answer is not a substitute for checking their state and arranging recovery. Shared files and ordinary conflicts follow the [integration rules](../roles/supervisor.md#parallel-work-and-integration).
+A running required check can justify `Waiting` when no other work or external review remains. Before waiting for a colleague, check their state and arrange recovery if needed. Shared files and ordinary conflicts follow the [integration rules](../roles/supervisor.md#parallel-work-and-integration).
 
-The coordinator resumes the same Issue when its event arrives, checks any remaining dependencies and returns to the appropriate phase. The follow-up deadline triggers investigation and reassignment if needed, not another permission request or automatic `Blocked`. Keep the human informed only when the impact changes or a decision is required.
+The coordinator resumes the same Issue when its event arrives, after checking remaining dependencies. An expired follow-up triggers investigation and, if needed, reassignment. It does not require renewed permission or automatically mean `Blocked`. Notify the human when the impact changes or a decision is needed.
 
 ### Decide what actually blocks work
 
@@ -80,13 +77,11 @@ Use `Blocked` only in two cases:
 - Work cannot proceed without a specific human decision that existing instructions and authority do not answer. Record one clear question, add `needs-human`, and ask the human through the Analyst, or directly through the coordinator if the Analyst is unreachable.
 - A confirmed defect makes the entire system unusable. Record evidence of that impact and the repair needed, notify the human, and have the coordinator coordinate recovery. Do not add `needs-human` unless a human decision is also required.
 
-Edge cases, failed checks, unavailable test environments and waiting for another task do not qualify by themselves. KISS must diagnose and resolve them: the coordinator establishes an owner and a concrete next action and follows through. Keep active work in its actual phase. Use `Waiting` only under the rules above; retain the checkpoint if an assignment is released back to `Todo`. Preserve genuine dependency links without treating them as an automatic reason for `Blocked`.
+Failed checks, unavailable test environments, plugin failures and dependencies do not qualify by themselves. The coordinator assigns their diagnosis and repair, keeps independent work moving and uses `Waiting` only under the rules above. Releasing an assignment to `Todo` preserves its checkpoint. Genuine dependency links do not automatically mean `Blocked`.
 
-A pending merge gate does not waive acceptance criteria, required checks, review or branch protection. Resolve technical failures within the workflow; merge exceptions still require explicit human authorization.
+These phase rules do not waive acceptance criteria, required checks, review or branch protection. Merge exceptions require explicit human authorization.
 
-Ordinary pull request review wait belongs in `Code review`. Retain `waiting-for-pr-review` while that review is pending, even if another step is blocked. When the blocker is resolved, return to the phase that matches the remaining work.
-
-Publish a phase change when that phase starts; a failed metadata write does not prevent independent implementation. The [synchronization owner](synchronization.md) reconciles the board with verified worker and PR state. Native links and GitHub automations must be checked after writes, not inferred from text references. Only close an Issue when its own criteria are complete. When closing it, remove stale active-status text and reconcile its criteria with delivery and authorized deferrals; keep verification evidence in the pull request.
+Report a phase when it starts. A failed metadata write does not stop independent implementation; the [synchronization owner](synchronization.md) repairs it and verifies the board state.
 
 ## Commands
 

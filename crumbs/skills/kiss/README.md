@@ -4,7 +4,7 @@ KISS coordinates delivery through an Analyst, Developers and an optional Supervi
 
 ## Model recommendations
 
-The user or execution host normally sets each agent's model and reasoning effort before KISS starts. The profiles below are optional starting points for that setup, not instructions for KISS to reconfigure roles. KISS selects a model only when launching a Developer on ONA, within the user's or project's settings.
+The user or host sets each agent's model and reasoning effort. These profiles are optional starting points, not measured optima or instructions to reconfigure roles. KISS selects settings only for Developers it launches on ONA, within user or project constraints.
 
 For a useful comparison, keep the chosen settings stable across a batch rather than changing them for every Issue.
 
@@ -18,7 +18,7 @@ For a useful comparison, keep the chosen settings stable across a batch rather t
 
 Deterministic synchronization uses scripts or APIs, not a model. An Analyst can coordinate execution without an additional Supervisor to relay messages. Review independence requires a separate assessment, not a different model provider.
 
-These are starting settings for the typical delivery workload, not measured optimal settings. The Developer profile retains capacity for contract changes, persistence, concurrency and integration. The reviewer examines a bounded change deeply. The Supervisor profile assumes execution coordination rather than another complete architecture review. The highest effort for every role is unlikely to be a useful starting point for comparing delivery cost.
+The Developer profile covers contracts, persistence, concurrency and integration; the reviewer examines a bounded change deeply. The Supervisor profile assumes coordination, not a second architecture review. Compare the suggested settings before selecting the highest effort for every role.
 
 ## Configure the host
 
@@ -32,4 +32,8 @@ Compare fixed profiles across batches using cost per completed behaviour, delive
 
 Use a comparable batch to decide whether to change your future setup. Lower prices per token do not prove lower delivery cost when retries and integration increase.
 
-Sources for model capabilities and settings: [OpenAI models](https://developers.openai.com/api/docs/models), [Astra guidance](https://developers.openai.com/api/docs/guides/latest-model), [Claude effort](https://platform.claude.com/docs/en/build-with-claude/effort), and [Claude Code configuration](https://code.claude.com/docs/en/model-config). These role assignments are suggestions for this workflow, not vendor recommendations or measured optima.
+Sources for model capabilities and settings: [OpenAI models](https://developers.openai.com/api/docs/models), [Astra guidance](https://developers.openai.com/api/docs/guides/latest-model), [Claude effort](https://platform.claude.com/docs/en/build-with-claude/effort), and [Claude Code configuration](https://code.claude.com/docs/en/model-config). The role assignments are suggestions for this workflow, not vendor recommendations.
+
+## ONA setup
+
+The KiaKia AI Native ONA project has runners for Europe and the United States. Use its configured runners and verify their current identifiers and capacity through the [ONA procedure](references/ona.md).
