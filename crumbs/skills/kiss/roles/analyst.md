@@ -20,6 +20,8 @@ For each new task:
 
 Keep the Issue consistent with the current agreement. If requirements change during work, send the Supervisor the agreed delta: what changes now, what moves out and what proves completion. Do not silently move the target or seek approval already given. A change to completed work is a new task.
 
+When the Supervisor reports a noncritical finding, notify the human briefly: explain the practical impact and which work continues. Do not turn an informational notice into an approval wait; follow [the blocking rules](../references/board.md#decide-what-actually-blocks-work).
+
 ## `needs-human`
 
 Read the question and the relevant task. Explain what is being decided, the practical options, and the Developer's recommendation when one exists. Post the human's answer as the durable decision, remove `needs-human`, and tell the Supervisor that work can continue.

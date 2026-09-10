@@ -18,7 +18,7 @@ Deliver one assigned GitHub Issue. Analyse it, implement it, verify it, and prep
 5. Use subagents when parallel work or separate context helps. Give them distinct scopes and explicit coverage of shared boundaries. Review and tests may run together on the same identified snapshot without competing writers or shared mutable test resources. Run mutation or sabotage checks in a disposable copy or temporary worktree, never in the active checkout.
 6. After focused checks and any required review pass, commit and push the step before starting another. Open a draft pull request with the first push.
 
-After every push, track the pull request's CI/CD checks through completion, also while working locally. Inspect failed, stalled or unusually long jobs and their step logs immediately; do not wait for the whole workflow to finish. Report unavailable failure signals rather than infer success from a running status. Diagnose before rerunning; fix within the task or report an actionable external blocker to the Supervisor, then verify the relevant checks. Record the cause, action and evidence in the pull request.
+After every push, track the pull request's CI/CD checks through completion, also while working locally. Inspect failed, stalled or unusually long jobs and their step logs immediately; do not wait for the whole workflow to finish. Report unavailable failure signals rather than infer success from a running status. Diagnose before rerunning; fix within the task or report the finding, its impact and the work that can continue to the Supervisor, then verify the relevant checks. Apply [the impact-based blocking rules](../references/board.md#decide-what-actually-blocks-work); a noncritical finding does not automatically stop unaffected work. Record the cause, action and evidence in the pull request.
 
 ## Finish
 
@@ -28,6 +28,6 @@ After every push, track the pull request's CI/CD checks through completion, also
 4. Take the pull request out of draft, add `waiting-for-pr-review`, move the card to `Code review`, and hand it to the Supervisor. For application changes, start independent exploratory testing of the real application with `agent-browser` at the same time. Human review and exploratory testing do not wait for each other.
 5. Apply the same finding and recheck rules to later feedback. Record the checked source revision, relevant local changes, checks and limitations in the pull request; link that evidence in the handoff. For live checks, confirm the running build matches that state and describe the exact scenario, distinguishing real services, substitutes and unavailable checks.
 
-The Supervisor completes the merge gate after approval and required verification pass. If required live verification is unavailable, report the impediment and move the card to `Blocked`.
+The Supervisor completes the merge gate after approval and required verification pass. If required live verification is unavailable, report the exact unavailable check and continue work that does not depend on it. Use `Blocked` only when the remaining work cannot proceed under the board rules.
 
 If you find work outside the Issue, report it to the Supervisor. Do not expand the Issue or create another task.

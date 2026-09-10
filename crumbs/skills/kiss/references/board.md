@@ -57,7 +57,15 @@ Use these Project phases in this order:
 
 After internal `Reviewing`, request pull request review and start required exploratory testing in parallel. While review is pending, keep the card in `Code review` with `waiting-for-pr-review`. After approval, remove the label and use `Testing` if required verification remains. Once approval and required verification pass, use `Code review` for the final merge gate; the Supervisor merges under existing human authority. If merge authorization is missing, use `Blocked` with `needs-human`.
 
-Use `Blocked` only for a real unresolved impediment, including unavailable required verification. Ordinary pull request review wait belongs in `Code review`. A real blocker takes precedence even while review is pending; retain `waiting-for-pr-review` until review finishes. When the blocker is resolved, return to the phase that matches the remaining work.
+### Decide what actually blocks work
+
+An edge-case defect that leaves the application usable does not stop other work by default. Establish its actual impact: a failed shared test alone does not prove that every affected task depends on the repair. Continue implementation, review and checks that can proceed independently; keep their cards in the phase being performed. Do not add blocking dependencies merely because tasks share a failing check.
+
+Record the finding and evidence in the pull request. The Supervisor sends the Analyst a short explanation of the impact and what work will continue; the Analyst notifies the human, or the Supervisor does so directly if the Analyst is unreachable. This is a notification, not a request for permission to continue. Do not add `needs-human` or wait for an answer unless a specific unresolved decision is required. Follow a human instruction to stop, and notify again only if the impact changes materially.
+
+Use `Blocked` when an unresolved impediment prevents the remaining work from proceeding. Name the exact step that cannot proceed, why, and what will unblock it. Limit the hold to that work, including when required verification is unavailable; do not stop unrelated tasks. While repair or other useful work continues, use its actual phase. A remaining merge gate can still block completion: continuing work does not waive acceptance criteria, required checks, review or branch protection, and merge exceptions still require explicit human authorization.
+
+Ordinary pull request review wait belongs in `Code review`. Retain `waiting-for-pr-review` while that review is pending, even if another step is blocked. When the blocker is resolved, return to the phase that matches the remaining work.
 
 Move a card before starting its phase. The Supervisor reconciles the board with the agent and pull request when they disagree. When closing an Issue, remove stale active-status text and reconcile its criteria with delivery and authorized deferrals; keep verification evidence in the pull request.
 
