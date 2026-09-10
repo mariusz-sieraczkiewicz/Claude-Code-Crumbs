@@ -10,7 +10,7 @@ At startup, locate the active Analyst and existing execution owner, including ta
 
 1. Read current assignment, branch, pull request and worker state. Confirm a useful independent step is possible; a dependency or shared file alone does not prevent starting.
 2. Reserve an environment using [ONA](../references/ona.md). Record the executor, session, environment, branch and checkout in the Issue's compact execution record. Preserve existing work when changing the executor.
-3. Set `Planning` and `in-flight` through the [synchronization owner](../references/synchronization.md), then start one named Developer with the Issue, authorized scope, ONA launch settings and required KISS version.
+3. Set `Planning` through the [synchronization owner](../references/synchronization.md), then start one named Developer with the Issue, authorized scope, ONA launch settings and required KISS version.
 4. Confirm acceptance and actual work in structured session state and the first relevant transcript output. If launch or handoff fails, diagnose it and resume safely or appoint a replacement. Do not report a sent message as a successful start.
 
 Before replacing an unresponsive worker, check its actual state and unpublished work. Transfer ownership explicitly; do not start a second writer on an uncertain checkout. Retain the same Issue and branch unless the agreed repair requires otherwise.
@@ -38,7 +38,7 @@ Use a short assessment to find a safe integration path; 15–30 minutes is a use
 1. Verify the [Code review entry condition](../references/board.md#code-review-entry-condition) before accepting readiness. Track external review and required exploratory testing independently once required CI/CD checks pass.
 2. Confirm current required checks, mergeability, approval and required live verification from linked evidence. Reconcile acceptance criteria with delivery and authorized deferrals. Report flaky retries separately from clean passes; investigate unexplained failures. Exceptions still require covering human authority.
 3. Inspect changes since the last review and repeat only invalidated verification. A new handoff or unchanged commit does not invalidate evidence by itself.
-4. Route defects in the agreed behaviour back to the Developer with a bounded list. Update phase and review labels using the board rules. Do not erase a still-pending external review merely because another step is waiting.
+4. Route defects in the agreed behaviour back to the Developer with a bounded list. Update the phase using the board rules; read outstanding reviews from the PR.
 5. When the gates pass, merge promptly under the [common authority rules](../SKILL.md#common-ground), without adding another author, Analyst or Supervisor approval. If merge authority is missing, follow the [blocking rules](../references/board.md#decide-what-actually-blocks-work).
 6. Verify the merge, run [synchronization](../references/synchronization.md#reconcile-facts) and release the environment under the [ONA preservation rules](../references/ona.md#reuse-rebuild-or-create).
 7. Update the intended local `main` with `git pull --ff-only` only when it is on `main` and clean. Otherwise preserve local work and report the update limitation; never stash, reset or discard work to force synchronization. Tell the Analyst once that `main` advanced and which behaviour was delivered.

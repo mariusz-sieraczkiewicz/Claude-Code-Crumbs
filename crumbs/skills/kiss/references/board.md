@@ -18,6 +18,15 @@ Do not post plans, phase traces, routine progress comments, or agent conversatio
 
 Follow the [Issue writing guide](writing.md) for titles, descriptions and comments.
 
+## Labels
+
+Use labels on Issues and PRs for classification only:
+
+- One task-group label, such as `engine` or `review and protocol`. Reuse the project's established names; these examples are not mandatory groups. The Analyst chooses the group by delivered responsibility, not every file touched. Apply it to both the Issue and its implementing PR; classify a standalone PR by its own scope.
+- Optional `bug` when the work fixes incorrect behaviour, not for every enhancement or refactor. A failed CI run alone does not make the underlying task a bug.
+
+Do not create or maintain workflow labels such as `in-flight`, `waiting-for-pr-review` or `needs-human`. The board records phase, the PR records reviews and checks, and the execution record identifies the active worker and any unresolved question. KISS removes its obsolete workflow labels from assigned Issues and PRs during synchronization, but preserves unrelated labels owned by other tools or required by the repository. Any other KISS classification needs an explicit project requirement.
+
 ## Priority
 
 The order of cards in `Todo` is their priority. Only the Analyst changes it. Resolve the Project and item identifiers, then move the highest-priority item to the top:
@@ -54,7 +63,7 @@ After internal review and the Developer's [readiness checks](../roles/developer.
 3. Apply the [Code review entry condition](#code-review-entry-condition). Unfinished automated verification uses `Testing`, or `Waiting` only under the rules below; it does not qualify for `Code review`.
 4. Once that condition passes, pending external review uses `Code review`. After approval, remaining exploratory verification uses `Testing`; when it also passes, use `Code review` for the [merge gate](../roles/supervisor.md#merge-gate).
 
-Keep `waiting-for-pr-review` whenever external review is pending, independently of the phase. Remove it once approval is complete. Missing merge authority requires a human decision; permission already given does not need renewal.
+Read pending reviews and approvals from the PR, independently of the board phase. Missing merge authority requires a human decision; permission already given does not need renewal.
 
 ### Code review entry condition
 
@@ -66,7 +75,7 @@ Recheck this condition after each push and CI/CD result. If it no longer holds, 
 
 Use `Waiting` only after checking that no useful independent step remains. Record the exact dependency or CI run, who owns its resolution, who will resume the task, the saved checkpoint, return phase and next follow-up time. Preserve genuine native dependency links. Keep one coordinator responsible even if the Developer is idle or reassigned safely.
 
-`Waiting` still counts as started work against the agreed work-in-progress limit; it does not free unlimited capacity for new tasks. Remove `in-flight` when no Developer is actively executing the task, and restore it on verified resumption. Agent allocation and started-work count are different facts.
+`Waiting` still counts as started work against the agreed work-in-progress limit; it does not free unlimited capacity for new tasks. Record whether a Developer is actively executing in the execution record and verify it on resumption. Agent allocation and started-work count are different facts.
 
 A running required check can justify `Waiting` when no useful independent work remains; an outstanding external review request does not override the Code review entry condition. Before waiting for a colleague, check their state and arrange recovery if needed. Shared files and ordinary conflicts follow the [integration rules](../roles/supervisor.md#parallel-work-and-integration).
 
@@ -76,12 +85,12 @@ The coordinator resumes the same Issue when its event arrives, after checking re
 
 An edge-case defect that leaves the application usable does not stop other work by default. Establish its actual impact: a failed shared test alone does not prove that every affected task depends on the repair. Continue implementation, review and checks that can proceed independently; keep their cards in the phase being performed. Do not add blocking dependencies merely because tasks share a failing check.
 
-Record the finding and evidence in the pull request. The coordinator establishes an owner and next action for the finding. A delegated Supervisor sends the impact and continuing work to the Analyst, who notifies the human; when coordinating directly or when the Analyst is unreachable, the coordinator sends that notice. This is a notification, not a request for permission to continue. Do not add `needs-human` or wait for an answer unless a specific unresolved decision is required. Follow a human instruction to stop, and notify again only if the impact changes materially.
+Record the finding and evidence in the pull request. The coordinator establishes an owner and next action for the finding. A delegated Supervisor sends the impact and continuing work to the Analyst, who notifies the human; when coordinating directly or when the Analyst is unreachable, the coordinator sends that notice. This is a notification, not a request for permission to continue. Do not wait for an answer unless a specific unresolved decision is required. Follow a human instruction to stop, and notify again only if the impact changes materially.
 
 Use `Blocked` only in two cases:
 
-- Work cannot proceed without a specific human decision that existing instructions and authority do not answer. Record one clear question, add `needs-human`, and ask the human through the Analyst, or directly through the coordinator if the Analyst is unreachable.
-- A confirmed defect makes the entire system unusable. Record evidence of that impact and the repair needed, notify the human, and have the coordinator coordinate recovery. Do not add `needs-human` unless a human decision is also required.
+- Work cannot proceed without a specific human decision that existing instructions and authority do not answer. Record one clear question and ask the human through the Analyst, or directly through the coordinator if the Analyst is unreachable.
+- A confirmed defect makes the entire system unusable. Record evidence of that impact and the repair needed, notify the human, and have the coordinator coordinate recovery. Ask a question only if a human decision is also required.
 
 Failed checks, unavailable test environments, plugin failures and dependencies do not qualify by themselves. The coordinator assigns their diagnosis and repair, keeps independent work moving and uses `Waiting` only under the rules above. Releasing an assignment to `Todo` preserves its checkpoint. Genuine dependency links do not automatically mean `Blocked`.
 

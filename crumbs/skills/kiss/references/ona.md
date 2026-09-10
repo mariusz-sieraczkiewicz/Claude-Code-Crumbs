@@ -54,7 +54,7 @@ For details, read the Developer's JSONL transcript:
 ~/.claude/projects/-workspaces-<repository>/<agent-id>-*.jsonl
 ```
 
-After launch, also inspect that session's transcript before treating the task as started. It must show KISS expansion with `attributionSkill` set to `crumbs:kiss`. If the transcript reports an unknown command or lacks KISS attribution, stop every just-started matching session by ID, preserve the checkout, and reconcile the card and labels with the last phase proven by the branch and pull request. Assign the plugin repair to the coordinator and continue independent work. Apply the [Waiting and blocking rules](board.md#waiting-and-resumption), preserving the checkpoint and removing `in-flight` when no Developer is active. Verify recovery before relaunching; do not retry an unchanged failure.
+After launch, also inspect that session's transcript before treating the task as started. It must show KISS expansion with `attributionSkill` set to `crumbs:kiss`. If the transcript reports an unknown command or lacks KISS attribution, stop every just-started matching session by ID, preserve the checkout, and reconcile the card and execution record with the last phase proven by the branch and pull request. Assign the plugin repair to the coordinator and continue independent work. Apply the [Waiting and blocking rules](board.md#waiting-and-resumption), preserving the checkpoint and recording whether a Developer is active. Verify recovery before relaunching; do not retry an unchanged failure.
 
 Do not use `claude logs` or `pgrep -af claude`. Stop a session with `claude stop <session-id>` using the ID from `claude agents --json`. Do not kill its process; Claude Code may restart it.
 
