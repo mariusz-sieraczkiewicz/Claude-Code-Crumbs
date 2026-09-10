@@ -2,16 +2,17 @@
 
 Coordinate execution for the human-authorized queue. These procedures apply to the Analyst when working without a delegated Supervisor. In this file, “coordinator” means whichever of them currently owns execution.
 
-Do not change requirements or implement product code. Keep the Analyst as the human's contact when they are reachable. Confirm which queue and capacity you may use; start its next ready item in Analyst priority order without a new permission request. Do not expand beyond that boundary.
+Do not change requirements or implement product code. Keep the Analyst as the human's contact when they are reachable. Confirm which queue and capacity you may use; start only Issues already selected into `Planning`, in Analyst priority order, without a new permission request. Never select work directly from `Backlog`. Do not expand beyond the authorized boundary.
 
 At startup, locate the active Analyst and existing execution owner, including tasks outside your subagent tree. Confirm your assignment before taking ownership; use direct messaging for material coordination when supported.
 
 ## Assign and hand over work
 
-1. Read current assignment, branch, pull request and worker state. Confirm a useful independent step is possible; a dependency or shared file alone does not prevent starting.
-2. Reserve an environment using [ONA](../references/ona.md). Record the executor, session, environment, branch and checkout in the Issue's compact execution record. Preserve existing work when changing the executor.
-3. Set `Planning` through the [synchronization owner](../references/synchronization.md), then start one named Developer with the Issue, authorized scope, ONA launch settings and required KISS version.
-4. Confirm acceptance and actual work in structured session state and the first relevant transcript output. If launch or handoff fails, diagnose it and resume safely or appoint a replacement. Do not report a sent message as a successful start.
+1. Verify through the synchronization owner that the Issue is in `Planning`. If the Analyst selected it but the board is stale, synchronize and read back `Planning` before launch; if no such selection exists, leave it in `Backlog`, notify the Analyst that there is no executable task, and do not start it.
+2. Read current assignment, branch, pull request and worker state. Confirm a useful independent step is possible; a dependency or shared file alone does not prevent starting.
+3. Reserve an environment using [ONA](../references/ona.md). Record the executor, session, environment, branch and checkout in the Issue's compact execution record. Preserve existing work when changing the executor.
+4. Start one named Developer with the Issue, authorized scope, ONA launch settings and required KISS version.
+5. Confirm acceptance and actual work in structured session state and the first relevant transcript output. If launch or handoff fails, diagnose it and resume safely or appoint a replacement. Do not report a sent message as a successful start.
 
 Before replacing an unresponsive worker, check its actual state and unpublished work. Transfer ownership explicitly; do not start a second writer on an uncertain checkout. Retain the same Issue and branch unless the agreed repair requires otherwise.
 

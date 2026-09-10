@@ -29,9 +29,9 @@ Use these labels on Issues and PRs:
 
 Do not create or maintain other workflow labels such as `in-flight` or `waiting-for-pr-review`. The board records phase, the PR records reviews and checks, and the execution record identifies the active worker and any unresolved question. KISS removes its obsolete workflow labels from assigned Issues and PRs during synchronization, but preserves unrelated labels owned by other tools or required by the repository. Any other KISS classification needs an explicit project requirement.
 
-## Priority
+## Priority and selection
 
-The order of cards in `Todo` is their priority. Only the Analyst changes it. Resolve the Project and item identifiers, then move the highest-priority item to the top:
+`Backlog` is the collection of known work. Its order is the Analyst's grooming priority, not permission to start. `Planning` contains work selected for execution; its order is the execution priority. Only the Analyst moves work from `Backlog` to `Planning`, either to record a direct human choice or within a human-authorized selection boundary. Resolve the Project and item identifiers, then move the highest-priority item to the top:
 
 ```bash
 gh api graphql -f query='mutation($p:ID!,$i:ID!){
@@ -47,8 +47,8 @@ Use these phases in display order. The coordinator is the Analyst or their deleg
 
 | Status | Meaning | Owner |
 | --- | --- | --- |
-| `Todo` | Defined and not currently assigned; preserve any prior checkpoint | Analyst |
-| `Planning` | Assigned; Developer is inspecting the task | Coordinator |
+| `Backlog` | Collected but not selected for execution; no agent may start it; preserve any prior checkpoint | Analyst |
+| `Planning` | Selected for execution; the coordinator may assign it and the Developer may inspect it | Analyst |
 | `Blocked` | Progress requires a human decision, or a confirmed defect makes the entire system unusable | Role that found the blocker |
 | `Implementing` | Code and tests are changing, including ordinary conflict or CI repair | Developer |
 | `Waiting` | No useful independent step remains; a named result will allow work to resume | Coordinator |
@@ -66,6 +66,10 @@ After internal review and the Developer's [readiness checks](../roles/developer.
 4. Once that condition passes, pending external review uses `Code review`. After approval, remaining exploratory verification uses `Testing`; when it also passes, use `Code review` for the [merge gate](../roles/supervisor.md#merge-gate).
 
 Read pending reviews and approvals from the PR, independently of the board phase. Missing merge authority requires a human decision; permission already given does not need renewal.
+
+Every new task enters the Project in `Backlog`. Before starting a Developer, the Analyst synchronizes the selected task to `Planning` and reads the value back. A direct human assignment authorizes the Analyst to record that selection, but the Project must still show `Planning` before execution begins. Existing work resumes from its current active phase rather than returning to `Planning`.
+
+The general rule to synchronize a phase before it starts does not authorize the Supervisor or Developer to perform `Backlog` → `Planning`. The Analyst owns both selection and withdrawal of selection. A first-launch failure leaves the selected card in `Planning` unless the Analyst returns it to `Backlog`; `Waiting` requires an actual started-work checkpoint under the rules below.
 
 ### Code review entry condition
 
@@ -94,7 +98,7 @@ Use `Blocked` only in two cases:
 - Work cannot proceed without a specific human decision that existing instructions and authority do not answer. Record one clear question, apply `needs-human` under the [label rules](#labels), and ask the human through the Analyst, or directly through the coordinator if the Analyst is unreachable.
 - A confirmed defect makes the entire system unusable. Record evidence of that impact and the repair needed, notify the human, and have the coordinator coordinate recovery. Ask a question only if a human decision is also required.
 
-Failed checks, unavailable test environments, plugin failures and dependencies do not qualify by themselves. The coordinator assigns their diagnosis and repair, keeps independent work moving and uses `Waiting` only under the rules above. Releasing an assignment to `Todo` preserves its checkpoint. Genuine dependency links do not automatically mean `Blocked`.
+Failed checks, unavailable test environments, plugin failures and dependencies do not qualify by themselves. The coordinator assigns their diagnosis and repair, keeps independent work moving and uses `Waiting` only under the rules above. Releasing an assignment to `Backlog` preserves its checkpoint but removes its authorization to resume until the Analyst selects it again. Genuine dependency links do not automatically mean `Blocked`.
 
 These phase rules do not waive acceptance criteria, required checks, review or branch protection. Merge exceptions require explicit human authorization.
 

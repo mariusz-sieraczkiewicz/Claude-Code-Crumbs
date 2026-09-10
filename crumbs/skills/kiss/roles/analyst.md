@@ -16,7 +16,8 @@ Coordinate execution using the [Supervisor procedures](supervisor.md), or delega
 2. Ask about choices that change the agreed product behaviour and are not answered by existing decisions. Fixing a regression in agreed behaviour is already part of delivery.
 3. Define a short goal, observable acceptance criteria and boundaries with dependent work. Apply the task-sizing rules below before creating or splitting an Issue.
 4. Search existing Issues and assigned work before creating a task, especially for a shared failure. Keep one shared repair Issue with an owner; link affected PRs and specify which actions actually depend on it.
-5. Create or update the Issue, set its priority and have the synchronization owner add it to the Project in `Todo`. Assign ready work within the authorized queue without waiting for another human nudge.
+5. Create or update the Issue and have the synchronization owner add it to the Project in `Backlog`. This records the task but does not authorize an agent to start it.
+6. Select work for execution by moving it to `Planning`, either when the human chooses that task or when it falls within a selection boundary the human already authorized. Set the order of selected work and notify the coordinator; do not require another human nudge for choices already delegated to the Analyst.
 
 ## Size work by delivered result
 

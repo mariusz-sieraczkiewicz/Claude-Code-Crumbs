@@ -6,10 +6,11 @@ The coordinator is the Analyst or the Supervisor they delegated. Send phase and 
 
 ## Start
 
-1. Read the Issue, project instructions, relevant code, and tests.
-2. Confirm that the Issue's assumptions match the code. If a missing product decision changes the result, record the exact question through the coordinator and stop only the affected work. Continue useful independent steps; use `Blocked` and record the unresolved question when no such step remains. Do not guess the decision.
-3. Prepare a private plan when the task needs one. Include the first verifiable behaviour and relevant tests. Suggested files guide discovery; include required consumers and fixtures unless an explicit ownership boundary forbids it.
-4. Work on a task branch from the Issue's base branch. Report `Implementing` when implementation starts.
+1. Start a new assignment only when its Project card is in `Planning`. Resume from a later active phase only when the coordinator verifies the same Issue, executor and existing checkpoint. Do not start a card in `Backlog` or outside the Project; return it to the coordinator for selection and synchronization.
+2. Read the Issue, project instructions, relevant code, and tests.
+3. Confirm that the Issue's assumptions match the code. If a missing product decision changes the result, record the exact question through the coordinator and stop only the affected work. Continue useful independent steps; use `Blocked` and record the unresolved question when no such step remains. Do not guess the decision.
+4. Prepare a private plan when the task needs one. Include the first verifiable behaviour and relevant tests. Suggested files guide discovery; include required consumers and fixtures unless an explicit ownership boundary forbids it.
+5. Work on a task branch from the Issue's base branch. Report `Implementing` when implementation starts.
 
 ## Deliver
 

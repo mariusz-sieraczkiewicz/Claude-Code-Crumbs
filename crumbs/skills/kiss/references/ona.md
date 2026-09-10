@@ -23,6 +23,8 @@ Do not use `ona environment exec` or `bash -lc` for such commands. Argument spli
 
 ## Prepare KISS
 
+For a new assignment, read back `Planning` on the Project card before reserving or renaming an environment, running assignment-specific preflight, or starting a Developer. Do not prepare or launch work from `Backlog`. Recovery of already started work may proceed from its recorded active phase.
+
 Before starting a Developer, record the KISS version selected by the coordinator and use it consistently across the assignment. Work from the repository root and ensure that version of `crumbs@Claude-Code-Crumbs` is installed and enabled at `local` scope for that repository. A `user`-scope installation alone is not evidence that the background service can load KISS. Use `--scope local` when installing, updating, or enabling it. `claude plugin list` must show the selected version with `Scope: local` and `Status: enabled`.
 
 Before launch, run the project's reusable environment preflight: required runtimes, browser dependencies, application ports and database, configuration availability, plugin scope/version and model access. Discover missing setup once and preserve the successful commands in a repository-approved bootstrap script or setup documentation; do not store secrets in instructions or logs.
@@ -54,7 +56,7 @@ For details, read the Developer's JSONL transcript:
 ~/.claude/projects/-workspaces-<repository>/<agent-id>-*.jsonl
 ```
 
-After launch, also inspect that session's transcript before treating the task as started. It must show KISS expansion with `attributionSkill` set to `crumbs:kiss`. If the transcript reports an unknown command or lacks KISS attribution, stop every just-started matching session by ID, preserve the checkout, and reconcile the card and execution record with the last phase proven by the branch and pull request. Assign the plugin repair to the coordinator and continue independent work. Apply the [Waiting and blocking rules](board.md#waiting-and-resumption), preserving the checkpoint and recording whether a Developer is active. Verify recovery before relaunching; do not retry an unchanged failure.
+After launch, also inspect that session's transcript before treating the task as started. It must show KISS expansion with `attributionSkill` set to `crumbs:kiss`. If the transcript reports an unknown command or lacks KISS attribution, stop every just-started matching session by ID, preserve the checkout, and reconcile the card and execution record with the last phase proven by the branch and pull request. Assign the plugin repair to the coordinator and continue independent work. A failed first launch remains in `Planning` without an active Developer; do not move it to `Waiting` or `Backlog` unless the board rules independently justify that transition. Preserve any real checkpoint, verify recovery before relaunching, and do not retry an unchanged failure.
 
 Do not use `claude logs` or `pgrep -af claude`. Stop a session with `claude stop <session-id>` using the ID from `claude agents --json`. Do not kill its process; Claude Code may restart it.
 
