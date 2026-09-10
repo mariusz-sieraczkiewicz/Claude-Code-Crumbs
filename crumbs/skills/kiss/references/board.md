@@ -47,7 +47,7 @@ Use these Project phases in this order:
 | --- | --- | --- |
 | `Todo` | Defined and not assigned | Analyst |
 | `Planning` | Assigned; Developer is inspecting the task | Supervisor |
-| `Blocked` | An unresolved impediment prevents progress, such as a missing human decision or external dependency | Role that found the blocker |
+| `Blocked` | Progress requires a human decision, or a confirmed defect makes the entire system unusable | Role that found the blocker |
 | `Implementing` | Code and tests are changing | Developer |
 | `Reviewing` | Internal diff review or repair | Developer |
 | `Testing` | Required verification is the remaining gate | Developer |
@@ -63,7 +63,14 @@ An edge-case defect that leaves the application usable does not stop other work 
 
 Record the finding and evidence in the pull request. The Supervisor sends the Analyst a short explanation of the impact and what work will continue; the Analyst notifies the human, or the Supervisor does so directly if the Analyst is unreachable. This is a notification, not a request for permission to continue. Do not add `needs-human` or wait for an answer unless a specific unresolved decision is required. Follow a human instruction to stop, and notify again only if the impact changes materially.
 
-Use `Blocked` when an unresolved impediment prevents the remaining work from proceeding. Name the exact step that cannot proceed, why, and what will unblock it. Limit the hold to that work, including when required verification is unavailable; do not stop unrelated tasks. While repair or other useful work continues, use its actual phase. A remaining merge gate can still block completion: continuing work does not waive acceptance criteria, required checks, review or branch protection, and merge exceptions still require explicit human authorization.
+Use `Blocked` only in two cases:
+
+- Work cannot proceed without a specific human decision that existing instructions and authority do not answer. Record one clear question, add `needs-human`, and ask the human through the Analyst.
+- A confirmed defect makes the entire system unusable. Record evidence of that impact and the repair needed, notify the human, and have the Supervisor coordinate recovery. Do not add `needs-human` unless a human decision is also required.
+
+Edge cases, failed checks, unavailable test environments and waiting for another task do not qualify by themselves. KISS must diagnose and resolve them: the Supervisor establishes an owner and a concrete next action, coordinates dependencies with the Analyst, and follows through instead of parking the card. Keep the card in the phase that matches the work, such as `Implementing`, `Reviewing` or `Testing`; keep unassigned work in `Todo`. Preserve genuine dependency links without treating them as an automatic reason for `Blocked`.
+
+A pending merge gate does not waive acceptance criteria, required checks, review or branch protection. Resolve technical failures within the workflow; merge exceptions still require explicit human authorization.
 
 Ordinary pull request review wait belongs in `Code review`. Retain `waiting-for-pr-review` while that review is pending, even if another step is blocked. When the blocker is resolved, return to the phase that matches the remaining work.
 
