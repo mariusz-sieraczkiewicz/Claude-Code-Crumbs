@@ -25,9 +25,15 @@ Do not use `ona environment exec` or `bash -lc` for such commands. Argument spli
 
 Before starting a Developer, record the KISS version selected by the coordinator and use it consistently across the assignment. Work from the repository root and ensure that version of `crumbs@Claude-Code-Crumbs` is installed and enabled at `local` scope for that repository. A `user`-scope installation alone is not evidence that the background service can load KISS. Use `--scope local` when installing, updating, or enabling it. `claude plugin list` must show the selected version with `Scope: local` and `Status: enabled`.
 
-Before launch, run the project's reusable environment preflight: required runtimes, browser dependencies, application ports and database, configuration availability, plugin scope/version and model access. Discover missing setup once and preserve the successful commands in a repository-approved bootstrap script or setup documentation; do not store secrets in instructions or logs. Follow [Models](models.md) for fixed settings and confirm them in the actual session.
+Before launch, run the project's reusable environment preflight: required runtimes, browser dependencies, application ports and database, configuration availability, plugin scope/version and model access. Discover missing setup once and preserve the successful commands in a repository-approved bootstrap script or setup documentation; do not store secrets in instructions or logs.
 
 When a plugin change says that a restart is required, start a fresh background service only after the local-scope check passes. Never restart a working Developer to apply an update.
+
+## Select the Developer model
+
+When launching an ONA Developer, use the model and effort specified by the human or project. If neither specifies them, choose a supported Developer profile from the [setup recommendations](../README.md#model-recommendations). Keep that choice fixed across the assignment. This choice applies only to the ONA Developer; preserve the user or host settings for other roles.
+
+Use the installed host's supported launch options and an exact provider model identifier; do not guess flags or rely on an unverified alias. Confirm the effective model, effort, provider and region in the actual session metadata or first response, and record them with the assignment. If a requested model is unavailable, diagnose access or use an explicitly authorized fallback. Keep unaffected work moving without silently downgrading or claiming a model ran when it did not. Never restart a working Developer just to change its model.
 
 ## Inspect a Developer
 

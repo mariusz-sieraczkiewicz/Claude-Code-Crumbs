@@ -44,4 +44,4 @@ ona:
 - [Developer](roles/developer.md): implementation, verification and repair of one Issue.
 - [Supervisor](roles/supervisor.md): execution procedures, used by a delegated Supervisor or directly by the Analyst.
 
-Use the fixed role settings in [Models](references/models.md) when starting agents. Read [ONA](references/ona.md) before inspecting or changing an environment and [Synchronization](references/synchronization.md) when maintaining the board, pull requests or review channel.
+Keep the model and reasoning effort supplied by the user or execution host. KISS selects these settings only for Developers it launches on ONA; it does not reconfigure other roles. Optional setup recommendations for the human are in the [README](README.md). Read [ONA](references/ona.md) before inspecting or changing an environment and [Synchronization](references/synchronization.md) when maintaining the board, pull requests or review channel.

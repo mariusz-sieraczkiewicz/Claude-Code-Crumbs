@@ -10,7 +10,7 @@ At startup, locate the active Analyst and existing execution owner for this proj
 
 1. Read current assignment, branch, pull request and worker state. Confirm a useful independent step is possible; a dependency or shared file alone does not prevent starting.
 2. Reserve an environment using [ONA](../references/ona.md). Record the executor, session, environment, branch and checkout in the Issue's compact execution record. Preserve existing work when changing the executor.
-3. Set `Planning` and `in-flight` through the [synchronization owner](../references/synchronization.md), then start one named Developer with the Issue, authorized scope, fixed model profile and required KISS version.
+3. Set `Planning` and `in-flight` through the [synchronization owner](../references/synchronization.md), then start one named Developer with the Issue, authorized scope, ONA launch settings and required KISS version.
 4. Confirm acceptance and actual work in structured session state and the first relevant transcript output. If launch or handoff fails, diagnose it and resume safely or appoint a replacement. Do not report a sent message as a successful start.
 
 Before replacing an unresponsive worker, check its actual state and unpublished work. Transfer ownership explicitly; do not start a second writer on an uncertain checkout. Retain the same Issue and branch unless the agreed repair requires otherwise.

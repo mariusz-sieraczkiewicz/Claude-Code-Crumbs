@@ -8,7 +8,7 @@ Use a script or API integration for deterministic copying and comparisons when a
 
 This skill defines the procedure; it does not install a webhook listener or scheduler. Verify that the chosen mechanism exists and runs. If none is available, the named coordinator performs reconciliation with available tools and registers a host wakeup. Report unsupported monitoring instead of claiming an unattended service is active. Do not have Analyst, Supervisor and Developer each poll the same unchanged CI run.
 
-The small-model profile in [Models](models.md) may classify an ambiguous description. It must not decide acceptance, infer missing approval or invent dependency links. Route such questions to the delivery owner with the source evidence.
+A configured model may help classify an ambiguous description. It must not decide acceptance, infer missing approval or invent dependency links. Route such questions to the delivery owner with the source evidence.
 
 ## Reconcile facts
 
