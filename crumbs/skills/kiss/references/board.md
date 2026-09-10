@@ -20,12 +20,14 @@ Follow the [Issue writing guide](writing.md) for titles, descriptions and commen
 
 ## Labels
 
-Use labels on Issues and PRs for classification only:
+Use these labels on Issues and PRs:
 
 - One task-group label, such as `engine` or `review and protocol`. Reuse the project's established names; these examples are not mandatory groups. The Analyst chooses the group by delivered responsibility, not every file touched. Apply it to both the Issue and its implementing PR; classify a standalone PR by its own scope.
 - Optional `bug` when the work fixes incorrect behaviour, not for every enhancement or refactor. A failed CI run alone does not make the underlying task a bug.
 
-Do not create or maintain workflow labels such as `in-flight`, `waiting-for-pr-review` or `needs-human`. The board records phase, the PR records reviews and checks, and the execution record identifies the active worker and any unresolved question. KISS removes its obsolete workflow labels from assigned Issues and PRs during synchronization, but preserves unrelated labels owned by other tools or required by the repository. Any other KISS classification needs an explicit project requirement.
+- `needs-human` only when further progress requires a specific human decision not covered by existing instructions or authority. Record the question on the affected Issue or standalone PR and ask the human; the label alone is not a notification. Remove it as soon as the answer or existing evidence resolves the question. Routine review, failed CI and technical dependencies do not qualify.
+
+Do not create or maintain other workflow labels such as `in-flight` or `waiting-for-pr-review`. The board records phase, the PR records reviews and checks, and the execution record identifies the active worker and any unresolved question. KISS removes its obsolete workflow labels from assigned Issues and PRs during synchronization, but preserves unrelated labels owned by other tools or required by the repository. Any other KISS classification needs an explicit project requirement.
 
 ## Priority
 
@@ -89,7 +91,7 @@ Record the finding and evidence in the pull request. The coordinator establishes
 
 Use `Blocked` only in two cases:
 
-- Work cannot proceed without a specific human decision that existing instructions and authority do not answer. Record one clear question and ask the human through the Analyst, or directly through the coordinator if the Analyst is unreachable.
+- Work cannot proceed without a specific human decision that existing instructions and authority do not answer. Record one clear question, apply `needs-human` under the [label rules](#labels), and ask the human through the Analyst, or directly through the coordinator if the Analyst is unreachable.
 - A confirmed defect makes the entire system unusable. Record evidence of that impact and the repair needed, notify the human, and have the coordinator coordinate recovery. Ask a question only if a human decision is also required.
 
 Failed checks, unavailable test environments, plugin failures and dependencies do not qualify by themselves. The coordinator assigns their diagnosis and repair, keeps independent work moving and uses `Waiting` only under the rules above. Releasing an assignment to `Todo` preserves its checkpoint. Genuine dependency links do not automatically mean `Blocked`.

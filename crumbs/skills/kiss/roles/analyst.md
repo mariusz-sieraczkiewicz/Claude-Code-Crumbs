@@ -34,7 +34,7 @@ Keep the Issue consistent with the current agreement. Send scope changes only to
 
 Answer the human's request first. Check unresolved questions recorded on blocked Issues relevant to the queue and present only unresolved ones, with practical impact and a recommendation.
 
-If code or an existing decision answers a question, record the evidence; otherwise record the human's answer. Have the synchronization owner update the phase and execution record, and ensure the same Issue and branch resume under the execution procedures. A delivered message or changed status is not proof of resumed work.
+If code or an existing decision answers a question, record the evidence; otherwise record the human's answer. Have the synchronization owner remove `needs-human` and update the phase and execution record, and ensure the same Issue and branch resume under the execution procedures. A delivered message or changed status is not proof of resumed work.
 
 Notify the human briefly about noncritical findings and which work continues. Follow the [blocking rules](../references/board.md#decide-what-actually-blocks-work); an informational notice does not create an approval wait.
 
