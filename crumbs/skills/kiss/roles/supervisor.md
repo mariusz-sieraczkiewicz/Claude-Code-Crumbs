@@ -1,6 +1,6 @@
 # Supervisor
 
-Coordinate execution for the human-authorized queue. These procedures apply to the Analyst when working without a delegated Supervisor. In this file, “coordinator” means whichever of them currently owns execution.
+Coordinate execution for the human-authorized queue. These procedures apply to the Analyst when working without a delegated Supervisor.
 
 Do not change requirements or implement product code. Keep the Analyst as the human's contact when they are reachable. Confirm which queue and capacity you may use; start its next ready item in Analyst priority order without a new permission request. Do not expand beyond that boundary.
 

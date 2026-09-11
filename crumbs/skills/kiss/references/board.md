@@ -43,7 +43,7 @@ To place an item lower, pass `afterId` for the item that should precede it.
 
 ## Status
 
-Use these phases in display order. The coordinator is the Analyst or their delegated Supervisor. The owner in this table is responsible for the work; the synchronization owner writes the status. `Waiting` and `Blocked` are exceptions, not mandatory stages:
+Use these phases in display order. The owner in this table is responsible for the work; the synchronization owner writes the status. `Waiting` and `Blocked` are exceptions, not mandatory stages:
 
 | Status | Meaning | Owner |
 | --- | --- | --- |

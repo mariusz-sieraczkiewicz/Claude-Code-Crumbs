@@ -36,4 +36,4 @@ Sources for model capabilities and settings: [OpenAI models](https://developers.
 
 ## ONA setup
 
-The KiaKia AI Native ONA project has runners for Europe and the United States. Use its configured runners and verify their current identifiers and capacity through the [ONA procedure](references/ona.md).
+The configured ONA project has runners for Europe and the United States. Use those runners rather than creating new ones, and verify their current identifiers and capacity through the [ONA procedure](references/ona.md).

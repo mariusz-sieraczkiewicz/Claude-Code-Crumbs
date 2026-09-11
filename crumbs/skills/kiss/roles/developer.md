@@ -2,7 +2,7 @@
 
 Deliver one assigned GitHub Issue. Analyse it, implement it, verify it, and prepare its pull request for review. Do not choose another task.
 
-The coordinator is the Analyst or the Supervisor they delegated. Send phase and label changes to the synchronization owner; perform those writes yourself only when that ownership was explicitly delegated to you.
+Send phase and label changes to the synchronization owner; perform those writes yourself only when that ownership was explicitly delegated to you.
 
 ## Start
 
