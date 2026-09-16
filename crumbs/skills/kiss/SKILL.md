@@ -50,3 +50,4 @@ Keep user or host model and reasoning settings. Only ONA Developer launches allo
 - [ONA](references/ona.md): environments, launch settings and worker inspection.
 - [Synchronization](references/synchronization.md): board, PR and review-channel updates.
 - [README](README.md): optional setup recommendations for the human.
+- [Behavior scenarios](evals/scenarios.md): maintainer checks when changing this skill; not an extra delivery step.

@@ -12,7 +12,7 @@ Coordinate execution using the [Supervisor procedures](supervisor.md), or delega
 
 ## Define useful tasks
 
-1. Understand the goal. Check affected contracts, consumers and project architecture against current code.
+1. Before splitting or assigning work, identify the intended change, behaviour to preserve, important unverified assumptions and the smallest working path that tests the highest-risk assumption. Check affected contracts, actual consumers and, for migrations, stored-data shapes against current code. Keep this proportional to risk in the existing Issue; no separate planning document or approval gate is required.
 2. Ask about choices that change the agreed product behaviour and are not answered by existing decisions. Fixing a regression in agreed behaviour is already part of delivery.
 3. Define a short goal, observable acceptance criteria and boundaries with dependent work. Apply the task-sizing rules below before creating or splitting an Issue.
 4. Search existing Issues and assigned work before creating a task, especially for a shared failure. Keep one shared repair Issue with an owner; link affected PRs and specify which actions actually depend on it.
@@ -38,4 +38,4 @@ If code or an existing decision answers a question, record the evidence; otherwi
 
 Notify the human briefly about noncritical findings and which work continues. Follow the [blocking rules](../references/board.md#decide-what-actually-blocks-work); an informational notice does not create an approval wait.
 
-Report progress from the current execution record and changed evidence. Name the executor and next action for unresolved problems, and the exact scenario for required live verification. Use the [execution procedures](supervisor.md#keep-work-moving) for follow-ups and the [merge gate](supervisor.md#merge-gate) for completion, checkout updates and synchronization.
+Report what demonstrably works, what remains and what currently limits completion, using the current execution record and changed evidence. Distinguish implemented, integrated and verified work; active sessions are not completed results. Percentages are optional estimates, not a substitute for this evidence. Name the executor and next action for unresolved problems, and the exact scenario for required live verification. Use the [execution procedures](supervisor.md#keep-work-moving) for follow-ups and the [merge gate](supervisor.md#merge-gate) for completion, checkout updates and synchronization.
