@@ -21,7 +21,7 @@ Use the [synchronization procedure](../references/synchronization.md) for initia
 
 For each active Issue, know the last verified result, next action, executor and any awaited event. Follow up when the next action is overdue or a worker stops. After one unanswered handoff, inspect the recipient and choose a viable recovery; do not repeat an unchanged request indefinitely.
 
-When a worker waits, a failure recurs or another handoff produces no verifiable result, check whether an existing procedure was missed. Correct avoidable waiting by changing the next action or work allocation; preserve legitimate event waits. Another reminder, status report or coordination layer is not a remedy for stalled execution. If several workers depend on one unfinished component, prioritize unblocking it rather than assigning its owner more independent work. Judge progress by working results and check evidence, not active session counts.
+When a worker waits, a failure recurs or a handoff produces no verifiable result, check for missed procedures. Change the next action or work allocation to remove avoidable waiting; preserve legitimate event waits. Reminders, status reports and more coordination do not fix stalled execution. If several workers depend on one unfinished component, prioritize unblocking it over assigning its owner independent work. Judge progress by working results and check evidence, not active session counts.
 
 Use the Developer's [CI evidence](developer.md#follow-ci) and ensure failed or stalled jobs have an active repair owner. Coordinate one repair for a shared cause.
 
@@ -33,7 +33,7 @@ Apply the Analyst's [task-sizing rules](analyst.md#size-work-by-delivered-result
 
 Before pausing a worker for integration, identify the conflicting contract, unresolved migration order or substantial work that integration would invalidate. Shared files or possible merge conflicts alone are not grounds to pause. Let independent work proceed; the Developer resolves ordinary conflicts and verifies both behaviours.
 
-Before adding a parallel worker, identify an independent deliverable and how it will join the working integration. One integration owner is accountable for consistency, not required to personally edit every shared file: delegate bounded changes with clear ownership and no competing writers. Do not add an approval gate for each local step.
+Before adding a parallel worker, identify an independent deliverable and its integration path. The integration owner ensures consistency but need not edit every shared file: delegate bounded changes with clear ownership and no competing writers. Do not add an approval gate for each local step.
 
 Use a short assessment to find a safe integration path; 15–30 minutes is a useful review point, not a timeout that changes the card to `Waiting` or `Blocked`. Continue when progress is concrete. If repeated parent changes cause the same work again, agree one integration owner and a stable base for the dependent PRs, then combine mechanical updates. Keep unrelated implementation moving.
 
