@@ -1,0 +1,36 @@
+{
+  "name": "analyze-run",
+  "version": "0.1.0",
+  "description": "Rebuild how an agent run went from Claude Code, Codex and GitHub Copilot transcripts: an interactive timeline of agents, skills and pivot events, with recommendations only where time was avoidable.",
+  "author": {
+    "name": "Mariusz Sieraczkiewicz",
+    "url": "https://github.com/mariusz-sieraczkiewicz"
+  },
+  "homepage": "https://github.com/mariusz-sieraczkiewicz/Claude-Code-Crumbs",
+  "repository": "https://github.com/mariusz-sieraczkiewicz/Claude-Code-Crumbs",
+  "license": "MIT",
+  "keywords": [
+    "codex",
+    "skills",
+    "agent-workflows",
+    "retrospective",
+    "timeline"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Analyze run",
+    "shortDescription": "Timeline and retrospective of an agent run",
+    "longDescription": "Analyze run rebuilds how an agent run went from Claude Code, Codex and GitHub Copilot session transcripts. It draws which agent and skill did what and when, marks pivot events such as lost access, long tests or review loops, and recommends changes only where the evidence shows avoidable time.",
+    "developerName": "Mariusz Sieraczkiewicz",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Analyze how the run for this Issue went.",
+      "Show a timeline of my last agent session and what slowed it down."
+    ]
+  }
+}

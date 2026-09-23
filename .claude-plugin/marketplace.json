@@ -1,6 +1,6 @@
 {
   "name": "Claude-Code-Crumbs",
-  "description": "Claude Code plugins: dev-workflow for delivery pipelines, crumbs for small skills and configurations.",
+  "description": "Claude Code plugins: dev-workflow for delivery pipelines, crumbs for small skills and configurations, analyze-run for timelines and retrospectives of agent runs.",
   "owner": {
     "name": "Mariusz Sieraczkiewicz"
   },
@@ -16,6 +16,12 @@
       "source": "./crumbs",
       "description": "A collection of small skills and configurations for Claude Code.",
       "version": "0.1.66"
+    },
+    {
+      "name": "analyze-run",
+      "source": "./analyze-run",
+      "description": "Rebuild how an agent run went from Claude Code, Codex and GitHub Copilot transcripts: an interactive timeline of agents, skills and pivot events, with recommendations only where time was avoidable.",
+      "version": "0.1.0"
     }
   ]
 }
