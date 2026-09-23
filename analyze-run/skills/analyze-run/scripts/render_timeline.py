@@ -29,9 +29,9 @@ SCHEMA = "analyze-run-timeline/1"
 # Order matters: the page colours these kinds with a colour-blind-safe palette validated in this order.
 SPAN_KINDS = {
     "work": "Agent work",
-    "test": "Tests",
-    "tool": "Build / commands",
-    "ci": "CI / remote checks",
+    "check": "Checks (tests, validators)",
+    "tool": "Long tool calls",
+    "remote": "Remote jobs (CI, cloud)",
     "review": "Review",
     "wait-agent": "Waiting for another agent",
     "wait-user": "Waiting for the user",
@@ -355,14 +355,20 @@ def stack_skills(skills):
 
 
 def span_skill(doc, span) -> str | None:
-    """The span's own skill, else the innermost (shortest) skill run of its agent covering its midpoint."""
+    """The span's own skill, else the innermost (shortest) skill running at its midpoint in its lane, or in
+    the nearest ancestor lane: a subagent or background job works for the skill its parent is running."""
     if span.skill:
         return span.skill
+    parents = {a["id"]: a.get("parent") for a in doc["agents"]}
     mid = span.start + (span.end - span.start) / 2
-    covering = [k for k in doc["skills"] if k.agent == span.agent and k.start <= mid <= k.end]
-    if not covering:
-        return None
-    return min(covering, key=lambda k: k.end - k.start).name
+    agent, seen = span.agent, set()
+    while agent and agent not in seen:
+        seen.add(agent)
+        covering = [k for k in doc["skills"] if k.agent == agent and k.start <= mid <= k.end]
+        if covering:
+            return min(covering, key=lambda k: k.end - k.start).name
+        agent = parents.get(agent)
+    return None
 
 
 def compute_stats(doc):
@@ -384,7 +390,7 @@ def compute_stats(doc):
         "active": total_minutes(active),
         "agent_sum": sum(per_agent.values()),
         "wait_user": total_minutes([(s.start, s.end) for s in spans if s.kind == "wait-user"]),
-        "tests_ci": total_minutes([(s.start, s.end) for s in spans if s.kind in ("test", "ci")]),
+        "checks_remote": total_minutes([(s.start, s.end) for s in spans if s.kind in ("check", "remote")]),
         "blocked": total_minutes([(s.start, s.end) for s in spans if s.kind == "blocked"]),
         "pivots": pivots,
         "impact": sum(p.impact_min or 0 for p in pivots),
@@ -511,7 +517,10 @@ def render_html(doc, gap_minutes: float = 30.0) -> str:
         ("Agent activity", fmt_dur(stats["active"]),
          f"{fmt_dur(stats['agent_sum'])} summed over agents" + (f" · ×{parallel:.1f} parallel" if parallel >= 1.05 else "")),
         ("Waiting for the user", fmt_dur(stats["wait_user"]), "gates, questions, answers"),
-        ("Tests & CI", fmt_dur(stats["tests_ci"]), "test runs and remote checks"),
+    ]
+    if stats["checks_remote"]:
+        tiles.append(("Checks & remote jobs", fmt_dur(stats["checks_remote"]), "tests, validators, CI and other remote jobs"))
+    tiles += [
         ("Pivot events", str(len(stats["pivots"])),
          " · ".join(f"{n} {SEVERITIES[k].lower()}" for k, n in sev_counts.items() if n) or "none"),
     ]
@@ -617,9 +626,10 @@ def render_markdown(doc) -> str:
         out += [" · ".join(f"{k}: {v}" for k, v in doc["subject"].items() if v), ""]
     out += [f"- Wall clock: {fmt_dur(stats['wall'])} ({local(stats['t0'], tz):%Y-%m-%d %H:%M} → {local(stats['t1'], tz):%Y-%m-%d %H:%M}, {doc['tzname']})",
             f"- Agent activity: {fmt_dur(stats['active'])} (summed over agents {fmt_dur(stats['agent_sum'])})",
-            f"- Waiting for the user: {fmt_dur(stats['wait_user'])}",
-            f"- Tests & CI: {fmt_dur(stats['tests_ci'])}",
-            f"- Pivot events: {len(stats['pivots'])}" + (f", estimated impact ~{fmt_dur(stats['impact'])}" if stats["impact"] else ""),
+            f"- Waiting for the user: {fmt_dur(stats['wait_user'])}"]
+    if stats["checks_remote"]:
+        out.append(f"- Checks & remote jobs: {fmt_dur(stats['checks_remote'])}")
+    out += [f"- Pivot events: {len(stats['pivots'])}" + (f", estimated impact ~{fmt_dur(stats['impact'])}" if stats["impact"] else ""),
             ""]
     if doc["phases"]:
         out += ["| Phase | Start | Length |", "|---|---|---|"]
@@ -627,11 +637,13 @@ def render_markdown(doc) -> str:
                 for p in doc["phases"]]
         out.append("")
     if stats["skills"]:
-        out += ["| Skill | Time | Agent work | Tests & CI | Waiting |", "|---|---|---|---|---|"]
-        for name, row in kind_minutes_by(doc, "skill").items():
-            out.append(f"| {name} | {fmt_dur(sum(row.values()))} | {fmt_dur(row.get('work', 0))} | "
-                       f"{fmt_dur(row.get('test', 0) + row.get('ci', 0))} | "
-                       f"{fmt_dur(row.get('wait-user', 0) + row.get('wait-agent', 0))} |")
+        table = kind_minutes_by(doc, "skill")
+        kinds = [k for k in SPAN_KINDS if any(r.get(k) for r in table.values())]
+        out += ["| Skill | Time | " + " | ".join(SPAN_KINDS[k] for k in kinds) + " |",
+                "|---|---|" + "---|" * len(kinds)]
+        for name, row in table.items():
+            out.append(f"| {name} | {fmt_dur(sum(row.values()))} | "
+                       + " | ".join(fmt_dur(row[k]) if row.get(k) else "" for k in kinds) + " |")
         out.append("")
     if stats["pivots"]:
         out += ["## Pivot events", ""]
@@ -676,7 +688,7 @@ HTML_TEMPLATE = r"""<!doctype html>
   --page: #f9f9f7; --surface: #fcfcfb; --surface-2: #f0efec;
   --text: #0b0b0b; --text-2: #52514e; --text-muted: #6f6e69;
   --grid: #e1e0d9; --axis: #c3c2b7; --ring: rgba(11,11,11,0.10);
-  --k-work: #2a78d6; --k-test: #eb6834; --k-tool: #1baf7a; --k-ci: #eda100; --k-review: #e87ba4; --k-wait-agent: #4a3aa7;
+  --k-work: #2a78d6; --k-check: #eb6834; --k-tool: #1baf7a; --k-remote: #eda100; --k-review: #e87ba4; --k-wait-agent: #4a3aa7;
   --wait-fill: #f0efec; --wait-ink: #c3c2b7; --blocked-fill: #fbe9e1;
   --status-good: #0ca30c; --status-warning: #fab219; --status-serious: #ec835a; --status-critical: #d03b3b;
   --phase-fill: #ecebe6; --phase-band: rgba(11,11,11,0.025);
@@ -688,7 +700,7 @@ HTML_TEMPLATE = r"""<!doctype html>
     --page: #0d0d0d; --surface: #1a1a19; --surface-2: #232321;
     --text: #ffffff; --text-2: #c3c2b7; --text-muted: #9a9890;
     --grid: #2c2c2a; --axis: #383835; --ring: rgba(255,255,255,0.10);
-    --k-work: #3987e5; --k-test: #d95926; --k-tool: #199e70; --k-ci: #c98500; --k-review: #d55181; --k-wait-agent: #9085e9;
+    --k-work: #3987e5; --k-check: #d95926; --k-tool: #199e70; --k-remote: #c98500; --k-review: #d55181; --k-wait-agent: #9085e9;
     --wait-fill: #232321; --wait-ink: #45443f; --blocked-fill: #3a2219;
     --phase-fill: #2a2a27; --phase-band: rgba(255,255,255,0.03);
     --skill-fill: #2f2e2b; --skill-ink: #4a4944; --brush: rgba(57,135,229,0.22);
@@ -699,7 +711,7 @@ HTML_TEMPLATE = r"""<!doctype html>
   --page: #0d0d0d; --surface: #1a1a19; --surface-2: #232321;
   --text: #ffffff; --text-2: #c3c2b7; --text-muted: #9a9890;
   --grid: #2c2c2a; --axis: #383835; --ring: rgba(255,255,255,0.10);
-  --k-work: #3987e5; --k-test: #d95926; --k-tool: #199e70; --k-ci: #c98500; --k-review: #d55181; --k-wait-agent: #9085e9;
+  --k-work: #3987e5; --k-check: #d95926; --k-tool: #199e70; --k-remote: #c98500; --k-review: #d55181; --k-wait-agent: #9085e9;
   --wait-fill: #232321; --wait-ink: #45443f; --blocked-fill: #3a2219;
   --phase-fill: #2a2a27; --phase-band: rgba(255,255,255,0.03);
   --skill-fill: #2f2e2b; --skill-ink: #4a4944; --brush: rgba(57,135,229,0.22);
@@ -770,9 +782,9 @@ svg.track { display: block; user-select: none; -webkit-user-select: none; }
 .span { stroke: var(--surface); stroke-width: 1; cursor: pointer; }
 .span:hover { stroke: var(--text); }
 .k-work { fill: var(--k-work); background: var(--k-work); }
-.k-test { fill: var(--k-test); background: var(--k-test); }
+.k-check { fill: var(--k-check); background: var(--k-check); }
 .k-tool { fill: var(--k-tool); background: var(--k-tool); }
-.k-ci { fill: var(--k-ci); background: var(--k-ci); }
+.k-remote { fill: var(--k-remote); background: var(--k-remote); }
 .k-review { fill: var(--k-review); background: var(--k-review); }
 .k-wait-agent { fill: var(--k-wait-agent); background: var(--k-wait-agent); opacity: 0.55; }
 .k-wait-user { fill: url(#hatch-wait); background: repeating-linear-gradient(45deg, var(--wait-ink) 0 2px, var(--wait-fill) 2px 6px); }
@@ -1265,7 +1277,7 @@ __METHOD__
     var c = D.catalog[n] || {};
     return '<div class="pop-skill"><div><span class="pop-tag">Skill</span> <strong>' + esc(n) + '</strong></div>' +
       (c.description ? '<div class="pop-desc">' + esc(c.description) + '</div>' : '') +
-      (c.url ? '<a href="' + esc(c.url) + '" target="_blank" rel="noopener">Open SKILL.md</a>' : '') + '</div>';
+      (c.url ? '<a href="' + esc(c.url) + '" target="_blank" rel="noopener">Open definition</a>' : '') + '</div>';
   }
   function row(k, v) { return v ? '<div class="pop-row"><span>' + esc(k) + '</span><span>' + v + '</span></div>' : ''; }
   function zoomBtn(a, b, extra) {

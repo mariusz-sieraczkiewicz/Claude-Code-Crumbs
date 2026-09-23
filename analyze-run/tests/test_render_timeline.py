@@ -61,7 +61,7 @@ def run_doc():
         "spans": [
             {"agent": "dev", "start": "2026-09-20T08:00:00Z", "end": "2026-09-20T08:40:00Z", "kind": "work",
              "items": [{"at": "2026-09-20T08:10:00Z", "text": "Edit OrderService.java"}, "plan written"]},
-            {"agent": "dev", "start": "2026-09-20T08:40:00Z", "end": "2026-09-20T09:00:00Z", "kind": "test",
+            {"agent": "dev", "start": "2026-09-20T08:40:00Z", "end": "2026-09-20T09:00:00Z", "kind": "check",
              "label": "gradlew test"},
             {"agent": "analyst", "start": "2026-09-20T08:30:00Z", "end": "2026-09-20T09:00:00Z", "kind": "work"},
             {"agent": "rev", "start": "2026-09-20T09:00:00Z", "end": "2026-09-20T09:20:00Z", "kind": "review",
@@ -154,11 +154,21 @@ class SkillTests(unittest.TestCase):
         self.assertEqual(renderer.span_skill(self.doc, spans[3]), "delivery:code-review")
         self.assertIsNone(renderer.span_skill(self.doc, spans[2]))
 
+    def test_subagent_work_counts_towards_the_skill_its_parent_is_running(self):
+        doc = run_doc()
+        doc["skills"].append({"agent": "analyst", "name": "delivery:orchestrate",
+                              "start": "2026-09-20T08:30:00Z", "end": "2026-09-20T13:30:00Z"})
+        del doc["spans"][3]["skill"]
+        loaded = renderer.load(doc)
+        self.assertEqual(renderer.span_skill(loaded, loaded["spans"][3]), "delivery:code-review")
+        loaded["skills"] = [k for k in loaded["skills"] if k.name != "delivery:code-review"]
+        self.assertEqual(renderer.span_skill(loaded, loaded["spans"][3]), "delivery:orchestrate")
+
     def test_time_by_skill_puts_unattributed_time_last(self):
         table = renderer.kind_minutes_by(self.doc, "skill")
         self.assertEqual(list(table)[-1], renderer.NO_SKILL)
         self.assertAlmostEqual(table["delivery:tdd"]["work"], 40.0)
-        self.assertAlmostEqual(table["delivery:implement"]["test"], 20.0)
+        self.assertAlmostEqual(table["delivery:implement"]["check"], 20.0)
 
 
 class RenderTests(unittest.TestCase):
@@ -213,6 +223,21 @@ class RenderTests(unittest.TestCase):
         self.assertIn("Some friction", md)
         self.assertIn("| 4 Review |", md)
         self.assertIn("| delivery:tdd | 40m |", md)
+
+    def test_checks_tile_appears_only_when_there_were_checks_or_remote_jobs(self):
+        self.assertIn("Checks &amp; remote jobs", renderer.render_html(self.doc))
+        doc = run_doc()
+        doc["spans"][1]["kind"] = "tool"
+        page = renderer.render_html(renderer.load(doc))
+        self.assertNotIn("Checks &amp; remote jobs", page)
+        self.assertNotIn("Checks & remote jobs", renderer.render_markdown(renderer.load(doc)))
+
+    def test_skill_definitions_can_be_local_command_files(self):
+        doc = run_doc()
+        doc["skill_catalog"]["write-report"] = {"label": "write-report",
+                                                "url": "file:///home/me/.claude/commands/write-report.md"}
+        data = page_payload(renderer.render_html(renderer.load(doc)))
+        self.assertEqual(data["catalog"]["write-report"]["url"], "file:///home/me/.claude/commands/write-report.md")
 
     def test_runs_without_phases_skills_or_analysis(self):
         doc = run_doc()

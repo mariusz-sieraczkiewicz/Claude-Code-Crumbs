@@ -68,22 +68,49 @@ the sibling `workspace.json` names the folder. The user dir is
 Structures differ by version. Sample first, then map requests, responses, tool invocations and their
 timestamps to the same compact events.
 
+## Other agents
+
+For any other agent (for example Gemini CLI, Cursor, Aider, OpenCode or an agent built on an SDK), find
+where it stores sessions: its documentation, its folder under the home directory, or the application
+support folder. Sample a file, then map it to the same compact events. When an agent keeps no local
+history, say so in `notes` and build its lane from what other sessions and records show about it.
+
 ## Skills
 
-Where a skill run starts, in each runtime:
+A skill here is any reusable instruction set the agent ran: a skill, a custom slash command or a prompt
+file. Where a run of one starts, in each runtime:
 
 - **Claude Code:** a `tool_use` named `Skill` (`input.skill`, `input.args`); a user's slash command
   `<command-name>/<plugin>:<skill>`; an `attachment` of type `invoked_skills`; a subagent's `description`
   such as "Spec review".
 - **Codex:** the skill's `SKILL.md` being read by an `exec` call, or `$<skill>` in the user's message.
-- **Copilot:** the skill selected in the picker or `/<plugin>:<skill>`; confirm on the sample.
+- **Copilot:** the skill selected in the picker, `/<plugin>:<skill>`, or a prompt file attached to the
+  request; confirm on the sample.
+- **Any runtime:** the agent reading a skill's `SKILL.md` or a command file right before acting on it.
 - **Workflow skills** often announce a phase or skill change in their messages, as a status block or a
   line such as `Phase: … | Skill: …`; use it when present.
 
 Where it ends: the next skill at the same level in that lane, the agent reporting the skill's result, or
 the end of that turn.
 
-## Git and GitHub
+Where its definition is, to read it and to link it from `skill_catalog`:
+
+- **In the transcript:** Claude Code prints `Base directory for this skill: <path>` when it loads a skill,
+  and an `invoked_skills` attachment holds its path and content. Prefer this: it is the version that ran.
+- **Claude Code:** `~/.claude/skills/<name>/`, the project's `.claude/skills/<name>/`, installed plugins
+  under `~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/skills/<name>/`, and custom commands in a
+  `commands/<name>.md` file next to them.
+- **Codex:** `~/.codex/skills/<name>/` and installed plugins under
+  `~/.codex/plugins/cache/<marketplace>/<plugin>/<version>/skills/<name>/`.
+- **Copilot:** the repository's `.github/` folder (skills, prompt files) and the user's `~/.copilot/`
+  folder; confirm on the machine.
+
+The definition may have changed since the run; when the path carries a version, use that version.
+
+## Git and trackers
+
+Use these when the work lives in a git repository or is tracked in GitHub. For another tracker (GitLab,
+Jira and so on), use whatever tool the session has for it; without one, rely on the transcripts.
 
 - `git log --format='%H %aI %cI %s' <base>..<head>`: author and committer time; an amend or rebase moves
   the committer time.
@@ -92,7 +119,7 @@ the end of that turn.
 - `gh pr view <n> --json commits,reviews,statusCheckRollup,createdAt,mergedAt`: PR opened, draft to ready,
   reviews, check results.
 - `gh run list --branch <branch> --json databaseId,createdAt,updatedAt,conclusion,name`: CI duration and
-  failures, to fill `ci` spans when no agent was watching them.
+  failures, to fill `remote` spans when no agent was watching them.
 
 ## Pitfalls
 

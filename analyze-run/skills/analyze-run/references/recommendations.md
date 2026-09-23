@@ -10,7 +10,8 @@ instructions or rules, the environment or tooling setup, or the way the run was 
 
 - the user's thinking and availability, such as answering a gate the next morning;
 - one-off external outages with no cheap prevention;
-- work that the task inherently needed, such as the test runs of a test refactoring.
+- work that the task inherently needed, such as the test runs of a test refactoring or the searches of a
+  literature review.
 
 Those still appear as observations.
 
@@ -31,10 +32,13 @@ delivered. State the reason in `summary`.
 
 - cite the pivot ids it would remove (`evidence`);
 - name one concrete change and where it lives (`target`):
-  - a skill's `SKILL.md` or reference file, by path and section, e.g. `skills/implement/SKILL.md`, verification;
-  - the target repository's instructions or rules, e.g. `CLAUDE.md`, `AGENTS.md` or `.claude/rules/<file>.md`;
-  - the environment or tooling, e.g. a test task, CI configuration, a preflight access check;
-  - the way the run was driven, e.g. cadence choice, `/clear` between slices, background test runs;
+  - the definition of the skill, command or prompt file that was running, by path and section, when the
+    pivot is a `skill-gap` or happened inside it and its instructions caused it or failed to prevent it;
+  - the project's agent instructions or rules, e.g. `CLAUDE.md`, `AGENTS.md` or a rules file, for
+    knowledge every run needs (typical for `discovery`);
+  - the environment or tooling, e.g. a faster check, a job configuration, a preflight access check;
+  - the way the run was driven, e.g. running long commands in the background, resetting context between
+    independent tasks, answering questions in one batch;
 - estimate the saving per run and state what it is based on (`saving`);
 - state its cost and risk (`cost`) and your `confidence`. Confidence is high only when the cause recurred
   or the mechanism is certain.

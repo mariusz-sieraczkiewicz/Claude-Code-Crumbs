@@ -1,40 +1,52 @@
 ---
 name: analyze-run
-description: Analyse how an agent run actually went — a skill-driven workflow, such as a delivery flow with analyst, developer and reviewer sessions, or any longer agent task. Rebuilds its timeline from Claude Code, Codex and GitHub Copilot session transcripts plus git and GitHub records, renders a self-contained HTML timeline that shows which agent did what, when and in which skill, marks pivot events (lost access, long tests, review loops, waits, rework), and recommends changes only where the evidence shows avoidable time.
-argument-hint: "[<issue-url-or-number> | <pr> | <branch> | <session-id-or-transcript-path> | --since <time>] [--out <dir>]"
+description: Analyse how an agent run actually went — one session or several, with any set of skills, commands or none, for coding, writing, research or any other task. Rebuilds its timeline from Claude Code, Codex, GitHub Copilot or other agents' session transcripts, plus git and tracker records when the work has them, renders a self-contained HTML timeline that shows which agent did what, when and in which skill, marks pivot events (lost access, long-running tools or checks, loops and rework, waits for people or other agents, departures from a skill's instructions), and recommends changes only where the evidence shows avoidable time.
+argument-hint: "[<session-id-or-transcript-path> | --skill <name> | <issue-or-pr> | <branch> | <folder> | --since <time>] [--out <dir>]"
 ---
 
 # Analyze run
 
 Reconstruct what happened during a run, where the time went and which agent spent it, then say whether
-anything is worth changing. A run that went well is a valid finding; do not invent improvements.
+anything is worth changing. A run is any stretch of agent work the user wants to look back on. A run
+that went well is a valid finding; do not invent improvements.
 
-The analysis is read-only. It never edits skills, code, settings or configuration, and never posts to
-GitHub, Slack or Jira. It proposes; the user decides and acts, or asks for the change separately.
+The analysis is read-only. It never edits skills, code, settings or configuration, and never posts
+anywhere. It proposes; the user decides and acts, or asks for the change separately.
 
 ## 1. Identify the run
 
-**Input:** an Issue or PR (URL or number), a branch, a session UUID or transcript path, a time window, or
-nothing.
+**Input**, any one of:
 
-Establish the **subject** (Issue, PR or branch), the **repository** and its checkouts or worktrees, and
-the **time window**. Use the Issue and PR timelines, the branch history and the sessions' own timestamps;
-widen the window by a few minutes on each side.
+- a session id or a transcript path;
+- `--skill <name>`: the most recent run of that skill, or its runs inside `--since`;
+- an Issue, pull request or other tracked task the agents worked on;
+- a branch, or a folder the work happened in;
+- `--since <time>`: a time window, optionally with one of the above;
+- nothing.
 
-With no input, list the recent candidate runs for the current repository (recent Issues and PRs worked on
-by agents, recent sessions whose working directory is this repository or its worktrees) and ask the user
-to pick one. Ask as well when two candidates fit equally.
+Establish the **subject** (what the run was for), the **working folders** (repository checkouts and
+worktrees, or plain folders) and the **time window**. Use the sessions' own timestamps, and the tracker
+and branch history when the work has them; widen the window by a few minutes on each side.
+
+With no input, list recent candidate runs (recent sessions whose working folder is the current folder or
+under it, with their first prompt and the skills they used) and ask the user to pick one. Ask as well when
+two candidates fit equally.
 
 ## 2. Collect the sources
 
 Read [transcript sources](references/transcript-sources.md). Find every transcript that touched the run
-inside the window, in all three runtimes: the main session, its subagents, continuation sessions after
-`/clear` or a resume, and peer sessions that worked on the same task, such as analyst, developer or
-reviewer sessions. Peer sessions are often named by the session UUIDs quoted in their messages to each
-other. Add git and GitHub records for milestones and CI duration.
+inside the window, in every agent runtime present on the machine: the main session, its subagents,
+continuation sessions after a context reset or a resume, and peer sessions that worked on the same task,
+for example sessions that handed work to each other. Peer sessions are often named by the session ids
+quoted in their messages to each other. Add git and tracker records when the work is tracked there.
 
 Remove duplicates: a forked or relocated session repeats earlier records in several files. Record each
 source's path, runtime, role and time span; they go into the timeline's `sources`.
+
+For every skill, command or prompt file that ran, read its definition (its `SKILL.md` or command file;
+the sources reference says where to find it). It tells you the intended procedure, phases, gates and
+required checks, which you need for phases (step 4) and for comparing what happened with what the skill
+asked (steps 5 and 6).
 
 ## 3. Extract events
 
@@ -55,10 +67,11 @@ Save the scripts next to the outputs (step 7) so the analysis can be re-run.
 Write `timeline.json` in the format described in [timeline schema](references/timeline-schema.md):
 
 - **Agents:** one lane per session; subagents and background jobs sit under their parent; the user has a lane.
-- **Phases:** the workflow's own phases when the run followed a workflow skill that names them, located as
-  the schema reference describes. Otherwise use the user's own chapters.
-- **Skills:** every skill run per lane, nested where one skill calls another, plus a `skill_catalog` entry
-  with each skill's description and a link to its `SKILL.md`.
+- **Phases:** the phases or steps named in the definition of the workflow skill that drove the run, when
+  there is one. Otherwise the run's own chapters: stretches with one goal, split where the user starts a
+  new request or changes direction.
+- **Skills:** every skill, command or prompt-file run per lane, nested where one calls another, plus a
+  `skill_catalog` entry with each one's description and a link to its definition.
 - **Spans:** derived from the events with the segmentation method in the schema reference. Give each span
   its `items`, the actions that happened inside it, so the reader can click a span and see what was done.
 - **Events:** milestones, messages between agents and the user, and pivot events (step 5).
@@ -66,9 +79,11 @@ Write `timeline.json` in the format described in [timeline schema](references/ti
 ## 5. Find the pivot events
 
 Use the [pivot event catalogue](references/pivot-events.md). A pivot is something that changed the course
-or the cost of the run. Each pivot needs evidence (source and time), an agent, a severity and, where
-measurable, an estimated impact in minutes. Merge repeats of the same cause into one pivot with
-`occurrences`. Number pivots in time order. Most runs have three to ten.
+or the cost of the run. Compare the run with the definitions read in step 2: skipped, reordered, repeated
+or improvised steps are pivots when they cost time or changed the result. Each pivot needs evidence
+(source and time), an agent, a severity and, where measurable, an estimated impact in minutes. Merge
+repeats of the same cause into one pivot with `occurrences`. Number pivots in time order. Most runs have
+three to ten.
 
 ## 6. Assess
 
@@ -79,8 +94,8 @@ Put the result in the timeline's `analysis` block.
 ## 7. Render and report
 
 Write the outputs to `--out`, or by default to
-`${XDG_STATE_HOME:-$HOME/.local/state}/analyze-run/<repository>/<subject>-<YYYYMMDD-HHMM>/`, outside every
-repository:
+`${XDG_STATE_HOME:-$HOME/.local/state}/analyze-run/<repository-or-folder>/<subject>-<YYYYMMDD-HHMM>/`,
+outside every repository:
 
 ```bash
 python3 <this-skill>/scripts/render_timeline.py timeline.json -o timeline.html --md summary.md
@@ -96,5 +111,5 @@ themselves: the verdict in one sentence, the two or three largest time sinks, re
 their expected saving, and where `timeline.html` and `summary.md` are. Explain a term or pivot id the
 first time it appears instead of assuming the reader remembers it.
 
-Then offer the next steps without doing them: open or share the page, turn a recommendation into an Issue
-in the repository that owns the change, or apply a change.
+Then offer the next steps without doing them: open or share the page, record a recommendation where the
+owner of the change tracks work, or apply a change.
