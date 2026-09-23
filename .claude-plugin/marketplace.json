@@ -21,7 +21,7 @@
       "name": "analyze-run",
       "source": "./analyze-run",
       "description": "Rebuild how an agent run went from Claude Code, Codex and GitHub Copilot transcripts: an interactive timeline of agents, skills and pivot events, with recommendations only where time was avoidable.",
-      "version": "0.1.0"
+      "version": "0.1.1"
     }
   ]
 }
