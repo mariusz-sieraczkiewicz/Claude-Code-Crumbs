@@ -1,6 +1,6 @@
 # analyze-run
 
-A plugin with one skill, `analyze-run`. It shows how an agent run actually went: which agent did what,
+The `analyze-run` skill of the `crumbs` plugin shows how an agent run actually went: which agent did what,
 when and in which skill, what slowed it down, and whether anything is worth changing.
 
 A run is any piece of agent work you want to look back on: one long session or several sessions that
@@ -32,14 +32,14 @@ The analysis is read-only: it never edits code, skills or settings, and never po
 
 ## Install
 
-Claude Code:
+It ships with the `crumbs` plugin. In Claude Code:
 
 ```text
 /plugin marketplace add mariusz-sieraczkiewicz/Claude-Code-Crumbs
-/plugin install analyze-run@Claude-Code-Crumbs
+/plugin install crumbs@Claude-Code-Crumbs
 ```
 
-The skill also works in Codex and GitHub Copilot CLI through the same plugin directory.
+The skill also works in Codex and GitHub Copilot CLI through the same plugin.
 
 ## Use
 
@@ -53,10 +53,10 @@ The argument says which run to analyse. Give whichever you have:
 - a time window, with `--since`.
 
 ```text
-/analyze-run:analyze-run 139949ae-50bc-4d84-8a31-3d3a9f1f962e
-/analyze-run:analyze-run --skill write-report
-/analyze-run:analyze-run https://github.com/owner/repo/issues/123
-/analyze-run:analyze-run ~/reports/q3 --since "2026-09-22 20:00"
+/crumbs:analyze-run 139949ae-50bc-4d84-8a31-3d3a9f1f962e
+/crumbs:analyze-run --skill write-report
+/crumbs:analyze-run https://github.com/owner/repo/issues/123
+/crumbs:analyze-run ~/reports/q3 --since "2026-09-22 20:00"
 ```
 
 With no argument, the skill lists recent sessions in the current folder, with their first prompt and the
@@ -80,19 +80,19 @@ they add milestones and CI times.
 ## Layout
 
 ```text
-skills/analyze-run/
+analyze-run/
   SKILL.md                        the seven steps the agent follows
   references/transcript-sources.md  where each agent keeps its sessions and which records matter
   references/timeline-schema.md     the timeline JSON the renderer reads
   references/pivot-events.md        pivot event families, thresholds, severity, impact
   references/recommendations.md     when to recommend, and when not to
   scripts/render_timeline.py        timeline JSON → HTML page and Markdown summary
-tests/test_render_timeline.py       renderer tests
+  tests/test_render_timeline.py     renderer tests
 ```
 
 ## Test
 
-From this directory:
+From this skill's folder:
 
 ```bash
 python3 -m unittest discover -s tests -v

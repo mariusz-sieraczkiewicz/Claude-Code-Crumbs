@@ -1,6 +1,6 @@
 """Regression tests for the analyze-run timeline renderer.
 
-Run from the plugin root: python3 -m unittest discover -s tests -v
+Run from the skill folder: python3 -m unittest discover -s tests -v
 """
 
 import copy
@@ -14,8 +14,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]  # the plugin root
-SKILL = ROOT / "skills/analyze-run"
+SKILL = Path(__file__).resolve().parents[1]  # the skill folder
 SCRIPT = SKILL / "scripts/render_timeline.py"
 SPEC = importlib.util.spec_from_file_location("render_timeline", SCRIPT)
 renderer = importlib.util.module_from_spec(SPEC)
