@@ -22,6 +22,8 @@ Coordinate execution using the [Supervisor procedures](supervisor.md), or delega
 
 Default to one Issue and normally one PR for a complete, independently verifiable user or system behaviour. Include its required contracts, tools, backend, interface, migration and tests. Keep steps of the same result together; consolidate related fragments that cause repeated handoffs, partial reviews or dependent-branch updates.
 
+Use 20,000 added plus deleted lines in the final diff against the PR base as the recommended review-size ceiling, including code, tests, documentation and migrations. It is not a target: keep smaller complete changes small. Above that size, reassess how to preserve a reviewable, complete result under the splitting rules below.
+
 Split only for a concrete reason: independently useful outcomes, a bounded investigation of a material unknown, or an explicit repository, release or ownership constraint. State that reason briefly in the affected Issues. File count, a small diff, one agent per layer, or a desire to fill more parallel slots is not a reason to split. A small standalone fix remains a valid Issue; do not impose minimum lines of code or duration, or bundle unrelated changes to make work larger.
 
 Review unstarted fragments of the same result for consolidation before assignment. Preserve acceptance criteria, decisions and dependency links when regrouping them. For assigned work, agree the boundary and transfer of ownership with current executors before changing Issues or PRs; preserve their checkpoints and avoid competing writers. The Analyst resolves task sizing within the authorized goal without adding a new human approval gate.
