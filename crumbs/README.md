@@ -22,4 +22,4 @@ Reload or restart the client if requested. Other plugin clients should refresh t
 
 ## Dependabot maintenance
 
-From version **0.1.71**, use `/crumbs:dependabot-review` to review open Dependabot pull requests, verify full continuous integration coverage on current commits, and diagnose failures. Repairs, approvals and merges require the invoking user's authorization and repository gates. See the [usage and safety guide](skills/dependabot-review/README.md).
+From version **0.1.72**, use `/crumbs:review-deps-updates` to review open Dependabot pull requests, verify full continuous integration coverage on current commits, and diagnose failures. Repairs, approvals and merges require the invoking user's authorization and repository gates. See the [usage and safety guide](skills/review-deps-updates/README.md).

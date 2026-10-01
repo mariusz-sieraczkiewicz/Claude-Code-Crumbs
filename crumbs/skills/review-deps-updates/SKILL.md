@@ -1,15 +1,15 @@
 ---
-name: dependabot-review
+name: review-deps-updates
 description: Review open Dependabot pull requests, verify full current-commit CI, and diagnose or safely repair failures. Use for Dependabot maintenance; approve and merge only within the invoking user's authorization and repository rules.
 metadata:
-  workspace: ./.workspaces/dependabot-review/<timestamp-id>
+  workspace: ./.workspaces/review-deps-updates/<timestamp-id>
 ---
 
 Read first and follow `references/runtime.md`.
 
 Input (request → `ReviewRequest`)
 
-# Dependabot review
+# Review dependency updates
 
 ## Establish scope
 
